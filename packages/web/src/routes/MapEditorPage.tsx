@@ -64,6 +64,7 @@ export function MapEditorPage() {
   const [doorType, setDoorType] = useState("wooden");
   const [doorState, setDoorState] = useState("closed");
   const [doorFacing, setDoorFacing] = useState("auto");
+  const [doorTrapped, setDoorTrapped] = useState(false);
   const [featureType, setFeatureType] = useState("pit-trap");
   const [featureRotate, setFeatureRotate] = useState(0);
   const [featureScale, setFeatureScale] = useState(1);
@@ -394,6 +395,18 @@ export function MapEditorPage() {
               <Button
                 variant="ghost"
                 disabled={dirty}
+                onClick={() => navigate(`/maps/${mapId}/play`)}
+                title={
+                  dirty
+                    ? "Save first — the play view reads the stored map."
+                    : "Open fog-of-war play view"
+                }
+              >
+                Play
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={dirty}
                 onClick={() => navigate(`/maps/${mapId}/print`)}
                 title={
                   dirty
@@ -460,6 +473,8 @@ export function MapEditorPage() {
             onDoorState={setDoorState}
             doorFacing={doorFacing}
             onDoorFacing={setDoorFacing}
+            doorTrapped={doorTrapped}
+            onDoorTrapped={setDoorTrapped}
             featureType={featureType}
             onFeatureType={setFeatureType}
             featureTypes={featureTypes}
@@ -507,6 +522,7 @@ export function MapEditorPage() {
               doorType={doorType}
               doorState={doorState}
               doorFacing={doorFacing}
+              doorTrapped={doorTrapped}
               featureType={featureType}
               featureRotate={featureRotate}
               featureScale={featureScale}

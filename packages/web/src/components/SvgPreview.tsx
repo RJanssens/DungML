@@ -55,6 +55,7 @@ export function SvgPreview({
   doorType = "wooden",
   doorState = "closed",
   doorFacing = "auto",
+  doorTrapped = false,
   featureType = "pit-trap",
   featureRotate = 0,
   featureScale = 1,
@@ -90,6 +91,7 @@ export function SvgPreview({
   doorType?: string;
   doorState?: string;
   doorFacing?: string;
+  doorTrapped?: boolean;
   /** Feature tool: which built-in glyph to drop, plus rotation/scale. */
   featureType?: string;
   featureRotate?: number;
@@ -444,6 +446,7 @@ export function SvgPreview({
           doorType,
           state: doorState,
           facing: doorFacing,
+          trapped: doorTrapped,
         });
       } else if (FEATURE_TOOLS.has(tool)) {
         onEmit?.({

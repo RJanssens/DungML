@@ -97,6 +97,43 @@ export const projects = {
     request<void>("DELETE", `/api/projects/${id}`),
   importSamples: () =>
     request<Project>("POST", "/api/projects/import-samples"),
+  // Download the whole project as a compressed `.dmapproj` archive. Uses a
+  // direct fetch (not `request`) because the body is binary, and carries the
+  // bearer token so the protected route authorises.
+  export: async (id: string): Promise<Blob> => {
+    const tok = getToken();
+    const res = await fetch(`/api/projects/${id}/export`, {
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, null, `export failed (${res.status})`);
+    return res.blob();
+  },
+  // Create a new project from an uploaded `.dmapproj` archive (multipart).
+  import: async (file: File): Promise<Project> => {
+    const tok = getToken();
+    const fd = new FormData();
+    fd.append("file", file);
+    // Don't set Content-Type — the browser adds the multipart boundary.
+    const res = await fetch("/api/projects/import", {
+      method: "POST",
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      let detail: unknown = await res.text();
+      try {
+        detail = JSON.parse(detail as string);
+      } catch {
+        /* leave as text */
+      }
+      const msg =
+        typeof detail === "object" && detail && "detail" in detail
+          ? String((detail as { detail: unknown }).detail)
+          : `import failed (${res.status})`;
+      throw new ApiError(res.status, detail, msg);
+    }
+    return res.json() as Promise<Project>;
+  },
   // Bundled include libraries and whether this project already has each.
   libraryCatalog: (id: string) =>
     request<LibraryCatalogEntry[]>(
@@ -148,6 +185,49 @@ export const maps = {
       "POST",
       `/api/maps/${id}/feature-names`,
       { source },
+    ),
+};
+
+// ----- play sessions (fog-of-war) -----
+
+export interface SessionExit {
+  to: string; // node id, e.g. "room.hall"
+  name: string; // bare name
+  door: string; // door key
+  type: string;
+  state: string;
+  blocked: boolean;
+  discovered: boolean;
+}
+
+export interface SessionState {
+  id: string;
+  map_id: string;
+  name: string;
+  party_location: string | null;
+  discovered_nodes: string[];
+  discovered_doors: string[];
+  exits: SessionExit[];
+}
+
+export const sessions = {
+  list: (mapId: string) =>
+    request<SessionState[]>("GET", `/api/maps/${mapId}/sessions`),
+  create: (mapId: string, name: string, startLocation?: string) =>
+    request<SessionState>("POST", `/api/maps/${mapId}/sessions`, {
+      name,
+      start_location: startLocation,
+    }),
+  get: (id: string) => request<SessionState>("GET", `/api/sessions/${id}`),
+  remove: (id: string) => request<void>("DELETE", `/api/sessions/${id}`),
+  move: (id: string, to: string) =>
+    request<SessionState>("POST", `/api/sessions/${id}/move`, { to }),
+  reveal: (id: string, node: string) =>
+    request<SessionState>("POST", `/api/sessions/${id}/reveal`, { node }),
+  render: (id: string, view: "discovered" | "full" = "discovered") =>
+    request<{ svg: string }>(
+      "GET",
+      `/api/sessions/${id}/render?view=${view}`,
     ),
 };
 

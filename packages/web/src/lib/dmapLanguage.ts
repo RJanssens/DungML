@@ -50,6 +50,7 @@ const PROPERTIES = [
   "type",
   "state",
   "facing",
+  "trapped",
   "width",
   "height",
   "radius",

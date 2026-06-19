@@ -1632,9 +1632,18 @@ class _RenderContext:
         if dtype in ("gate", "gates"):
             return self._gates_symbol(cx, cy, ux, uy, nx, ny, half)
 
+        # Trap glyph: shown for the legacy `state trapped` OR the orthogonal
+        # `trapped` flag (so e.g. a locked door can also read as trapped).
+        # GM information — fog-of-war strips the flag from the players' view.
+        trap = (
+            self._trap_mark(cx, cy, ux, uy, nx, ny)
+            if (d.trapped or state == "trapped")
+            else ""
+        )
         parts = [self._jamb_ticks(cx, cy, ux, uy, nx, ny, half, 0.18)]
         if state == "open":
             parts.append(self._open_swing(cx, cy, ux, uy, nx, ny, half))
+            parts.append(trap)
             return "".join(parts)
         if dtype in ("double", "double-door", "double_door"):
             # Two leaves meeting at the centre of the opening.
@@ -1649,8 +1658,7 @@ class _RenderContext:
             )
         if state == "locked":
             parts.append(self._lock_dot(cx, cy))
-        elif state == "trapped":
-            parts.append(self._trap_mark(cx, cy, ux, uy, nx, ny))
+        parts.append(trap)
         return "".join(parts)
 
     def _oneway_sign(self, d: Door, nx: float, ny: float) -> float:

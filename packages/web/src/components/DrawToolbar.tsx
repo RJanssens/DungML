@@ -52,6 +52,8 @@ export function DrawToolbar({
   onDoorState,
   doorFacing,
   onDoorFacing,
+  doorTrapped,
+  onDoorTrapped,
   featureType,
   onFeatureType,
   featureTypes,
@@ -99,6 +101,8 @@ export function DrawToolbar({
   onDoorState: (s: string) => void;
   doorFacing: string;
   onDoorFacing: (f: string) => void;
+  doorTrapped: boolean;
+  onDoorTrapped: (v: boolean) => void;
   featureType: string;
   onFeatureType: (t: string) => void;
   featureTypes: string[];
@@ -275,6 +279,18 @@ export function DrawToolbar({
               </option>
             ))}
           </select>
+          <label
+            className={styles.snap}
+            title="Mark the door trapped (GM only — hidden from the players' fog-of-war view)"
+          >
+            <input
+              type="checkbox"
+              checked={doorTrapped}
+              onChange={(e) => onDoorTrapped(e.target.checked)}
+              disabled={disabled}
+            />
+            Trapped
+          </label>
         </div>
       ) : null}
 

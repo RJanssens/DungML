@@ -348,6 +348,7 @@ export type DraftShape =
       doorType: string;
       state: string;
       facing: string; // "auto" → let the renderer infer the leaf side
+      trapped?: boolean;
     }
   | { kind: "feature"; at: Pt; ref: string; rotate?: number; scale?: number }
   | { kind: "text"; at: Pt; content: string; size?: number }
@@ -380,6 +381,7 @@ export function emitShape(source: string, shape: DraftShape): string {
         shape.doorType,
         shape.state,
         shape.facing,
+        shape.trapped ?? false,
       );
     case "feature":
       return emitFeature(shape.at, shape.ref, shape.rotate ?? 0, shape.scale ?? 1);
@@ -453,6 +455,7 @@ export function emitDoor(
   doorType: string,
   state: string,
   facing: string,
+  trapped = false,
 ): string {
   const lines: string[] = [];
   if (connects.length) lines.push(`  connects ${connects.join(", ")}`);
@@ -460,5 +463,6 @@ export function emitDoor(
   // arch / open are stateless (no leaf to be open/closed/locked).
   if (doorType !== "arch" && doorType !== "open") lines.push(`  state ${state}`);
   if (facing && facing !== "auto") lines.push(`  facing ${facing}`);
+  if (trapped) lines.push(`  trapped`);
   return `\ndoor at ${num(at.x)},${num(at.y)} {\n${lines.join("\n")}\n}\n`;
 }

@@ -100,6 +100,23 @@ export function ProjectPage() {
     },
   });
 
+  const [exporting, setExporting] = useState(false);
+  async function onExport() {
+    setExporting(true);
+    try {
+      const blob = await api.projects.export(projectId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const base = (project?.name ?? "project").replace(/[^A-Za-z0-9._-]+/g, "-");
+      a.download = `${base || "project"}.dmapproj`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!creatingKind) return;
@@ -123,6 +140,14 @@ export function ProjectPage() {
         <div className={styles.container}>
           <div className={styles.toolbar}>
             <div className={styles.toolbarSpacer} />
+            <Button
+              variant="secondary"
+              disabled={exporting || maps.length === 0}
+              onClick={onExport}
+              title="Download this project (all maps) as a .dmapproj archive"
+            >
+              {exporting ? "Exporting…" : "Export project"}
+            </Button>
             <Button
               variant={showCatalog ? "ghost" : undefined}
               onClick={() => setShowCatalog((v) => !v)}

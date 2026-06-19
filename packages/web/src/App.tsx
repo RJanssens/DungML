@@ -5,6 +5,7 @@ import { ProjectsPage } from "./routes/ProjectsPage";
 import { ProjectPage } from "./routes/ProjectPage";
 import { MapEditorPage } from "./routes/MapEditorPage";
 import { MapPrintPage } from "./routes/MapPrintPage";
+import { PlayPage } from "./routes/PlayPage";
 import { DocsPage } from "./routes/DocsPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -44,6 +45,14 @@ export function App() {
         element={
           <ProtectedRoute>
             <MapPrintPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maps/:mapId/play"
+        element={
+          <ProtectedRoute>
+            <PlayPage />
           </ProtectedRoute>
         }
       />

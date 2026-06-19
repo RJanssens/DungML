@@ -960,6 +960,9 @@ class _Tx(Transformer):
     def door_width(self, items: list[Any]) -> tuple[str, Any]:
         return ("width", _num(items[0]))
 
+    def door_trapped(self, items: list[Any]) -> tuple[str, Any]:
+        return ("trapped", True)
+
     def door(self, items: list[Any]) -> Door:
         x = _num(items[0])
         y = _num(items[1])
@@ -968,6 +971,7 @@ class _Tx(Transformer):
         state = "closed"
         facing = None
         width = 1.0
+        trapped = False
         description = None
         dm_notes = None
         for item in items[2:]:
@@ -984,6 +988,8 @@ class _Tx(Transformer):
                 facing = val
             elif key == "width":
                 width = val
+            elif key == "trapped":
+                trapped = val
             elif key == "description":
                 description = val
             elif key == "dm_notes":
@@ -995,6 +1001,7 @@ class _Tx(Transformer):
             state=state,
             facing=facing,
             width=width,
+            trapped=trapped,
             description=description,
             dm_notes=dm_notes,
         )

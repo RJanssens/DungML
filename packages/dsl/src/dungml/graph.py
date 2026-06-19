@@ -333,6 +333,16 @@ def fog_of_war(
         n: c for n, c in out.corridors.items() if f"corridor.{n}" in nodes
     }
     out.doors = [d for d in out.doors if door_key(d) in doors]
+
+    # A door's `trapped` flag is GM-only knowledge — never expose it in the
+    # discovered (players') view. The GM full view renders the map without
+    # fog, so traps still show there.
+    def _hide_traps(door_list: list[Door]) -> None:
+        for d in door_list:
+            if d.trapped:
+                d.trapped = False
+
+    _hide_traps(out.doors)
     out.windows = [w for w in out.windows if keep_window(w.in_ref)]
     out.markers = [m for m in out.markers if keep_marker(m.location)]
 
@@ -342,6 +352,7 @@ def fog_of_war(
             c for c in layer.corridors if f"corridor.{c.name}" in nodes
         ]
         layer.doors = [d for d in layer.doors if door_key(d) in doors]
+        _hide_traps(layer.doors)
         layer.windows = [w for w in layer.windows if keep_window(w.in_ref)]
         layer.markers = [m for m in layer.markers if keep_marker(m.location)]
 

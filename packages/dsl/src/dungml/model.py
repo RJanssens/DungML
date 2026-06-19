@@ -315,6 +315,10 @@ class Door(BaseModel):
     state: str = "closed"
     facing: Optional[str] = None
     width: float = 1.0
+    # Trap flag — orthogonal to `state`, so a door can be e.g. closed-and-
+    # trapped or locked-and-trapped. GM information: the renderer marks it,
+    # but fog-of-war hides it in the players' view until discovered.
+    trapped: bool = False
     description: Optional[str] = None
     dm_notes: Optional[str] = None
     span: SourceSpan = Field(default_factory=SourceSpan)

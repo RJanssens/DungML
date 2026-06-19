@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "../lib/api";
@@ -35,6 +35,21 @@ export function ProjectsPage() {
     },
   });
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const importProject = useMutation({
+    mutationFn: (file: File) => api.projects.import(file),
+    onSuccess: (project) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      navigate(`/projects/${project.id}`);
+    },
+  });
+
+  function onImportPick(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (file) importProject.mutate(file);
+  }
+
   function onCreate(e: FormEvent) {
     e.preventDefault();
     if (name.trim()) create.mutate(name.trim());
@@ -59,10 +74,30 @@ export function ProjectsPage() {
             >
               {importSamples.isPending ? "Importing…" : "Import samples"}
             </Button>
+            <Button
+              variant="secondary"
+              disabled={importProject.isPending}
+              onClick={() => fileRef.current?.click()}
+              title="Import a project from a .dmapproj archive"
+            >
+              {importProject.isPending ? "Importing…" : "Import project"}
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".dmapproj,application/zip"
+              hidden
+              onChange={onImportPick}
+            />
             <Button onClick={() => setCreating((v) => !v)}>
               {creating ? "Cancel" : "New project"}
             </Button>
           </div>
+          {importProject.isError ? (
+            <p role="alert" style={{ color: "#b00", margin: "0 0 0.5rem" }}>
+              Import failed: {(importProject.error as Error)?.message ?? "unknown error"}
+            </p>
+          ) : null}
           {creating ? (
             <Card className={styles.createCard}>
               <form onSubmit={onCreate} className={styles.createForm}>

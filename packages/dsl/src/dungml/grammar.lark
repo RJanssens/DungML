@@ -297,6 +297,7 @@ door: "door" "at" NUMBER "," NUMBER "{" door_property* "}"
               | door_state
               | door_facing
               | door_width
+              | door_trapped
               | description_decl
               | dm_notes_decl
 
@@ -305,6 +306,7 @@ door_type: "type" CNAME
 door_state: "state" CNAME
 door_facing: "facing" CNAME
 door_width: "width" NUMBER
+door_trapped: "trapped"
 
 // ============ WINDOW ============
 window: "window" "at" NUMBER "," NUMBER "{" window_property* "}"
