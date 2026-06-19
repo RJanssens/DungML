@@ -1,0 +1,114 @@
+# forest.dmap — bundled feature_defs for overland / wilderness maps.
+#
+# `include "forest.dmap"` from any .dmap file. The parser resolves it
+# against the bundled `includes/` library so the file works whether
+# you're editing locally or have imported a sample into your account.
+#
+# Trees:     pine, oak, birch, withered, palm
+# Terrain:   boulder, bush, standing_stone, campfire, log, mushroom_ring,
+#            fern_cluster, spider_web
+
+feature_def "pine" {
+  name "Pine"
+  shape circle radius 0.55
+  background "#2f4d2a"
+  outline { color "#1a2e16" width 0.06 stroke solid }
+  overlay circle radius 0.22 fill "#1a2e16"
+}
+
+feature_def "oak" {
+  name "Oak"
+  shape circle radius 0.85
+  background "#3f6b34"
+  outline { color "#22431b" width 0.07 stroke solid }
+  overlay circle radius 0.36 fill "#22431b"
+}
+
+feature_def "birch" {
+  name "Birch"
+  shape circle radius 0.55
+  background "#7a956a"
+  outline { color "#3a4d33" width 0.05 stroke solid }
+  overlay circle radius 0.22 fill "#e5eddd"
+}
+
+feature_def "withered" {
+  name "Withered Tree"
+  shape circle radius 0.6
+  background "#7a6748"
+  outline { color "#3a2d18" width 0.06 stroke solid }
+  overlay circle radius 0.22 fill "#3a2d18"
+}
+
+feature_def "palm" {
+  name "Palm"
+  shape circle radius 0.6
+  background "#3d6f3d"
+  outline { color "#1f3a1f" width 0.06 stroke solid }
+  overlay polygon (-0.55,0) (-0.18,0.10) (0,0.55) (0.18,0.10) (0.55,0) (0.18,-0.10) (0,-0.55) (-0.18,-0.10) fill "#1f3a1f"
+}
+
+# ---------- non-tree wilderness ----------
+
+feature_def "boulder" {
+  name "Boulder"
+  shape circle radius 0.55
+  background "#7c7264"
+  outline { color "#3a3328" width 0.07 stroke solid }
+  overlay circle radius 0.20 fill "#3a3328"
+}
+
+feature_def "bush" {
+  name "Bush"
+  shape circle radius 0.40
+  background "#5e7a44"
+  outline { color "#2d3a20" width 0.05 stroke solid }
+}
+
+feature_def "standing_stone" {
+  name "Standing Stone"
+  shape rect 0.5 x 1.1
+  background "#4a4540"
+  outline { color "#1a1812" width 0.07 stroke solid }
+}
+
+feature_def "campfire" {
+  name "Campfire"
+  shape circle radius 0.4
+  background "#3a1a0a"
+  outline { color "#1a0a04" width 0.05 stroke solid }
+  overlay circle radius 0.18 fill "#ff7a1a"
+}
+
+feature_def "log" {
+  name "Fallen Log"
+  shape rect 1.6 x 0.45
+  background "#6f5836"
+  outline { color "#2e2415" width 0.05 stroke solid }
+  overlay rect 1.4 x 0.18 offset 0,0 fill "#8a6e44"
+}
+
+feature_def "mushroom_ring" {
+  name "Mushroom Ring"
+  shape circle radius 0.55
+  background "#7a8a5f"
+  outline { color "#3a4528" width 0.05 stroke dashed }
+  overlay circle radius 0.10 offset -0.25,0 fill "#e8d8b8"
+  overlay circle radius 0.10 offset 0.25,0 fill "#e8d8b8"
+  overlay circle radius 0.10 offset 0,0.25 fill "#e8d8b8"
+  overlay circle radius 0.10 offset 0,-0.25 fill "#e8d8b8"
+}
+
+feature_def "fern_cluster" {
+  name "Ferns"
+  shape circle radius 0.45
+  background "#3a5530"
+  outline { color "#1c2a18" width 0.04 stroke solid }
+}
+
+feature_def "spider_web" {
+  name "Spider Web"
+  shape circle radius 0.5
+  background "#dcd6c2"
+  outline { color "#3a3528" width 0.04 stroke dashed }
+}

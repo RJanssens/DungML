@@ -1,0 +1,71 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# Quickstart — a minimal dungml map for new users.
+#
+# Two rooms, one corridor, a couple of doors, a window, a handful of
+# built-in feature glyphs, and a legend strip. Everything else uses
+# sensible defaults — no explicit renderer (classic-bw is the default),
+# no explicit origin (top-left), no explicit door type/state/width.
+#
+# See docs/ for the full DSL reference.
+
+map "Quickstart" {
+  grid { bounds 30 x 18 }
+  legend
+  description """
+  A starter dungeon. Two stone-walled rooms joined by a short hall —
+  enough to demonstrate the language without overwhelming a new reader.
+  """
+}
+
+room "antechamber" {
+  rect 2,4 12 x 10
+  label "Antechamber"
+  description "Cracked flagstones. Pillars hold up a sagging ceiling."
+
+  feature pillar  at 4,6
+  feature pillar  at 4,12
+  feature pillar  at 12,6
+  feature pillar  at 12,12
+  feature brazier at 8,6
+}
+
+room "sanctum" {
+  rect 18,4 10 x 10
+  label "Inner Sanctum"
+  description "A statue of a forgotten god still keeps watch."
+
+  feature statue at 23,7
+  feature altar  at 23,11 scale 1.2
+}
+
+# Short corridor bridging the 4-unit gap between the rooms.
+corridor "passage" {
+  width 2
+  segment line from 14,9 to 18,9
+}
+
+# Default door — wooden, closed, width 1. Three more lines of property
+# would let you change those.
+door at 14,9 {
+  connects room.antechamber, corridor.passage
+}
+
+door at 18,9 {
+  connects room.sanctum, corridor.passage
+  type iron
+  state locked
+  description "Old keyed lock. The wards still hum faintly."
+}
+
+# Windows on the antechamber's west wall — exterior light.
+window at 2,7  { in room.antechamber  width 1.5 }
+window at 2,11 { in room.antechamber  width 1.5 }
+
+# A secret door in the antechamber's south wall — discoverable only
+# on a successful Perception check.
+door at 8,14 {
+  connects room.antechamber
+  type secret
+  description "A pivot stone. Catch the seam and the wall turns."
+}

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8" width="288" height="192" data-name="probe" data-map-w="12" data-map-h="8" data-origin="top-left">
+<style>.wall{fill:none;stroke:#111;stroke-width:0.18;stroke-linecap:square;stroke-linejoin:miter}.floor{fill:#fafafa;stroke:none}.corridor-wall{fill:none}.corridor-floor{fill:none}.door{fill:none;stroke:#111;stroke-width:0.1;stroke-linecap:butt}.window{fill:none;stroke:#111;stroke-width:0.06}.feature{fill:#fff;stroke:#111;stroke-width:0.06}.feature-fill{fill:#111;stroke:none}.label{font-family:Georgia,serif;font-style:italic;fill:#111;paint-order:stroke;stroke:#fafafa;stroke-width:0.18;stroke-linejoin:round}.room-grid line{stroke:#b8b3a3;stroke-width:0.04;fill:none}.map-grid line{stroke:#9a937f;stroke-width:0.035;fill:none;opacity:0.55}</style>
+<rect class="bg" x="0" y="0" width="12" height="8" fill="#ffffff"/>
+<g class="rooms">
+<path class="floor" data-room="a" data-number="1" d="M 1,1 L 5,1 L 5,5 L 1,5 L 1,1 Z"/>
+<path class="floor" data-room="b" data-number="2" d="M 5,1 L 9,1 L 9,5 L 5,5 L 5,1 Z"/>
+</g>
+<g class="walls">
+<g data-room="a"><line class="wall" x1="1" y1="1" x2="5" y2="1"/><line class="wall" x1="5" y1="1" x2="5" y2="5"/><line class="wall" x1="5" y1="5" x2="1" y2="5"/><line class="wall" x1="1" y1="5" x2="1" y2="1"/></g>
+<g data-room="b"><line class="wall" x1="5" y1="1" x2="9" y2="1"/><line class="wall" x1="9" y1="1" x2="9" y2="5"/><line class="wall" x1="9" y1="5" x2="5" y2="5"/><line class="wall" x1="5" y1="5" x2="5" y2="1"/></g>
+</g>
+<g class="corridors">
+<path class="corridor-wall" data-corridor="c" data-label="c" d="M 1,6 L 10,6" stroke-width="2.36" stroke="#111" stroke-linejoin="round" stroke-linecap="butt" fill="none"/><path class="corridor-floor" data-corridor="c" data-label="c" d="M 1,6 L 10,6" stroke-width="2" stroke="#fafafa" stroke-linejoin="round" stroke-linecap="butt" fill="none"/>
+</g>
+<g class="features">
+</g>
+<g class="labels">
+</g>
+</svg>

@@ -1,0 +1,40 @@
+.centered {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 40px 20px;
+}
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+}
+
+.subtitle {
+  margin: 6px 0 24px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.formError {
+  font-size: 13px;
+  color: var(--error);
+  background: rgba(179, 38, 30, 0.08);
+  border: 1px solid rgba(179, 38, 30, 0.25);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.alt {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+  text-align: center;
+}

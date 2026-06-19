@@ -1,0 +1,164 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# Pull in the bundled wilderness feature_defs (boulder, campfire,
+# standing_stone, pine, ...) — used for the incidental scenery.
+include "forest.dmap"
+
+# Bridgewater Ford — a tiny outdoor map demonstrating the new
+# `slice` construct (cross-slice terrain: river / ravine / split)
+# and the built-in `bridge` feature. The map shows a single river
+# bisecting the scene with a stone bridge as the only crossing,
+# plus a watchtower on each bank.
+#
+#       N
+#       │   guard tower (W)   ║   shrine (E)
+#       │                     ║
+#       │── KING'S ROAD ──[BRIDGE]── KING'S ROAD ──
+#       │                     ║
+#       │   ravine bottom-S   ║   standing-stone (E)
+#       S
+#
+# The river runs north-south down the middle (x=22 → x=22 wavering),
+# crossed at y=14 by the road's stone bridge. A short ravine cuts in
+# from the south-east corner to show off the ravine kind; a hairline
+# split crack on the west bank shows the third kind.
+
+map "Bridgewater Ford" {
+  grid {
+    cell    20 px
+    units   yards 5
+    bounds  44 x 28
+    origin  top-left
+  }
+  renderer "classic-bw"
+  background "grass"
+  grid_overlay 1                    # faint 1-yard graph paper across the canvas
+  description """
+  The King's Road dips into a wooded vale. Below, a swift brown
+  river slides under a moss-grown stone bridge. Two squat watch-
+  towers face one another across the water.
+  """
+  dm_notes """
+  Bridge toll: 1 cp / foot, 2 cp / horse. Tower-captain Mern (HP 11)
+  collects on the east bank and turns a blind eye to anyone who lets
+  a coin "fall into the river" with a wink.
+
+  Hidden under the third arch (DC 14 Investigation from the bank):
+  an old cache — a leather purse, 14 sp, a wax-sealed letter.
+  """
+}
+
+# ============ Banks ============
+#
+# The river splits the map cleanly down the middle; we model each bank
+# as a wide terrain region. Rooms here are just grass tiles — the
+# interesting geometry is the slice + bridge that crosses them.
+
+room "west_bank" {
+  rect 0,0 22 x 28
+  label "West Bank" align top left size 1.0
+  background "grass"
+  line_style organic
+  description "Soft turf and scattered alders. The bridgehead is paved."
+}
+
+room "east_bank" {
+  rect 22,0 22 x 28
+  label "East Bank" align top right size 1.0
+  background "grass"
+  line_style organic
+  description "Rougher ground — heather and broken outcrops between the trees."
+}
+
+# ============ Road ============
+#
+# The King's Road runs east-west, broken only by the bridge.
+
+corridor "kings_road" "King's Road" {
+  width 2.5
+  segment line from 0,14 to 44,14
+  background "dirt"
+  description "Old imperial road. Cartwheel ruts run an inch deep."
+  dm_notes "Watched from the east tower in daylight; unwatched at night."
+}
+
+# ============ The river — a SLICE ============
+#
+# IMPORTANT: slice segments must be tangent-continuous. The renderer
+# starts the SVG path at the first segment's start, then `L`/arc-tos
+# each subsequent endpoint — so if seg(N).end != seg(N+1).start, the
+# renderer fills the gap with a straight line and the river loops back
+# on itself (a figure-eight).
+#
+# Geometry: straight north of the bridge, an S-curve below it (two
+# small 90° arcs of opposite curvature), then a straight run to the
+# southern map edge.
+#
+#   (22, 0) ──► (22,16)           # north run
+#         │
+#         └ arc CW  ─► (22.5, 16.5)  # tangent south → east
+#         └ arc CCW ─► (23, 17)      # tangent east  → south (inflection)
+#         │
+#         (23, 17) ──► (23, 28)     # south run
+
+slice "river_branwen" {
+  kind river
+  width 3.2
+  segment line from 22,0 to 22,16
+  segment arc center 22.5,16 radius 0.5 from-angle 180 to-angle 90  sweep cw
+  segment arc center 22.5,17 radius 0.5 from-angle 270 to-angle 360 sweep ccw
+  segment line from 23,17 to 23,28
+  label "R. Branwen" at 25,23 rotate -85 size 0.9
+  description "Cold and quick. Knee-deep at the ford, head-deep mid-channel."
+  dm_notes """
+  Swim DC 12 to cross outside the bridge. Failure = washed 1d4 hexes
+  downstream, lose any item with no strap. Ranger may know the actual
+  ford (DC 13 Survival) sixty yards south of the bridge.
+  """
+}
+
+# ============ The bridge — a built-in FEATURE on top of the slice ============
+#
+# Default bridge size is 1.6 (deck length along +x) × 1.0 (deck width
+# along y). The long axis IS the crossing direction, so for a N-S river
+# crossed by an E-W road no rotation is needed. Scale must be large
+# enough that 1.6 × scale spans the 3.2-wide river plus a little overlap
+# onto each bank; scale 2.5 gives a 4.0-long deck (20 → 24 across the
+# river centered at x=22).
+
+feature bridge at 22,14 scale 2.5 {
+  description "Three squat stone arches. The keystone bears a worn maker's mark."
+  dm_notes "The maker's mark is the seal of a dwarven clan extinct 200 years."
+}
+
+# ============ A ravine on the south-east — second SLICE kind ============
+#
+# Shorter, narrower, brown-shadowed band. Cuts into the east bank from
+# the corner so the bridge isn't the only relief in the scene.
+
+slice "drovers_cut" {
+  kind ravine
+  width 1.4
+  segment line from 44,25 to 32,21
+  label "Drover's Cut" size 0.75
+  description "A dry gully where storm-water drains in spring. Loose shale."
+  dm_notes "Drop is six feet at the head, two feet at the road. Mules baulk."
+}
+
+# ============ A hairline split — third SLICE kind ============
+#
+# Just to demonstrate. A thin crack in the west bank near the tower.
+
+slice "settle_crack" {
+  kind split
+  width 0.8
+  segment line from 6,2 to 11,8
+  description "A subsidence crack in the turf. Wider after last winter's freeze."
+}
+
+# ============ Some incidental features (boulders, towers) ============
+
+feature boulder at 14,4
+feature boulder at 18,22 scale 0.7
+feature campfire at 33,5
+feature standing_stone at 38,21 rotate 20

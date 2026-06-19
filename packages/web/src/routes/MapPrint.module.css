@@ -1,0 +1,331 @@
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 32px 80px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--serif);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.toolbar > :first-child {
+  flex: 1;
+}
+
+.back {
+  color: var(--fg-muted);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.back:hover {
+  color: var(--accent);
+}
+
+.printBtn {
+  padding: 7px 16px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.header {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+.header h1 {
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.introSection {
+  margin: 0 0 28px;
+  font-family: var(--serif);
+}
+.introSection .readAloud {
+  margin-bottom: 8px;
+}
+
+.mapSection {
+  margin-bottom: 36px;
+  display: flex;
+  justify-content: center;
+}
+.mapHolder {
+  max-width: 100%;
+}
+.mapHolder svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+}
+
+.keySection h2 {
+  font-size: 20px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+/* 3-column module layout. Each <li> stays intact across columns. */
+.roomList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 3;
+  column-gap: 18px;
+  column-rule: 1px solid var(--border);
+  font-size: 11.5pt;
+  line-height: 1.4;
+}
+@media (max-width: 900px) {
+  .roomList {
+    columns: 2;
+  }
+}
+@media (max-width: 560px) {
+  .roomList {
+    columns: 1;
+  }
+}
+
+.roomItem {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 14px;
+  display: block;
+}
+
+.roomHeading {
+  font-family: var(--serif);
+  font-size: 12.5pt;
+  font-weight: 700;
+  margin: 0 0 5px;
+  letter-spacing: 0;
+}
+.roomNumber {
+  font-weight: 700;
+}
+
+/* Read-aloud box — light grey background, classic boxed text. */
+.readAloud {
+  margin: 0 0 6px;
+  padding: 7px 10px;
+  background: #e8e6df;
+  color: #111;
+  font-family: var(--serif);
+  font-style: italic;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+/* Features paragraph — plain body text, with a small-caps label. */
+.features {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  line-height: 1.45;
+}
+.featuresLabel {
+  font-variant: small-caps;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.featureName {
+  font-style: italic;
+}
+
+/* DM notes — thin bordered box. */
+.dmBox {
+  margin: 6px 0 0;
+  padding: 6px 9px;
+  border: 1px solid #555;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 10.5pt;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.dmTag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border: 1px solid #555;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 9pt;
+  letter-spacing: 0.08em;
+  vertical-align: 1px;
+}
+.dmText {
+  /* lays out alongside the tag */
+}
+
+.muted {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+/* Per-feature DM notes, sitting under the Features paragraph. */
+.featureNotes {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-family: var(--sans);
+  font-size: 10.5pt;
+  line-height: 1.35;
+}
+.featureNotes li {
+  margin: 0 0 3px;
+  padding: 3px 7px;
+  border-left: 2px solid #555;
+}
+
+/* Corridor + door auxiliary sections (after the room key). */
+.auxSection {
+  margin-top: 24px;
+}
+.auxSection h2 {
+  font-size: 18px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.auxList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 2;
+  column-gap: 18px;
+  column-rule: 1px solid var(--border);
+  font-size: 11pt;
+  line-height: 1.4;
+}
+@media (max-width: 700px) {
+  .auxList {
+    columns: 1;
+  }
+}
+.auxItem {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 10px;
+  display: block;
+}
+.auxLabel {
+  font-family: var(--serif);
+  font-weight: 700;
+  margin-right: 6px;
+}
+.auxBody {
+  font-family: var(--serif);
+}
+
+.loading {
+  padding: 60px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+
+/* -------- Print styles -------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  .toolbar {
+    display: none;
+  }
+  .page {
+    padding: 0;
+    max-width: none;
+    background: #fff;
+    color: #000;
+  }
+  .mapSection {
+    break-after: page;
+    page-break-after: always;
+  }
+  .roomList {
+    columns: 3;
+    column-gap: 6mm;
+    column-rule: 0.5pt solid #888;
+    font-size: 9.5pt;
+    line-height: 1.35;
+  }
+  .roomItem {
+    margin-bottom: 3mm;
+  }
+  .roomHeading {
+    font-size: 10pt;
+  }
+  .readAloud {
+    background: #e8e6df !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 5px 8px;
+    font-size: 9.5pt;
+    line-height: 1.35;
+  }
+  .features {
+    font-size: 9.5pt;
+    line-height: 1.35;
+  }
+  .dmBox {
+    border-color: #333;
+    font-size: 8.5pt;
+    line-height: 1.3;
+    padding: 4px 7px;
+  }
+  .dmTag {
+    border-color: #333;
+    font-size: 7.5pt;
+  }
+  .keySection h2 {
+    font-size: 14pt;
+  }
+  .header h1 {
+    font-size: 22pt;
+  }
+  .introSection {
+    margin: 0 0 4mm;
+    font-size: 10pt;
+  }
+  .auxSection {
+    margin-top: 6mm;
+    break-before: auto;
+    page-break-before: auto;
+  }
+  .auxSection h2 {
+    font-size: 13pt;
+  }
+  .auxList {
+    columns: 2;
+    column-gap: 6mm;
+    column-rule: 0.5pt solid #888;
+    font-size: 9.5pt;
+    line-height: 1.35;
+  }
+  .auxItem {
+    margin-bottom: 3mm;
+  }
+  .featureNotes {
+    font-size: 8.5pt;
+    line-height: 1.3;
+  }
+  .featureNotes li {
+    border-left-color: #333;
+  }
+}

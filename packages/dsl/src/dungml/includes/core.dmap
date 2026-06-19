@@ -1,0 +1,317 @@
+# core.dmap — the built-in feature library.
+#
+# Every project owns this editable copy. Bring it into a map with
+# `include "core.dmap"` to use built-in features like `pillar`,
+# `stairs-up`, `bridge`, etc. The include resolves to THIS project copy,
+# so anything you change here takes effect on the next render — edit a
+# glyph below to reskin a built-in, or add your own `feature_def`s.
+#
+# Includes merge at the lowest precedence, so a `feature_def "pillar"`
+# defined directly in a map still overrides the one here.
+#
+# These defs use `glyph { ... }` — ordered line-art draw commands. Each
+# command is `<primitive> <role> <geometry> <style*>` where role is
+# stroke (class="feature"), fill (class="feature-fill"), or plain.
+
+# ---- obstacles & traps ----
+
+feature_def "pillar" {
+  glyph { circle fill at 0,0 radius 0.13 }
+}
+
+feature_def "rubble" {
+  glyph {
+    polygon stroke (-0.3,-0.1) (-0.1,-0.25) (0.05,-0.1) (-0.15,0.0)
+    polygon stroke (0.05,-0.05) (0.25,-0.15) (0.3,0.05) (0.15,0.1)
+    polygon stroke (-0.2,0.05) (0.0,0.05) (0.05,0.22) (-0.15,0.22)
+  }
+}
+
+feature_def "portcullis" {
+  glyph {
+    circle fill at -0.3,0 radius 0.09
+    circle fill at 0,0 radius 0.09
+    circle fill at 0.3,0 radius 0.09
+  }
+}
+
+feature_def "pit-trap" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from -0.25,-0.25 to 0.25,0.25
+    line stroke from -0.25,0.25 to 0.25,-0.25
+  }
+}
+
+# Generic trap mark — a "T" in a circle (use `pit-trap`, `dart-trap`,
+# `fire-trap` for specific kinds).
+feature_def "trap" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from -0.2,-0.16 to 0.2,-0.16
+    line stroke from 0,-0.16 to 0,0.2
+  }
+}
+
+# A pit / shaft: a white square with a smaller black square inside, the
+# corners joined by lines (the classic "drop" perspective). `stroke` role
+# gives the outer square a white fill + black outline; `fill` role makes
+# the inner square solid black.
+feature_def "pit" {
+  glyph {
+    rect stroke at -0.45,-0.45 0.9 x 0.9
+    line stroke from -0.45,-0.45 to -0.25,-0.25
+    line stroke from 0.45,-0.45 to 0.25,-0.25
+    line stroke from 0.45,0.45 to 0.25,0.25
+    line stroke from -0.45,0.45 to -0.25,0.25
+    rect fill at -0.25,-0.25 0.5 x 0.5
+  }
+}
+
+# Trapdoors — a circle with "F" (floor / drops down) or "C" (ceiling /
+# opens above). The letter strokes use the same `stroke` role as the
+# enclosing circle.
+feature_def "floor-trapdoor" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from -0.12,-0.18 to -0.12,0.2
+    line stroke from -0.12,-0.18 to 0.14,-0.18
+    line stroke from -0.12,0.0 to 0.08,0.0
+  }
+}
+
+feature_def "ceiling-trapdoor" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    path stroke "M0.13,-0.16 Q-0.2,-0.18 -0.18,0 Q-0.2,0.18 0.13,0.16" fill-color "none"
+  }
+}
+
+feature_def "dart-trap" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from -0.22,0 to 0.16,0
+    polygon fill (0.26,0) (0.1,0.1) (0.1,-0.1)
+  }
+}
+
+feature_def "fire-trap" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    path fill "M0,-0.26 C0.2,-0.04 0.13,0.2 0,0.22 C-0.13,0.2 -0.2,-0.04 0,-0.26 Z"
+  }
+}
+
+# ---- furniture & fittings ----
+
+feature_def "chest" {
+  glyph {
+    rect stroke at -0.5,-0.35 1.0 x 0.7
+    line stroke from -0.5,-0.05 to 0.5,-0.05
+  }
+}
+
+feature_def "altar" {
+  glyph {
+    rect stroke at -0.6,-0.35 1.2 x 0.7
+    line stroke from 0,-0.25 to 0,0.25
+    line stroke from -0.15,-0.15 to 0.15,-0.15
+  }
+}
+
+feature_def "fountain" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    path stroke "M-0.22,-0.05 Q-0.11,-0.18 0,-0.05 T0.22,-0.05" fill-color "none"
+    path stroke "M-0.22,0.12 Q-0.11,-0.01 0,0.12 T0.22,0.12" fill-color "none"
+  }
+}
+
+feature_def "water" {
+  glyph {
+    rect stroke at -0.5,-0.35 1.0 x 0.7 fill-color "#e0eaf6"
+    path stroke "M -0.4 -0.1 Q -0.2 -0.25 0 -0.1 T 0.4 -0.1 M -0.4 0.15 Q -0.2 0 0 0.15 T 0.4 0.15" fill-color "none"
+  }
+}
+
+feature_def "brazier" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    path fill "M 0 -0.25 Q 0.15 -0.05 0 0.1 Q -0.15 -0.05 0 -0.25 Z"
+  }
+}
+
+feature_def "statue" {
+  glyph {
+    circle fill at 0,0 radius 0.35
+    polygon plain (0,-0.22) (0.06,-0.06) (0.22,-0.06) (0.09,0.04) (0.13,0.2) (0,0.1) (-0.13,0.2) (-0.09,0.04) (-0.22,-0.06) (-0.06,-0.06) fill-color "#fff" stroke-color "none"
+  }
+}
+
+feature_def "marker" {
+  glyph { circle fill at 0,0 radius 0.18 }
+}
+
+# ---- stairs ----
+
+feature_def "stairs-up" {
+  glyph {
+    rect stroke at -0.5,-0.4 1.0 x 0.8
+    line stroke from -0.5,-0.2 to 0.5,-0.2
+    line stroke from -0.5,0.0 to 0.5,0.0
+    line stroke from -0.5,0.2 to 0.5,0.2
+    polygon fill (0,-0.35) (0.12,-0.18) (-0.12,-0.18)
+  }
+}
+
+feature_def "stairs-down" {
+  glyph {
+    rect stroke at -0.5,-0.4 1.0 x 0.8
+    line stroke from -0.5,-0.2 to 0.5,-0.2
+    line stroke from -0.5,0.0 to 0.5,0.0
+    line stroke from -0.5,0.2 to 0.5,0.2
+    polygon fill (0,0.35) (0.12,0.18) (-0.12,0.18)
+  }
+}
+
+feature_def "stairs-left" {
+  glyph {
+    rect stroke at -0.4,-0.5 0.8 x 1.0
+    line stroke from -0.2,-0.5 to -0.2,0.5
+    line stroke from 0.0,-0.5 to 0.0,0.5
+    line stroke from 0.2,-0.5 to 0.2,0.5
+    polygon fill (-0.35,0) (-0.18,0.12) (-0.18,-0.12)
+  }
+}
+
+feature_def "stairs-right" {
+  glyph {
+    rect stroke at -0.4,-0.5 0.8 x 1.0
+    line stroke from -0.2,-0.5 to -0.2,0.5
+    line stroke from 0.0,-0.5 to 0.0,0.5
+    line stroke from 0.2,-0.5 to 0.2,0.5
+    polygon fill (0.35,0) (0.18,0.12) (0.18,-0.12)
+  }
+}
+
+feature_def "stairs-spiral" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from 0.12,0.0 to 0.35,0.0
+    line stroke from 0.06,0.104 to 0.175,0.303
+    line stroke from -0.06,0.104 to -0.175,0.303
+    line stroke from -0.12,0.0 to -0.35,0.0
+    line stroke from -0.06,-0.104 to -0.175,-0.303
+    line stroke from 0.06,-0.104 to 0.175,-0.303
+    polyline stroke (0.07,0.0) (0.078,0.021) (0.079,0.046) (0.072,0.072) (0.057,0.098) (0.032,0.12) (0.0,0.135) (-0.038,0.141) (-0.078,0.136) (-0.118,0.118) (-0.154,0.089) (-0.183,0.049) (-0.2,0.0) (-0.204,-0.055) (-0.192,-0.111) (-0.164,-0.164) (-0.122,-0.211) (-0.066,-0.246) (-0.0,-0.265) (0.071,-0.266) (0.143,-0.248) (0.21,-0.21) (0.267,-0.154) (0.308,-0.083) (0.33,-0.0) fill-color "none"
+    circle fill at 0,0 radius 0.07
+  }
+}
+
+# `spiral-stairs` is an alias for `stairs-spiral`.
+feature_def "spiral-stairs" {
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from 0.12,0.0 to 0.35,0.0
+    line stroke from 0.06,0.104 to 0.175,0.303
+    line stroke from -0.06,0.104 to -0.175,0.303
+    line stroke from -0.12,0.0 to -0.35,0.0
+    line stroke from -0.06,-0.104 to -0.175,-0.303
+    line stroke from 0.06,-0.104 to 0.175,-0.303
+    polyline stroke (0.07,0.0) (0.078,0.021) (0.079,0.046) (0.072,0.072) (0.057,0.098) (0.032,0.12) (0.0,0.135) (-0.038,0.141) (-0.078,0.136) (-0.118,0.118) (-0.154,0.089) (-0.183,0.049) (-0.2,0.0) (-0.204,-0.055) (-0.192,-0.111) (-0.164,-0.164) (-0.122,-0.211) (-0.066,-0.246) (-0.0,-0.265) (0.071,-0.266) (0.143,-0.248) (0.21,-0.21) (0.267,-0.154) (0.308,-0.083) (0.33,-0.0) fill-color "none"
+    circle fill at 0,0 radius 0.07
+  }
+}
+
+# ---- building / domestic ----
+
+feature_def "hearth" {
+  glyph {
+    rect stroke at -0.6,-0.3 1.2 x 0.6
+    path fill "M -0.1 0.1 Q 0 -0.2 0.1 0.1 Z"
+  }
+}
+
+feature_def "stove" {
+  glyph {
+    rect stroke at -0.45,-0.35 0.9 x 0.7
+    circle stroke at -0.15,-0.1 radius 0.08
+    circle stroke at 0.15,-0.1 radius 0.08
+    circle stroke at -0.15,0.15 radius 0.08
+    circle stroke at 0.15,0.15 radius 0.08
+  }
+}
+
+feature_def "table" {
+  glyph { rect stroke at -0.6,-0.3 1.2 x 0.6 }
+}
+
+feature_def "chair" {
+  glyph {
+    rect stroke at -0.25,-0.25 0.5 x 0.5
+    line stroke from -0.25,-0.25 to 0.25,-0.25 stroke-width 0.12
+  }
+}
+
+feature_def "bed" {
+  glyph {
+    rect stroke at -0.45,-0.75 0.9 x 1.5
+    rect stroke at -0.35,-0.65 0.7 x 0.4
+  }
+}
+
+feature_def "desk" {
+  glyph {
+    rect stroke at -0.5,-0.25 1.0 x 0.5
+    line stroke from -0.5,0.0 to 0.5,0.0
+  }
+}
+
+feature_def "bookshelf" {
+  glyph {
+    rect stroke at -0.5,-0.2 1.0 x 0.4
+    line stroke from -0.25,-0.2 to -0.25,0.2
+    line stroke from 0,-0.2 to 0,0.2
+    line stroke from 0.25,-0.2 to 0.25,0.2
+  }
+}
+
+feature_def "bath" {
+  glyph { rect stroke at -0.6,-0.35 1.2 x 0.7 rx 0.2 }
+}
+
+feature_def "wardrobe" {
+  glyph {
+    rect stroke at -0.4,-0.25 0.8 x 0.5
+    line stroke from 0,-0.25 to 0,0.25
+  }
+}
+
+feature_def "barrel" {
+  glyph {
+    circle stroke at 0,0 radius 0.32
+    line stroke from -0.3,0 to 0.3,0
+  }
+}
+
+feature_def "crate" {
+  glyph {
+    rect stroke at -0.35,-0.35 0.7 x 0.7
+    line stroke from -0.35,-0.35 to 0.35,0.35
+    line stroke from 0.35,-0.35 to -0.35,0.35
+  }
+}
+
+# ---- terrain ----
+
+feature_def "bridge" {
+  glyph {
+    rect stroke at -0.8,-0.5 1.6 x 1.0 class "bridge-deck" fill-color "#caa97a" stroke-color "#3a2a18" stroke-width 0.08
+    line stroke from -0.8,-0.5 to 0.8,-0.5 stroke-width 0.10
+    line stroke from -0.8,0.5 to 0.8,0.5 stroke-width 0.10
+    line stroke from -0.5,-0.5 to -0.5,0.5 stroke-width 0.06
+    line stroke from -0.2,-0.5 to -0.2,0.5 stroke-width 0.06
+    line stroke from 0.1,-0.5 to 0.1,0.5 stroke-width 0.06
+    line stroke from 0.4,-0.5 to 0.4,0.5 stroke-width 0.06
+  }
+}

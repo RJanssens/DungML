@@ -1,0 +1,156 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# Crypt of Saint Vellis — exercises corridors, polygons, boundary arcs,
+# custom feature definitions, layers, and triple-quoted descriptions.
+
+map "Crypt of Saint Vellis" {
+  grid {
+    cell    32 px
+    units   feet 5
+    bounds  60 x 40
+    origin  top-left
+  }
+  renderer "classic-bw"
+  theme    dark
+  legend
+  background "#1a1a1a"
+  description """
+  The crypt door grinds open on a draft that smells of cold iron and
+  dust. Two centuries of saints' bones rest beyond. None should be
+  awake.
+  """
+  dm_notes """
+  The magic_circle in the throne chamber was drawn within the last
+  hour — somebody is here ahead of the party. If the PCs take more
+  than two rounds in the entry hall, the ritualist (a cult priest,
+  HP 18, AC 14) finishes binding the sarcophagus and leaves through
+  the vestry. Otherwise interrupt mid-cast.
+  """
+}
+
+# ---------- Custom feature definitions ----------
+feature_def "magic_circle" {
+  shape circle radius 1.5
+  background "#3a1f5d"
+  outline { color "#c9a227" width 0.1 stroke dashed }
+  description "Concentric runes glow faintly in the dark."
+}
+
+feature_def "sarcophagus" {
+  shape rect 2 x 1
+  background "#5a5a5a"
+  outline { color "#222222" width 0.08 stroke solid }
+  overlay rect 1.6 x 0.6 offset 0.2,0.2 fill "#888888"
+}
+
+# ---------- Rooms ----------
+room "entry_hall" {
+  rect 5,5 10 x 8
+  label "Entry Hall" align top center
+  description "A drafty antechamber. Bones crunch underfoot."
+
+  feature pillar at 7,7
+  feature pillar at 13,7
+  feature pillar at 7,11
+  feature pillar at 13,11
+  feature chest  at 10,11 rotate 45 {
+    description "Iron-bound. The lock is freshly oiled."
+  }
+  feature rubble at 6,12 scale 0.8 rotate 15
+}
+
+room "throne_chamber" {
+  # Hexagonal hall with short vertical jambs at the east and west doors so
+  # the corridor caps land flush against the wall (no diagonal gap).
+  polygon (20,5) (32,5) (35,8) (35,12) (32,15) (20,15) (17,12) (17,8)
+  label "Throne Room" at 26,9 size 1.2 rotate -5
+  description """
+  Tarnished gold leaf still clings to the walls. The throne itself
+  is gone — only the dais remains, cracked down the middle.
+  """
+
+  feature "magic_circle" at 26,12 scale 1.5 {
+    description "Drawn in fresh blood. Still wet."
+    dm_notes """
+    Binding ritual targeting the south sarcophagus. Scuffing the
+    circle (move action) breaks the binding; the ritualist takes
+    2d6 psychic from the broken thread.
+    """
+  }
+  feature "sarcophagus" at 22,7
+  feature "sarcophagus" at 30,7 rotate 180
+  feature altar at 26,6 scale 1.2
+}
+
+# A room with a curved wall — boundary mixes lines and a 3-point arc.
+room "vestry_alcove" {
+  boundary {
+    start 40,20
+    line to 48,20
+    arc  to 48,28 via 52,24
+    line to 40,28
+    line to 40,20
+  }
+  label "Vestry" align middle right
+  description "A semicircular alcove with a domed niche."
+
+  feature brazier at 46,24
+}
+
+# ---------- Corridors ----------
+# Short hall bridging entry_hall east wall to throne_chamber's west jamb.
+corridor "main_hall" {
+  width 2
+  segment line from 15,10 to 17,10
+}
+
+# Curving passage exiting the throne chamber's east jamb, sweeping
+# down-and-east to the vestry alcove's north wall.
+corridor "curved_passage" {
+  width 1.5
+  segment line from 35,10 to 38,10
+  segment arc  center 38,14 radius 4 from-angle 270 to-angle 0 sweep ccw
+  segment line from 42,14 to 42,20
+  description "A curving corridor carved with relief panels worn unreadable."
+  dm_notes "The ritualist's escape route. He cached a flask of acid in the arc bend (DC 12 Investigation)."
+}
+
+# ---------- Doors ----------
+door at 15,10 {
+  connects room.entry_hall, corridor.main_hall
+  type wooden
+  state closed
+  facing east
+  width 1
+}
+
+door at 17,10 {
+  connects room.throne_chamber, corridor.main_hall
+  type iron
+  state locked
+  facing west
+  description "Three hand-spans thick. The frame is warded."
+  dm_notes """
+  Ward triggers if forced open without the saint's seal: 2d6 radiant
+  to attacker (CON DC 13 half). The seal is hidden in the entry hall's
+  chest at 10,11.
+  """
+}
+
+door at 35,10 {
+  connects room.throne_chamber, corridor.curved_passage
+  type arch
+  width 1.5
+}
+
+door at 42,20 {
+  connects room.vestry_alcove, corridor.curved_passage
+  type arch
+}
+
+# ---------- Hidden layer ----------
+layer "secrets" hidden {
+  feature trap at 26,12 {
+    description "Pressure plate. Triggers the runes above."
+  }
+}

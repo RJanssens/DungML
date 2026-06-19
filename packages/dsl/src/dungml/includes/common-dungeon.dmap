@@ -1,0 +1,86 @@
+# common-dungeon.dmap — frequently-used feature_defs for dungeon maps.
+#
+# `include "common-dungeon.dmap"` from any .dmap file to bring these in.
+# Local feature_defs in the including file win on name collision, so
+# you can override any of these without touching this library.
+
+feature_def "magic_circle" {
+  name "Magic Circle"
+  shape circle radius 1.5
+  background "#3a1f5d"
+  outline { color "#c9a227" width 0.1 stroke dashed }
+  description "Concentric runes glow faintly in the dark."
+}
+
+feature_def "sarcophagus" {
+  name "Sarcophagus"
+  shape rect 2 x 1
+  background "#5a5a5a"
+  outline { color "#222222" width 0.08 stroke solid }
+  overlay rect 1.6 x 0.6 offset 0,0 fill "#888888"
+}
+
+feature_def "runestone" {
+  name "Runestone"
+  shape circle radius 0.6
+  background "#1a1530"
+  outline { color "#c9a227" width 0.08 stroke dashed }
+  description "A flat-topped basalt stone. Runes glow faintly when touched."
+}
+
+feature_def "arcane_pillar" {
+  name "Arcane Pillar"
+  shape circle radius 0.8
+  background "#3a3a3a"
+  outline { color "#c9a227" width 0.06 stroke solid }
+  overlay circle radius 0.28 fill "#c9a227"
+}
+
+feature_def "bookcase_tall" {
+  name "Tall Bookcase"
+  shape rect 0.6 x 2.0
+  background "#4a3520"
+  outline { color "#1a1a1a" width 0.06 stroke solid }
+  overlay rect 0.4 x 1.7 offset 0,0 fill "#2a1f10"
+}
+
+feature_def "water_pool" {
+  name "Water Pool"
+  shape rect 2.5 x 1.8
+  background "#3a5d6e"
+  outline { color "#1a3344" width 0.08 stroke solid }
+  overlay rect 2.0 x 1.3 offset 0,0 fill "#4a7088"
+}
+
+feature_def "sarcophagus_grand" {
+  name "Grand Sarcophagus"
+  shape rect 2.5 x 1.2
+  background "#6a6a6a"
+  outline { color "#1a1a1a" width 0.08 stroke solid }
+  overlay rect 2.0 x 0.7 offset 0,0 fill "#999999"
+}
+
+feature_def "spike_trap" {
+  name "Spike Trap"
+  shape rect 1.0 x 1.0
+  background "#3d2a1a"
+  outline { color "#1a1a1a" width 0.08 stroke solid }
+  overlay rect 0.3 x 0.3 offset 0,0 fill "#c9a227"
+  description "Spring-loaded floor section. Look for the trigger plate."
+}
+
+feature_def "ritual_brazier" {
+  name "Ritual Brazier"
+  shape circle radius 0.55
+  background "#2a1f10"
+  outline { color "#c9a227" width 0.08 stroke solid }
+  overlay circle radius 0.22 fill "#ff8c2a"
+}
+
+feature_def "obelisk" {
+  name "Obelisk"
+  shape rect 0.8 x 0.8
+  background "#2a2a3a"
+  outline { color "#c9a227" width 0.08 stroke solid }
+  overlay rect 0.4 x 0.4 offset 0,0 fill "#5a5a7a"
+}

@@ -1,0 +1,4 @@
+map "probe" { grid { cell 24 px units feet 5 bounds 12 x 8 } renderer "classic-bw" }
+room "a" { rect 1,1 4 x 4 }
+room "b" { rect 5,1 4 x 4 }
+corridor "c" { width 2 segment line from 1,6 to 10,6 }

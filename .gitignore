@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+
+# Built SPA assets — produced by `npm run build` from packages/web
+packages/backend/src/dungml_backend/static/
+
+# Local dev DBs
+dungml.db
+dungml-*.db
+
+# Local Claude Code settings (per-machine permissions etc.)
+.claude/settings.local.json
+
+# Stray local debug screenshot
+/screenshot.png

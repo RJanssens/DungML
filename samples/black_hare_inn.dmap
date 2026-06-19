@@ -1,0 +1,214 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# The Black Hare Inn — ground floor of a wayhouse at a forest crossroads.
+# Designed to show off the print/PDF view: lots of per-feature descriptions,
+# read-aloud blocks, and DM-only notes on every room.
+
+map "The Black Hare Inn" {
+  grid {
+    cell   28 px
+    units  feet 5
+    bounds 38 x 26
+    origin top-left
+  }
+  renderer "floorplan"
+  background "grass"
+  description """
+  You crest a rise in the forest road as dusk settles. Below, a
+  low-eaved wayhouse leans against the woodline, its shutters thrown
+  open, lamplight spilling onto the muddy yard. The carved sign over
+  the door shows a black hare in mid-leap.
+  """
+  dm_notes """
+  Tonight is the night the cultist observer expects his accomplice
+  to return with the stolen horse. If the PCs sit and order food
+  without raising suspicion, the keeper will refill mugs for free
+  on a successful DC 10 Cha (Persuasion). Otherwise prices are 2sp.
+  """
+}
+
+# ---------- Rooms ----------
+# Layout (rooms share walls — building style, no gaps):
+#
+#   +----------------+--------------+
+#   |                |   KITCHEN    |
+#   |  COMMON ROOM   +-------+------+
+#   |                |LARDER |KEEPER|
+#   +----------------+-------+------+
+#   |    STABLES                    |
+#   +-------------------------------+
+
+room "common_room" {
+  rect 2,2 20 x 14                  # spans x:2-22, y:2-16
+  label "Common Room" align top left
+  description """
+  Smoke-darkened beams. A long bar runs the length of the north wall,
+  and a low fire smoulders in a soot-stained hearth. Six trestle tables
+  fill the floor — at this hour only one is occupied.
+  """
+  dm_notes """
+  The man at the corner table (table four) is a Cult of the Black Hand
+  observer. He leaves the moment any PC mentions the road north.
+  """
+
+  feature hearth at 3,4 rotate 90 {
+    description "Iron fire-dogs shaped like leaping hares."
+  }
+  feature table at 6,5  { description "Table one — clean, freshly wiped." }
+  feature table at 12,5 { description "Table two — sticky with old ale." }
+  feature table at 18,5
+  feature table at 6,11  { description "Table three — one leg shimmed with a folded prayer card." }
+  feature table at 12,11
+  feature table at 18,11 {
+    description "Table four. A mug of cooled cider sits half-drunk."
+  }
+  feature chair at 5,5   feature chair at 7,5
+  feature chair at 11,5  feature chair at 13,5
+  feature chair at 5,11  feature chair at 7,11
+  feature chair at 17,11 {
+    description "Worn smooth — the spy's habitual seat."
+    dm_notes "A folded scrap of paper under the cushion: tomorrow's drop time."
+  }
+}
+
+room "kitchen" {
+  rect 22,2 14 x 8                  # shares west wall (x=22) with common_room
+  label "Kitchen" align top center
+  description """
+  Hot, close, smelling of bread fat and onions. Copper pans hang in a
+  row above a long oak block stained dark with use.
+  """
+  dm_notes """
+  Under the chopping block: a loose floorboard. Inside, the innkeeper
+  keeps a coin pouch (28 gp), a silver locket (engraved 'M'), and a
+  letter from his absent daughter (plot hook).
+  """
+
+  feature stove at 24,3 {
+    description "Cast-iron, recently stoked. Glowing coals."
+  }
+  feature hearth at 35,4 rotate -90
+  feature table at 30,6 {
+    description "Oak chopping block. Knife-scarred."
+  }
+  feature chest at 33,8 {
+    description "Spice chest. Smells of clove and saffron."
+  }
+}
+
+room "larder" {
+  rect 22,10 7 x 6                  # shares north wall (y=10) with kitchen,
+  label "Larder"                    # and west wall (x=22) with common_room
+  description "Cool, dim. Shelves of crocks and a hanging side of bacon."
+
+  dm_notes "Behind the rear shelf: passage to the cellar (not drawn)."
+
+  feature bookshelf at 23,12 rotate 90 {
+    description "Stacked with sealed crocks of pickled root."
+  }
+  feature barrel at 27,12 {
+    description "Cider — local, sharp, surprisingly good."
+  }
+  feature barrel at 27,14 {
+    description "Salted pork."
+  }
+}
+
+room "keeper_room" {
+  rect 29,10 7 x 6                  # shares north wall (y=10) with kitchen,
+  label "Keeper's Room" align bottom right     # bbox-aligned to the SE corner
+  description "Spare and tidy. A narrow bed, a writing desk, a strongbox."
+
+  dm_notes """
+  Strongbox is trapped: a needle in the lock, smeared with sleep
+  poison (CON save DC 12, 1d4 hours). Inside: 47 gp, the inn's deed,
+  and a sealed letter addressed to a name no PC will recognise yet.
+  """
+
+  feature bed at 31,12
+  feature desk at 35,12 rotate 90 {
+    description "Inkwell uncapped — recently used."
+  }
+  feature chest at 35,14 {
+    description "Iron-banded strongbox. Locked. Heavy."
+    dm_notes """
+    Trapped: needle in the lock smeared with sleep poison (CON DC 12,
+    1d4 hours). Contents: 47 gp, the inn's deed, a sealed letter
+    addressed to a name no PC will recognise yet.
+    """
+  }
+}
+
+room "stable" {
+  rect 2,16 20 x 8                  # shares north wall (y=16) with common_room
+  label "Stables" at 12,17 size 1.1
+  description """
+  Three stalls open onto a packed-dirt floor. The far stall stands
+  empty; straw kicked aside as if its occupant left in a hurry.
+  """
+  dm_notes """
+  Tracks in the empty stall show the horse was led out two hours ago
+  by a person wearing soft boots — the cultist observer's accomplice.
+  """
+
+  feature barrel at 3,18 { description "Oats." }
+  feature barrel at 3,22 { description "Drinking water." }
+  feature rubble at 18,22 scale 0.6
+}
+
+# ---------- Doors ----------
+
+# Interior — bar passes into the kitchen.
+door at 22,5 {
+  connects room.common_room, room.kitchen
+  type arch
+}
+
+# Interior — kitchen into pantry.
+door at 26,10 {
+  connects room.kitchen, room.larder
+  type wooden
+  state closed
+  facing south
+}
+
+# Interior — kitchen into the innkeeper's quarters.
+door at 32,10 {
+  connects room.kitchen, room.keeper_room
+  type wooden
+  state locked
+  facing south
+  description "Always locked when the keeper is out front."
+  dm_notes "Key on a thong around the keeper's neck. He notices if it's missing within 10 minutes."
+}
+
+# Interior — common room into the stable.
+door at 12,16 {
+  connects room.common_room, room.stable
+  type wooden
+  state closed
+  facing south
+}
+
+# Front door — opens onto the road.
+door at 7,2 {
+  connects room.common_room
+  type wooden
+  state closed
+  facing north
+  description "Iron-strapped oak. A black-painted hare on the lintel."
+}
+
+# Stable yard gate.
+door at 22,21 {
+  connects room.stable
+  type arch
+  facing east
+}
+
+# ---------- Windows (all on exterior walls) ----------
+
+window at 4,2  { in room.common_room width 1.5 }
+window at 16,2 { in room.common_room width 1.5 }
+window at 28,2 { in room.kitchen     width 1   }
+window at 6,24 { in room.stable      width 1   }

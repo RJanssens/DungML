@@ -1,0 +1,151 @@
+.crumb {
+  color: var(--fg-muted);
+  font-size: 14px;
+  font-family: var(--serif);
+}
+.crumb:hover {
+  color: var(--fg);
+}
+.crumbSep {
+  color: var(--fg-faint);
+}
+
+.mapName {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.dirty {
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+  margin-left: -2px;
+}
+
+.headerActions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.editorPane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.divider {
+  background: var(--border);
+  cursor: col-resize;
+  min-height: 0;
+}
+.divider:hover,
+.divider:active {
+  background: var(--accent);
+}
+
+.editorBox {
+  flex: 1;
+  min-height: 0;
+}
+
+.previewPane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.previewArea {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+
+.connPanel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  min-width: 200px;
+  max-width: 320px;
+  max-height: 60%;
+  overflow: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.connHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.connTitle {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--fg);
+}
+.connClose {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.connClose:hover {
+  color: var(--accent);
+}
+.connList {
+  list-style: none;
+  margin: 0;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.connList li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.connArrow {
+  color: var(--accent);
+  font-weight: 600;
+}
+.connTo {
+  font-family: var(--mono);
+  color: var(--fg);
+}
+.connMeta {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.connEmpty {
+  padding: 8px 10px;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.loadingState {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--fg-muted);
+}

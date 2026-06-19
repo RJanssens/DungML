@@ -1,0 +1,62 @@
+# Crossroads — branching corridors in a SINGLE corridor declaration.
+#
+# Demonstrates the `node` / `run` form: name the junction points, then
+# join them with straight `run`s. The number of runs meeting at a node
+# decides the junction — a 4-way crossing at `hub`, a T where the east
+# arm sprouts a guard-niche spur, and a branch off the south arm to a
+# blind alcove.
+#
+# Because it is one corridor, the whole tangle is one connected space:
+# fully traversable in the connectivity graph with no door needed at any
+# internal junction. Compare samples/maze.dmap, which predates this form
+# and uses many separate corridors that merely touch.
+
+map "Crossroads" {
+  grid { bounds 40 x 34 }
+  legend
+  description """
+  A four-way junction hewn from rock, with a guard niche off the east
+  arm and a blind alcove branching south.
+  """
+}
+
+room "north_vault" { rect 13,2  14 x 6  label "North Vault" }
+room "south_cell"  { rect 13,25 14 x 6  label "South Cell" }
+room "west_store"  { rect 2,14  9  x 8  label "West Store" }
+room "east_hall"   { rect 29,13 9  x 10 label "East Hall" }
+
+# One corridor, several junctions.
+corridor "passages" "The Crossroads" {
+  width 2
+
+  # Junction points.
+  node hub    at 20,17     # central 4-way crossing
+  node n_end  at 20,8      # up to the north vault door
+  node w_end  at 11,17     # out to the west store door
+  node s_mid  at 20,21     # branch point on the south arm
+  node s_end  at 20,25     # down to the south cell door
+  node alcove at 26,21     # blind branch east off the south arm
+  node e_jct  at 25,17     # T on the east arm
+  node e_end  at 29,17     # on to the east hall door
+  node guard  at 25,11     # guard-niche spur
+
+  # Four runs share `hub` → a crossing.
+  run hub to n_end
+  run hub to w_end
+  run hub to s_mid
+  run hub to e_jct
+
+  # `s_mid` carries the arm onward plus a spur → a branch.
+  run s_mid to s_end
+  run s_mid to alcove
+
+  # `e_jct` carries the arm onward plus a guard spur → a T.
+  run e_jct to e_end
+  run e_jct to guard
+}
+
+# Doors tie the four rooms onto the corridor network.
+door at 20,8  { connects room.north_vault, corridor.passages }
+door at 20,25 { connects room.south_cell,  corridor.passages }
+door at 11,17 { connects room.west_store,  corridor.passages }
+door at 29,17 { connects room.east_hall,   corridor.passages }

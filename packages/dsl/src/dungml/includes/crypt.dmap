@@ -1,0 +1,104 @@
+# crypt.dmap — bundled feature_defs for tombs, ossuaries, mausolea.
+#
+# `include "crypt.dmap"` from any .dmap file. Designed to layer on top
+# of `common-dungeon.dmap` — that file already ships sarcophagus and
+# sarcophagus_grand; this one adds the funerary-specific gear (urns,
+# bone piles, niches, candelabra, masks).
+#
+# Includes: urn, candelabrum, coffin, bone_pile, ossuary_niche,
+#           funerary_statue, offering_bowl, inscription_slab,
+#           death_mask, ash_jar, prayer_stand
+
+feature_def "urn" {
+  name "Funerary Urn"
+  shape circle radius 0.32
+  background "#5a4a3a"
+  outline { color "#1f160d" width 0.06 stroke solid }
+  overlay circle radius 0.16 fill "#3a2e22"
+}
+
+feature_def "ash_jar" {
+  name "Ash Jar"
+  shape circle radius 0.28
+  background "#7a6b58"
+  outline { color "#2a2218" width 0.05 stroke solid }
+  overlay rect 0.18 x 0.10 offset 0,-0.20 fill "#2a2218"
+}
+
+feature_def "candelabrum" {
+  name "Candelabrum"
+  shape circle radius 0.45
+  background "#3a3026"
+  outline { color "#1a1308" width 0.06 stroke solid }
+  overlay circle radius 0.10 offset -0.22,0 fill "#e8c454"
+  overlay circle radius 0.10 offset 0.22,0 fill "#e8c454"
+  overlay circle radius 0.10 offset 0,0 fill "#e8c454"
+}
+
+feature_def "coffin" {
+  name "Coffin"
+  shape polygon (-0.4,-0.9) (0.4,-0.9) (0.5,-0.3) (0.5,0.9) (-0.5,0.9) (-0.5,-0.3)
+  background "#4a3520"
+  outline { color "#1a1208" width 0.07 stroke solid }
+  overlay polygon (-0.3,-0.7) (0.3,-0.7) (0.4,-0.3) (0.4,0.7) (-0.4,0.7) (-0.4,-0.3) offset 0,0 fill "#2e2110"
+}
+
+feature_def "bone_pile" {
+  name "Bone Pile"
+  shape circle radius 0.55
+  background "#d8c89a"
+  outline { color "#5a4a30" width 0.05 stroke solid }
+  overlay polygon (-0.30,-0.10) (-0.10,-0.30) (0.10,-0.10) (-0.10,0.10) offset 0,0 fill "#a89868"
+  overlay polygon (0.10,0.05) (0.30,-0.05) (0.30,0.20) (0.10,0.25) offset 0,0 fill "#a89868"
+}
+
+feature_def "ossuary_niche" {
+  name "Ossuary Niche"
+  shape rect 0.9 x 1.4
+  background "#2a2418"
+  outline { color "#605238" width 0.06 stroke solid }
+  overlay rect 0.7 x 1.2 offset 0,0 fill "#1a1408"
+}
+
+feature_def "funerary_statue" {
+  name "Funerary Statue"
+  shape circle radius 0.48
+  background "#888178"
+  outline { color "#2a2618" width 0.07 stroke solid }
+  overlay polygon (0,-0.35) (0.12,-0.10) (0.30,0.05) (0.18,0.25) (0,0.18) (-0.18,0.25) (-0.30,0.05) (-0.12,-0.10) offset 0,0 fill "#3a3528"
+}
+
+feature_def "offering_bowl" {
+  name "Offering Bowl"
+  shape circle radius 0.30
+  background "#5a4030"
+  outline { color "#1a1208" width 0.05 stroke solid }
+  overlay circle radius 0.18 fill "#8a6a48"
+}
+
+feature_def "inscription_slab" {
+  name "Inscription Slab"
+  shape rect 1.2 x 0.6
+  background "#6a6258"
+  outline { color "#1a1408" width 0.06 stroke solid }
+  overlay rect 1.0 x 0.10 offset 0,-0.15 fill "#3a3528"
+  overlay rect 1.0 x 0.10 offset 0,0.15  fill "#3a3528"
+}
+
+feature_def "death_mask" {
+  name "Death Mask"
+  shape circle radius 0.32
+  background "#c8b87a"
+  outline { color "#2e2410" width 0.06 stroke solid }
+  overlay rect 0.10 x 0.06 offset -0.10,-0.05 fill "#1a1208"
+  overlay rect 0.10 x 0.06 offset 0.10,-0.05 fill "#1a1208"
+  overlay rect 0.18 x 0.04 offset 0,0.10 fill "#1a1208"
+}
+
+feature_def "prayer_stand" {
+  name "Prayer Stand"
+  shape rect 0.6 x 0.45
+  background "#3a2e1a"
+  outline { color "#1a1208" width 0.05 stroke solid }
+  overlay rect 0.5 x 0.10 offset 0,-0.10 fill "#a8884c"
+}

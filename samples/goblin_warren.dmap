@@ -1,0 +1,336 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# Goblin Warren of the Broken Tooth — a small cave system held by a
+# warband of half a dozen goblins and their chief. Showcases the
+# hatched renderer's halo-only style, irregular polygon caves, and
+# rich per-feature DM notes for the printable handout.
+
+map "Goblin Warren of the Broken Tooth" {
+  grid {
+    cell    20 px
+    units   feet 5
+    bounds  60 x 44
+    origin  top-left
+  }
+  renderer "hatched"
+  theme    dark
+  description """
+  The trail of stolen cattle ends at a crack in the hillside. Bones
+  hang on twine from low branches outside — fox skulls, mostly, but
+  one or two are too long for any fox.
+  """
+  dm_notes """
+  Warren state assumes the warband has not yet been alerted. Three
+  rolls to track:
+    • Lookout asleep? 1-in-6 each hour
+    • Warband roused (any room with goblins enters combat at +1
+      morale and all rooms get +2 to passive detection)
+    • Chief's escape: if Broken Tooth flees, drop a faction clock
+      'Goblin reprisal — 3 segments' on the campaign sheet.
+  """
+}
+
+# ---------- Custom feature definitions ----------
+
+feature_def "cookfire" {
+  name "Cookfire"
+  shape circle radius 0.9
+  background "#3a1f0f"
+  outline { color "#1a0a00" width 0.06 stroke solid }
+  overlay circle radius 0.45 fill "#ff7a1a"
+}
+
+feature_def "junk_pile" {
+  name "Junk Pile"
+  shape rect 1.6 x 1.6
+  background "#4a3a22"
+  outline { color "#1a1208" width 0.06 stroke solid }
+  overlay rect 1.0 x 1.0 offset 0,0 fill "#6a5236"
+}
+
+feature_def "pelt_nest" {
+  name "Pelt Nest"
+  shape circle radius 0.9
+  background "#3a2a18"
+  outline { color "#1a120a" width 0.05 stroke solid }
+  overlay circle radius 0.45 fill "#5a4028"
+}
+
+feature_def "bone_throne" {
+  name "Throne of Bones"
+  shape rect 1.8 x 1.6
+  background "#2a2a2a"
+  outline { color "#c9a227" width 0.08 stroke solid }
+  overlay rect 1.2 x 1.0 offset 0,0 fill "#e6dfcc"
+}
+
+feature_def "stalagmite" {
+  name "Stalagmite"
+  shape circle radius 0.45
+  background "#5a5448"
+  outline { color "#2a2620" width 0.05 stroke solid }
+}
+
+# ---------- Rooms ----------
+
+# Narrow fissure where the warband enters.
+room "entrance_fissure" {
+  polygon (2,18) (6,16) (10,17) (12,20) (10,23) (6,24) (3,22)
+  label "Entrance Fissure" at 7,20 size 0.85
+  description """
+  A crack in the hillside, just wide enough for a hunched figure to
+  squeeze through. Wind sighs across the gap with a low whistle.
+  """
+  dm_notes """
+  A goblin lookout (HP 4) crouches behind the stalagmite at 9,21.
+  On a 1-in-6, he's asleep. If he sees the party first, he flees
+  down the south tunnel and rouses the warren.
+  """
+
+  feature "stalagmite" at 9,21 {
+    description "The lookout's perch — chewed bones at its base."
+  }
+}
+
+# Trash chamber where the goblins dump bones, broken gear, and worse.
+room "midden" {
+  polygon (16,4) (24,3) (30,6) (32,12) (28,16) (20,16) (15,12) (14,7)
+  label "Midden" at 22,9 size 0.9
+  description """
+  The stench reaches you before the chamber does. Bones, broken
+  pottery, gnawed leather, and a half-buried iron helmet glint amid
+  the refuse. Flies move in lazy clouds.
+  """
+  dm_notes """
+  Searching the midden (15 minutes, DC 12 Investigation): turn up
+  one of — a bent silver ring (5 gp), a sealed letter addressed to
+  Captain Reswick (plot hook), a still-living rat the size of a cat.
+  """
+
+  feature "junk_pile" at 19,8 {
+    description "Mostly bones, some splintered shield-rim."
+  }
+  feature "junk_pile" at 26,9 rotate 30 {
+    description "Broken crockery and a child's shoe."
+  }
+  feature "junk_pile" at 22,13 rotate -20 {
+    description "Helmet visible. Inside: a bent silver ring."
+  }
+  feature rubble at 17,12 scale 0.7
+  feature rubble at 28,13 scale 0.6
+}
+
+# Cook chamber — the social hub.
+room "cookpit" {
+  polygon (38,8) (46,7) (52,11) (52,18) (48,22) (40,22) (36,17) (36,11)
+  label "Cookpit" at 44,15 size 0.9
+  description """
+  A low, smoke-blackened cavern. A cookfire smoulders at the centre;
+  a battered pot dangles over it on a tripod of charred branches.
+  Something with too many legs simmers inside.
+  """
+  dm_notes """
+  Three goblins (HP 7, 5, 6) are here at any reasonable hour. One
+  stirs the pot. If alarmed, two grab spears from the pile at 49,19;
+  the third dives behind the junk pile at 41,11 for cover.
+  """
+
+  feature "cookfire" at 44,15 {
+    description "Stew of suspicious provenance. Smells faintly of mutton."
+  }
+  feature "pelt_nest" at 39,12 {
+    description "A goblin sleeps off last night's celebration here."
+  }
+  feature "pelt_nest" at 49,12 rotate 25
+  feature "junk_pile" at 41,11 rotate -15 {
+    description "Spears, a bent crowbar, a coil of fraying rope."
+  }
+  feature "junk_pile" at 49,19 {
+    description "Three crude spears and a single splint-mail vambrace."
+  }
+  feature "stalagmite" at 47,20
+}
+
+# Sleeping warren — the cave of nests where most of the warband rests.
+room "warren_floor" {
+  polygon (4,28) (12,27) (18,29) (22,33) (20,40) (12,42) (6,40) (3,34)
+  label "Sleeping Warren" at 12,34 size 0.9
+  description """
+  A low-ceilinged chamber whose floor is hidden under a chaotic
+  patchwork of pelts, gnawed bones, and reeking nests. The smell
+  is overwhelming.
+  """
+  dm_notes """
+  Two goblins (HP 5, 3) sleep here unless the warren has been
+  roused. Loot among the nests (DC 14 Investigation, 10 min):
+  18 cp, a brass holy symbol of Pelor (still warm — recently stolen),
+  a stoppered vial of dust labelled in Goblin: 'sneeze powder'.
+  """
+
+  feature "pelt_nest" at 7,31  { description "Half-eaten rabbit." }
+  feature "pelt_nest" at 11,33 { description "A child's wool cloak, blood-stained." }
+  feature "pelt_nest" at 16,33 { description "Brass holy symbol tucked beneath." }
+  feature "pelt_nest" at 9,37
+  feature "pelt_nest" at 14,37 rotate 20
+  feature "pelt_nest" at 18,35
+  feature rubble at 4,38 scale 0.8
+}
+
+# The chief's chamber — somewhat fortified, holds the loot.
+room "chief_lair" {
+  polygon (34,28) (44,27) (52,30) (54,35) (52,40) (44,42) (36,40) (33,34)
+  label "Chief's Lair" at 43,35 size 1.0
+  background "stone"
+  description """
+  A vaulted bubble in the rock, lit by a brace of stinking tallow
+  torches. The chief's throne — a heap of bones strung together with
+  wire — squats against the far wall. Behind it, an iron-bound chest.
+  """
+  dm_notes """
+  Chief 'Broken Tooth' (HP 22, scimitar +5 to hit, 1d6+3) is here
+  with one bodyguard (HP 9). If reduced below 8 HP he tries to bolt
+  through the south fissure (not drawn) — pursue or let him escape
+  to fight another day.
+
+  Chest contents: 84 gp, 12 sp, a polished moonstone (50 gp), a
+  rolled map showing the route to a deeper goblin shrine.
+  """
+
+  feature "bone_throne" at 50,36 rotate -10 {
+    description "Wired-together humanoid bones. A fresher skull on top."
+    dm_notes """
+    The fresh skull is one of the missing villagers (Ned the cooper).
+    Returning it earns Ned's widow's favour — drop the local-faction
+    reputation +1 if returned with proper rites.
+    """
+  }
+  feature chest at 51,33 {
+    description "Iron-bound, locked. Key on a thong around the chief's neck."
+  }
+  feature "cookfire" at 38,34 scale 0.7 {
+    description "Smaller fire — the chief takes meals alone."
+  }
+  feature "stalagmite" at 36,31
+  feature "stalagmite" at 42,40
+}
+
+# ---------- Corridors ----------
+
+corridor "fissure_to_midden" {
+  width 1.4
+  segment line from 12,20 to 16,12
+}
+
+corridor "midden_to_cook" {
+  width 1.6
+  segment line from 32,11 to 36,13
+}
+
+corridor "cook_descent" {
+  width 1.6
+  # Quarter-arc curling SW from cookpit's south wall down to chief_lair's
+  # west wall. Centre placed so the arc passes through the empty wedge
+  # between the two cave polygons and never crosses either floor.
+  segment arc center 43,32 radius 10 from-angle 270 to-angle 180 sweep cw
+}
+
+corridor "warren_to_chief" {
+  width 1.8
+  # Lands on chief_lair's SW diagonal wall, not at the bare vertex,
+  # so the door can cut a proper slot.
+  segment line from 22,35 to 33,35
+}
+
+corridor "back_passage" "Back Crawl" {
+  width 1.2
+  segment line from 10,23 to 6,28
+  description "A low, sloping crawlway. You'd have to stoop."
+  dm_notes """
+  Not on the goblins' patrol. A party that finds it (DC 13 Perception
+  from inside the entrance fissure) can bypass the lookout entirely
+  and emerge inside the sleeping warren.
+  """
+}
+
+# ---------- Doors ----------
+
+# Entrance fissure side of the back crawl.
+door at 10,23 {
+  connects room.entrance_fissure, corridor.back_passage
+  type arch
+}
+
+door at 6,28 {
+  connects room.warren_floor, corridor.back_passage
+  type arch
+}
+
+door at 22,35 {
+  connects room.warren_floor, corridor.warren_to_chief
+  type arch
+}
+
+# Chief_lair side of warren_to_chief — on the SW diagonal wall.
+door at 33,35 {
+  connects room.chief_lair, corridor.warren_to_chief
+  type arch
+}
+
+# Cookpit side of cook_descent — on the south wall.
+door at 43,22 {
+  connects room.cookpit, corridor.cook_descent
+  type arch
+}
+
+door at 33,32 {
+  connects room.chief_lair, corridor.cook_descent
+  type wooden
+  state closed
+  facing east
+  description "Chief's door — splintered planks lashed with rawhide."
+  dm_notes """
+  Wired to a clay pot of lamp oil overhead (see hidden 'secrets' layer).
+  Forcing without finding the wire (DC 14 Investigation) showers the
+  threshold in oil; first PC takes 1d4 fire if any torch is nearby.
+  """
+}
+
+door at 36,13 {
+  connects room.cookpit, corridor.midden_to_cook
+  type arch
+}
+
+door at 32,11 {
+  connects room.midden, corridor.midden_to_cook
+  type arch
+}
+
+door at 16,12 {
+  connects room.midden, corridor.fissure_to_midden
+  type arch
+}
+
+door at 12,20 {
+  connects room.entrance_fissure, corridor.fissure_to_midden
+  type arch
+}
+
+# ---------- Hidden layer (traps + secrets) ----------
+
+layer "secrets" hidden {
+  feature trap at 11,20 {
+    description """
+    Tripwire across the fissure mouth — DC 13 Perception to spot,
+    DC 11 Dex save or take 1d4 piercing from a swung spike-log.
+    Set by the lookout each evening.
+    """
+  }
+  feature trap at 33,32 {
+    description """
+    The chief's door is wired to a clay pot of lamp oil overhead.
+    Forcing the door without finding the wire (DC 14 Investigation)
+    showers the threshold in oil — first PC takes 1d4 fire if any
+    torch is nearby.
+    """
+  }
+}

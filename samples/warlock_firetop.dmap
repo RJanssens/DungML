@@ -1,0 +1,366 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# The Warlock of Firetop Mountain — a homage to the Dyson Logos
+# "warlock-double" map. Exercises the hatched renderer with an
+# upper cluster of irregular caverns, a long descending corridor,
+# and a lower section culminating in the warlock's throne chamber.
+#
+# Faithful to spirit rather than pixels: room counts, topology, and
+# the overall vertical narrative match the reference; the exact
+# polygon outlines are simplified.
+
+include "common-dungeon.dmap"
+include "forest.dmap"
+include "city.dmap"
+
+map "The Warlock of Firetop Mountain" {
+  grid {
+    cell    14 px
+    units   feet 5
+    bounds  60 x 84
+    origin  top-left
+  }
+  renderer "hatched"
+  theme    dark
+  description """
+  A crack in the eastern cliff face yawns wide enough for a hunched
+  figure. Cold air sighs from the dark inside. Somewhere beneath the
+  mountain a single bell tolls, then nothing.
+  """
+  dm_notes """
+  Two levels (top cluster + lower warlock chamber) connected by a long
+  central corridor. The warlock himself (HP 36, AC 14, two spells
+  prepared per session) sits in the southern octagonal chamber.
+  Lieutenants: a goblin warband (rooms 5–7), a giant rat colony (room
+  10), and two skeletal guards flanking the throne.
+  """
+}
+
+# ---------- Local feature defs ----------
+
+feature_def "warlock_throne" {
+  name "Warlock's Throne"
+  shape rect 1.6 x 1.4
+  background "#2a1f10"
+  outline { color "#c9a227" width 0.08 stroke solid }
+  overlay rect 1.0 x 0.9 offset 0,0 fill "#3a2818"
+  overlay rect 0.3 x 0.3 offset 0,0 fill "#c9a227"
+}
+
+feature_def "cooking_pit" {
+  name "Cooking Pit"
+  shape circle radius 0.55
+  background "#3a1f0f"
+  outline { color "#1a0a00" width 0.06 stroke solid }
+  overlay circle radius 0.28 fill "#ff7a1a"
+}
+
+# ====================================================================
+# UPPER LEVEL — irregular cavern cluster
+# ====================================================================
+
+# Entry chamber — the crack in the cliff opens here.
+room "entry_crack" {
+  polygon (38,2) (44,3) (46,7) (44,11) (40,11) (37,9) (37,5)
+  label "Entry" align top center size 0.85
+  line_style organic
+  description "Daylight pools on a sand-strewn floor. A narrow crack admits the wind."
+  dm_notes "Tripwire at the throat (DC 13 Perception). Pulls a small bell in entrance_hall."
+
+  feature rubble at 39,9 scale 0.8
+}
+
+# Wide entrance hall just past the crack.
+room "entrance_hall" {
+  polygon (30,8) (38,10) (40,14) (38,18) (32,18) (28,15) (28,11)
+  label "Entrance Hall" align middle center size 0.9
+  grid 1 "#8a8270"
+  line_style organic
+  description "Pillars of crude stone hold up a low ceiling. Bones underfoot."
+
+  feature "arcane_pillar" at 32,12 scale 0.7
+  feature "arcane_pillar" at 36,12 scale 0.7
+  feature "arcane_pillar" at 32,16 scale 0.7
+  feature "arcane_pillar" at 36,16 scale 0.7
+  feature rubble at 30,17 scale 0.6
+}
+
+# Guard room — small chamber north of entrance.
+room "guard_post" {
+  polygon (16,4) (22,4) (24,7) (22,10) (16,10) (14,7)
+  label "Guard Post" align middle center size 0.8
+  line_style organic
+  description "Two stools, an iron lantern hung from a peg, a half-eaten loaf."
+  dm_notes "Two goblin guards (HP 5, 4). One naps unless an alarm has been raised."
+
+  feature chair at 17,7
+  feature chair at 21,7
+  feature "barrel_stack" at 19,9 scale 0.5
+}
+
+# Storeroom west of guard post.
+room "north_store" {
+  polygon (4,5) (12,4) (14,9) (12,14) (5,13) (3,9)
+  label "Store" align top center size 0.85
+  line_style organic
+  description "Crates, salt-pork, and a barrel of stale ale."
+
+  feature "crate_stack" at 6,8 scale 0.7
+  feature "crate_stack" at 10,7 scale 0.7
+  feature barrel at 8,11
+  feature barrel at 11,10
+}
+
+# Barracks — west wall.
+room "barracks" {
+  polygon (3,16) (10,15) (13,18) (12,23) (7,24) (3,22)
+  label "Barracks" align middle center size 0.85
+  grid 1 "#8a8270"
+  line_style organic
+  description "Six straw pallets in a row. The smell suggests they're slept in."
+  dm_notes "1d4+2 goblins (HP 5 each) here unless the warband is roused."
+
+  feature bed at 5,17 scale 0.7
+  feature bed at 7,17 scale 0.7
+  feature bed at 9,17 scale 0.7
+  feature bed at 5,22 scale 0.7
+  feature bed at 7,22 scale 0.7
+}
+
+# Mess hall — central, with the cooking pit.
+room "mess_hall" {
+  polygon (15,14) (25,14) (27,18) (24,22) (16,22) (14,19)
+  label "Mess" align top center size 0.85
+  grid 1 "#8a8270"
+  line_style organic
+  description """
+  A pit of glowing coals sits in the centre, with a blackened pot suspended
+  above it. The walls are smoke-stained.
+  """
+  dm_notes "Three goblins (HP 6, 5, 4). Cook is the chief's cousin — bargains for his life if cornered."
+
+  feature "cooking_pit" at 20,18
+  feature table at 18,21 scale 0.8
+  feature chair at 17,21 scale 0.7
+  feature chair at 19,21 scale 0.7
+  feature chair at 21,21 scale 0.7
+}
+
+# Shrine — irregular west of mess.
+room "shrine" {
+  polygon (4,26) (10,25) (14,28) (13,33) (8,34) (3,31)
+  label "Shrine" align bottom center size 0.85
+  line_style organic
+  description """
+  An altar of unworked stone, stained dark. Bones and broken weapons
+  heap at its foot.
+  """
+  dm_notes "Touching the altar without offering blood: 1d4 necrotic. Offering a freshly drawn drop reveals the next stair (clue)."
+
+  feature altar at 8,30 scale 1.2
+  feature brazier at 5,28 scale 0.7
+  feature brazier at 11,32 scale 0.7
+}
+
+# Cistern — circular room (two arcs make a circle).
+room "cistern" {
+  boundary {
+    start 22,28
+    arc to 16,28 via 19,25
+    arc to 22,28 via 19,31
+  }
+  label "Cistern" align top center size 0.8
+  background "water"
+  line_style organic
+  description "A still pool of dark water, stone-lined. Coins glint on the bottom."
+  dm_notes "Searching the pool: 22 cp, 4 sp, a brass key (opens the throne-room iron door)."
+}
+
+# Library — east of mess.
+room "library" {
+  polygon (28,22) (36,22) (38,26) (36,30) (28,30) (26,26)
+  label "Library" align middle center size 0.85
+  grid 1 "#8a8270"
+  line_style organic
+  description """
+  Shelves of mouldering scrolls and bestiaries half-eaten by silverfish.
+  A single candle, recently snuffed, sits on a writing desk.
+  """
+  dm_notes """
+  DC 14 Investigation, 10 min: a slim journal in Common. Last entry:
+  'F— has gone below. The seal slipped. I cannot wait any longer.'
+  """
+
+  feature "bookcase_tall" at 28,23 rotate 0
+  feature "bookcase_tall" at 32,23 rotate 0
+  feature "bookcase_tall" at 36,23 rotate 0
+  feature desk at 32,28 scale 0.8 {
+    description "Inkwell uncapped. A quill stripped of barbs."
+  }
+  feature chair at 32,29 scale 0.7
+}
+
+# Study — small chamber east of library.
+room "study" {
+  polygon (39,12) (46,12) (47,16) (45,20) (40,20) (38,16)
+  label "Study" align middle center size 0.85
+  line_style organic
+  description "Cleaner than the rest. A locked iron chest. A single chair drawn close to a small hearth."
+
+  feature hearth at 39,15 rotate 90
+  feature chair at 43,16
+  feature chest at 45,18 {
+    description "Iron-banded. The lock is freshly oiled."
+    dm_notes "Inside: 38 gp, a vial of black ink, a sealed letter signed only 'F'."
+  }
+}
+
+# Stair room — the descent begins here.
+room "stair_chamber" {
+  polygon (28,32) (36,32) (38,36) (36,40) (30,40) (26,36)
+  label "Stairs Down" align middle center size 0.85
+  grid 1 "#8a8270"
+  line_style organic
+  description "Worn steps spiral down into the dark. Cold air rises."
+
+  feature "stairs-down" at 32,36 scale 1.3
+}
+
+# ====================================================================
+# DESCENT — long central corridor
+# ====================================================================
+
+corridor "long_descent" "Long Descent" {
+  width 2
+  segment line from 32,40 to 32,58
+  background "stone"
+  line_style organic
+  description "Twenty paces of damp-walled stair, no torches, no windows."
+  dm_notes "Halfway down: a stair-tread is a pressure plate (DC 14 Perception). Trips a stone block in stair_chamber that drops 1d6 bludgeoning."
+}
+
+# ====================================================================
+# LOWER LEVEL — warlock's domain
+# ====================================================================
+
+# Junction at the foot of the stairs.
+room "junction" {
+  polygon (28,58) (36,58) (38,61) (36,64) (28,64) (26,61)
+  label "Junction" align middle center size 0.85
+  grid 1 "#8a8270"
+  line_style organic
+  description "A small T of corridors meeting. A dropped torch lies cold near the centre."
+}
+
+# West chamber off the junction.
+room "guardroom_lower" {
+  polygon (10,60) (20,59) (23,63) (20,67) (12,67) (8,63)
+  label "Lower Guards" align middle center size 0.85
+  grid 1 "#8a8270"
+  line_style organic
+  description "Two suits of bone armour stand at attention against the far wall."
+  dm_notes "Two skeleton guards (HP 13 each). Activate when any living creature enters."
+
+  feature "standing_stone" at 13,63 scale 0.8
+  feature "standing_stone" at 19,63 scale 0.8
+  feature rubble at 17,66 scale 0.6
+}
+
+# East alcove off the junction.
+room "alcove" {
+  polygon (40,60) (48,59) (50,62) (48,66) (42,66) (39,63)
+  label "Alcove" align middle center size 0.8
+  line_style organic
+  description "A bricked-up doorway. Mortar still tacky to the touch."
+  dm_notes "Behind the bricks: a corridor leading to the deeper mountain (not on this map — future expansion hook)."
+
+  feature rubble at 44,64 scale 0.9 rotate 15
+  feature rubble at 47,63 scale 0.7
+}
+
+# Final corridor connecting junction to throne room.
+corridor "approach" "Throne Approach" {
+  width 1.6
+  segment line from 32,64 to 32,70
+  background "stone"
+  line_style organic
+}
+
+# Warlock's throne chamber — octagonal, sealed by an iron door.
+room "throne_chamber" {
+  polygon (24,70) (40,70) (44,74) (40,80) (24,80) (20,74)
+  label "Warlock's Throne" align top center size 0.95
+  background "#2a2418"
+  grid 1 "#5a4a30"
+  line_style organic
+  description """
+  A vaulted chamber of dressed black stone, lit by four green braziers.
+  At the far end, on a raised step, a single high-backed chair of carved
+  ebony. Whoever sits there is watching you.
+  """
+  dm_notes """
+  The Warlock (HP 36, AC 14, spells: scorching ray, hold person, misty
+  step, command). Begins seated. Two skeleton bodyguards (HP 13 each)
+  flank the throne and step forward on round 2.
+
+  Treasure (behind a sliding panel in the throne base, DC 15
+  Investigation if Warlock killed): 240 gp, a moonstone (100 gp), the
+  warlock's grimoire (3 spells, ritual-only).
+  """
+
+  feature "warlock_throne" at 32,77 rotate 0 {
+    description "Ebony chair. The arms are carved as grasping hands."
+    dm_notes "Sliding panel in the base — DC 15 Investigation."
+  }
+  feature brazier at 24,72 scale 0.8
+  feature brazier at 40,72 scale 0.8
+  feature brazier at 26,79 scale 0.8
+  feature brazier at 38,79 scale 0.8
+  feature "arcane_pillar" at 28,75 scale 0.8
+  feature "arcane_pillar" at 36,75 scale 0.8
+}
+
+# ====================================================================
+# DOORS — short, mostly archways between upper rooms; iron door at throne
+# ====================================================================
+
+# Upper level — connecting the cluster.
+door at 38,9   { connects room.entry_crack,   room.entrance_hall  type arch }
+door at 24,8   { connects room.guard_post,    room.entrance_hall  type arch }
+door at 14,8   { connects room.guard_post,    room.north_store    type arch }
+door at 10,15  { connects room.north_store,   room.barracks       type wooden state closed facing south }
+door at 14,18  { connects room.barracks,      room.mess_hall      type arch }
+door at 26,18  { connects room.mess_hall,     room.entrance_hall  type arch }
+door at 14,28  { connects room.shrine,        room.mess_hall      type wooden state closed facing north
+                 description "Carved with goblin runes." }
+door at 16,29  { connects room.shrine,        room.cistern        type arch }
+door at 28,26  { connects room.library,       room.mess_hall      type arch }
+door at 38,16  { connects room.study,         room.entrance_hall  type wooden state locked facing west
+                 description "Always locked when the warlock is below."
+                 dm_notes "Key on the warlock's belt." }
+door at 32,32  { connects room.stair_chamber, room.mess_hall      type arch }
+door at 36,28  { connects room.stair_chamber, room.library        type arch }
+
+# Stair-to-junction and lower-level doors.
+door at 32,58  { connects corridor.long_descent, room.junction    type arch }
+door at 26,61  { connects room.junction,        room.guardroom_lower type wooden state closed facing west }
+door at 38,61  { connects room.junction,        room.alcove          type arch }
+door at 32,64  { connects room.junction,        corridor.approach    type arch }
+door at 32,70  { connects corridor.approach,    room.throne_chamber  type iron state locked facing north width 1.5
+                 description "Iron-bound, runes flickering at the hinges."
+                 dm_notes "Opens to the brass key from the cistern. Forcing it (DC 18 Athletics) wakes the skeletons one round early." }
+
+# ====================================================================
+# HIDDEN — traps + secrets
+# ====================================================================
+
+layer "secrets" hidden {
+  feature trap at 32,49 {
+    description "Pressure-plate tread, halfway down the stairs."
+    dm_notes "DC 14 Perception to spot; DEX DC 13 or take 1d6 bludgeoning from the falling stone (in stair_chamber)."
+  }
+  feature trap at 50,63 {
+    description "Bricked alcove: the seal can be broken from the OUTSIDE only."
+    dm_notes "Future-content marker — the alcove conceals the descent to a sub-mountain shrine."
+  }
+}

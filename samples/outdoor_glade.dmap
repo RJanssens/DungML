@@ -1,0 +1,43 @@
+# Hartfell Glade — a small demo of the bundled `outdoor.dmap` symbols:
+# trees, a mountain backdrop, and a polygonal water pool.
+
+include "outdoor.dmap"
+
+map "Hartfell Glade" {
+  grid {
+    cell    20 px
+    units   yards 5
+    bounds  30 x 20
+    origin  top-left
+  }
+  renderer "classic-bw"
+  background "grass"
+  description """
+  A grassy hollow below the fells. A spring-fed pool sits at the foot of
+  the slope; pines crowd the eastern edge.
+  """
+}
+
+# A polygonal water pool — a room with the built-in `water` texture and
+# an organic (wavy) shoreline.
+room "spring_pool" {
+  polygon (3,11) (9,10) (12,13) (11,17) (6,18) (2,15)
+  label "Spring Pool" at 7,14
+  background "water"
+  line_style organic
+  description "Cold and clear, fed from under the rocks to the north."
+
+  feature water at 4,12
+}
+
+# Trees and mountains sit straight on the grass background as map-level
+# features — no enclosing room needed.
+feature mountain at 24,4 scale 1.6
+feature mountain at 27,5
+feature tree at 18,3
+feature tree at 21,7 scale 1.2
+feature tree at 24,9
+feature tree at 27,11 scale 1.1
+feature tree at 16,16
+feature tree at 20,17 scale 1.2
+feature tree at 13,4

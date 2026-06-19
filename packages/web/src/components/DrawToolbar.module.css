@@ -1,0 +1,140 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  flex-wrap: wrap;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.tool {
+  width: 30px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  cursor: pointer;
+}
+.tool:hover {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+.toolActive {
+  background: var(--accent);
+  color: #fff;
+}
+.toolActive:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.glyph {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.snap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.refBtn {
+  height: 26px;
+  padding: 0 9px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+.refBtn:hover {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+
+.sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+.sortBtn:hover {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+
+.slider {
+  width: 84px;
+  accent-color: var(--accent);
+}
+
+.select {
+  height: 26px;
+  padding: 0 4px;
+  background: var(--bg-elevated);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+.select:disabled {
+  color: var(--fg-faint);
+  cursor: default;
+}
+
+.numField {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.num {
+  width: 48px;
+  height: 24px;
+  padding: 0 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.hint {
+  flex-basis: 100%;
+  color: var(--fg-faint);
+  font-size: 12px;
+  font-style: italic;
+}

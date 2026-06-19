@@ -1,0 +1,84 @@
+# outdoor.dmap — a compact symbol set for outdoor / overland maps.
+#
+# `include "outdoor.dmap"` from any map to get three terrain symbols:
+#
+#   tree      — a layered conifer (point feature)
+#   mountain  — a snow-capped peak (point feature)
+#   water     — a small pool / spring marker (point feature)
+#
+# Place the point symbols anywhere with:
+#
+#   feature tree     at 12,8
+#   feature mountain at 20,5 scale 1.4
+#   feature water    at 9,14
+#
+# ----- Drawing polygonal pools -----
+#
+# `water` above is a *spot* marker. A real body of water is an AREA, so
+# draw it as a room with a `polygon` outline and the built-in `water`
+# texture as its background. `line_style organic` gives the edge a wavy,
+# natural shoreline instead of straight survey lines:
+#
+#   room "mill_pond" {
+#     polygon (4,26) (14,26) (18,30) (16,36) (10,38) (4,36) (2,32)
+#     label "Mill Pond" at 10,32
+#     background "water"
+#     line_style organic
+#   }
+#
+# Any number of pools can be drawn this way — each is just another room.
+# (Other built-in area textures useful outdoors: grass, forest, dirt.)
+
+# NOTE on `plain`: glyph roles `stroke`/`fill` attach the renderer's
+# `.feature` / `.feature-fill` CSS classes, whose colors override any
+# `fill-color`/`stroke-color` you set (CSS beats presentation attributes).
+# These symbols want their own palette, so every element uses role
+# `plain` (no class) and states its colors explicitly.
+
+feature_def "tree" {
+  name "Tree"
+  description "A standing tree (conifer)."
+  glyph {
+    # trunk (drawn first, behind the canopy) — grayscale
+    rect plain at -0.06,0.14 0.12 x 0.24 fill-color "#4f4f4f" stroke-color "none"
+    # canopy — two stacked triangles for a pine silhouette, tonal grays
+    polygon plain (-0.34,0.20) (0.34,0.20) (0,-0.04) fill-color "#8c8c8c" stroke-color "#2e2e2e" stroke-width 0.04
+    polygon plain (-0.24,0.02) (0.24,0.02) (0,-0.34) fill-color "#a8a8a8" stroke-color "#2e2e2e" stroke-width 0.04
+  }
+}
+
+feature_def "mountain" {
+  name "Mountain"
+  description "A rocky peak. Scale up for taller summits."
+  glyph {
+    # back peak — smaller, lighter, sits behind the main summit
+    polygon plain (0.04,0.30) (0.28,-0.04) (0.46,0.30) fill-color "#9a9a9a" stroke-color "#4a4a4a" stroke-width 0.04
+    # main peak
+    polygon plain (-0.46,0.30) (-0.08,-0.36) (0.26,0.30) fill-color "#777777" stroke-color "#333333" stroke-width 0.05
+    # snow cap
+    polygon plain (-0.19,-0.07) (-0.08,-0.36) (0.03,-0.07) fill-color "#f2f2f2" stroke-color "none"
+  }
+}
+
+feature_def "water" {
+  name "Water"
+  description "A spring or small pool. For larger bodies, draw a polygon room with `background \"water\"`."
+  glyph {
+    circle plain at 0,0 radius 0.34 fill-color "#4f7c8a" stroke-color "#2c4f59" stroke-width 0.05
+    # two ripples
+    path plain "M-0.18,-0.04 Q-0.09,-0.13 0,-0.04 T0.18,-0.04" fill-color "none" stroke-color "#bfe0e8" stroke-width 0.035
+    path plain "M-0.15,0.12 Q-0.075,0.03 0,0.12 T0.15,0.12" fill-color "none" stroke-color "#bfe0e8" stroke-width 0.03
+  }
+}
+
+feature_def "boulder" {
+  name "Boulder"
+  description "A large rock or boulder."
+  glyph {
+    # rounded irregular rock body
+    polygon plain (-0.40,0.18) (-0.42,-0.05) (-0.22,-0.28) (0.05,-0.34) (0.30,-0.22) (0.40,0.02) (0.32,0.24) (0.0,0.30) (-0.25,0.26) fill-color "#9a9a9a" stroke-color "#3a3a3a" stroke-width 0.05
+    # a couple of cracks for texture
+    path plain "M-0.05,-0.3 L0.02,-0.05 L-0.1,0.12" fill-color "none" stroke-color "#3a3a3a" stroke-width 0.03
+    path plain "M0.1,-0.02 L0.28,0.1" fill-color "none" stroke-color "#3a3a3a" stroke-width 0.03
+  }
+}

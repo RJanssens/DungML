@@ -1,0 +1,15 @@
+- Traps with location
+- View modes (don't show traps, only show some rooms - toggle hidden on/off)
+- API-based zoom/center operations (center on player)
+- Monster statistics metadata
+- Support images (textures - tiled or not)
+- Better autocomplete
+- Asset manager (textures, images...)
+- Should have structured metamodel (named: creature_adnd2e)
+- Cross-slice support (river, ravine) and bridges
+- Dark mode support
+- Ability to jump to feature definition (even in includes)
+- Font support
+- OIDC support and public workspaces
+- Check: includes handled properly? (should be part of a project)
+- In printed PDF, door and corridor key unclear (which entry belongs where?)

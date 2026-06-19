@@ -1,0 +1,131 @@
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+.headerTitle {
+  font-size: 16px;
+}
+
+.crumb {
+  color: var(--fg-muted);
+  font-size: 14px;
+  font-family: var(--serif);
+}
+.crumb:hover {
+  color: var(--fg);
+}
+.crumbSep {
+  color: var(--fg-faint);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.toolbarSpacer {
+  flex: 1;
+}
+
+.muted {
+  color: var(--fg-muted);
+  padding: 30px 0;
+  text-align: center;
+}
+
+.createCard {
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.createForm {
+  display: flex;
+  gap: 8px;
+}
+.createForm > :first-child {
+  flex: 1;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.listItem:hover {
+  border-color: var(--fg-muted);
+}
+
+.itemLink {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+  color: inherit;
+}
+.itemLink:hover {
+  text-decoration: none;
+}
+.itemName {
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.itemMeta {
+  color: var(--fg-faint);
+  font-size: 12px;
+}
+
+.itemActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.renameForm {
+  flex: 1;
+}
+
+/* Grouped sections (Maps / Library files) on the project page. */
+.section {
+  margin-top: 28px;
+}
+.section:first-of-type {
+  margin-top: 0;
+}
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.sectionHint {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fg-faint);
+  font-style: italic;
+}

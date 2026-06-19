@@ -1,0 +1,400 @@
+// dungml grammar
+// Top-level: any number of declarations in any order.
+
+start: top_level*
+
+?top_level: map_block
+          | scenario_block
+          | feature_def
+          | room
+          | corridor
+          | slice_decl
+          | feature_inst
+          | door
+          | window
+          | marker
+          | text_annotation
+          | area
+          | line_feature
+          | layer
+          | include_decl
+
+include_decl: "include" STRING
+
+// ============ SCENARIO ============
+// An adventure-level bundle: scenario-wide prose plus a list of `map "path"`
+// references to .dmap files that the scenario renderer pulls in.
+scenario_block: "scenario" STRING "{" scenario_property* "}"
+
+?scenario_property: scenario_map_ref
+                  | description_decl
+                  | dm_notes_decl
+
+scenario_map_ref: "map" STRING
+
+// ============ MAP ============
+map_block: "map" STRING "{" map_property* "}"
+
+?map_property: grid_block
+             | renderer_prop
+             | theme_prop
+             | legend_prop
+             | grid_overlay_decl
+             | background_prop
+             | party_start_decl
+             | room_numbers_decl
+             | map_title_decl
+             | cell_grid_decl
+             | description_decl
+             | dm_notes_decl
+
+renderer_prop: "renderer" STRING
+party_start_decl: "party_start" NUMBER "," NUMBER
+room_numbers_decl: "room_numbers" CNAME
+map_title_decl: "title" STRING label_modifier*
+// `cell_grid` alone → spacing 1; `cell_grid 0.5` → custom spacing;
+// `cell_grid 1 "#999"` → custom spacing + colour.
+cell_grid_decl: "cell_grid" (NUMBER STRING?)?
+theme_prop: "theme" CNAME
+legend_prop: "legend"
+
+// Map-wide grid overlay (graph-paper-style). Both args are optional:
+// `grid_overlay` alone → spacing 1 world-unit, default colour.
+// `grid_overlay 2` → 2-unit spacing, default colour.
+// `grid_overlay 1 "#444"` → 1-unit spacing, custom colour.
+grid_overlay_decl: "grid_overlay" (NUMBER STRING?)?
+
+grid_block: "grid" "{" grid_property* "}"
+
+?grid_property: cell_prop
+              | units_prop
+              | bounds_prop
+              | origin_prop
+
+cell_prop: "cell" NUMBER "px"
+units_prop: "units" CNAME NUMBER
+bounds_prop: "bounds" NUMBER "x" NUMBER
+origin_prop: "origin" ORIGIN_KIND
+
+ORIGIN_KIND: "top-left" | "bottom-left"
+
+// ============ FEATURE_DEF ============
+feature_def: "feature_def" STRING "{" feature_def_property* "}"
+
+?feature_def_property: shape_decl
+                     | glyph_block
+                     | background_prop
+                     | outline_block
+                     | overlay_decl
+                     | description_decl
+                     | display_name_decl
+
+background_prop: "background" STRING
+display_name_decl: "name" STRING
+
+shape_decl: "shape" shape_kind
+
+?shape_kind: circle_shape
+           | rect_shape
+           | polygon_shape
+
+circle_shape: "circle" "radius" NUMBER
+rect_shape: "rect" NUMBER "x" NUMBER
+polygon_shape: "polygon" point+
+
+outline_block: "outline" "{" outline_property* "}"
+
+?outline_property: outline_color
+                 | outline_width
+                 | outline_stroke
+
+outline_color: "color" STRING
+outline_width: "width" NUMBER
+outline_stroke: "stroke" CNAME
+
+overlay_decl: "overlay" shape_kind overlay_modifier*
+
+?overlay_modifier: overlay_offset
+                 | overlay_fill
+
+overlay_offset: "offset" NUMBER "," NUMBER
+overlay_fill: "fill" STRING
+
+// ----- glyph (line-art draw commands) -----
+// An alternative to `shape`: an ordered list of raw draw primitives.
+// Each begins with a role (stroke | fill | plain) selecting its CSS
+// class, followed by geometry, then optional style overrides.
+glyph_block: "glyph" "{" glyph_element* "}"
+
+?glyph_element: glyph_circle
+              | glyph_rect
+              | glyph_line
+              | glyph_polygon
+              | glyph_polyline
+              | glyph_path
+
+glyph_circle:   "circle"   glyph_role "at" NUMBER "," NUMBER "radius" NUMBER glyph_style*
+glyph_rect:     "rect"     glyph_role "at" NUMBER "," NUMBER NUMBER "x" NUMBER glyph_style*
+glyph_line:     "line"     glyph_role "from" NUMBER "," NUMBER "to" NUMBER "," NUMBER glyph_style*
+glyph_polygon:  "polygon"  glyph_role point+ glyph_style*
+glyph_polyline: "polyline" glyph_role point+ glyph_style*
+glyph_path:     "path"     glyph_role STRING glyph_style*
+
+?glyph_role: g_stroke | g_fill | g_plain
+g_stroke: "stroke"
+g_fill:   "fill"
+g_plain:  "plain"
+
+?glyph_style: g_fill_color | g_stroke_color | g_stroke_width | g_rx | g_class
+g_fill_color:   "fill-color" STRING
+g_stroke_color: "stroke-color" STRING
+g_stroke_width: "stroke-width" NUMBER
+g_rx:           "rx" NUMBER
+g_class:        "class" STRING
+
+// ============ ROOM ============
+room: "room" STRING "{" room_property* "}"
+
+?room_property: room_shape
+              | label_decl
+              | description_decl
+              | dm_notes_decl
+              | feature_inst
+              | room_grid
+              | background_prop
+              | line_style_decl
+              | allow_overlap_decl
+
+line_style_decl: "line_style" CNAME NUMBER?
+
+// Opt this room out of the interior-overlap validation warning (for
+// deliberate stacking, e.g. a building drawn inside the floor it sits on).
+allow_overlap_decl: "allow_overlap"
+
+// Optional STRING is a CSS colour for the grid lines (defaults to a subtle
+// warm grey when omitted).
+room_grid: "grid" NUMBER STRING?
+dm_notes_decl: "dm_notes" any_string
+
+?room_shape: rect_room
+           | polygon_room
+           | boundary_room
+           | circle_room
+
+rect_room: "rect" NUMBER "," NUMBER NUMBER "x" NUMBER
+polygon_room: "polygon" point+
+circle_room: "circle" "at" NUMBER "," NUMBER "radius" NUMBER
+
+// Mixed line + 3-point-arc boundary. The boundary is implicitly closed:
+// the final edge's endpoint connects back to `start`.
+boundary_room: "boundary" "{" boundary_edge+ "}"
+
+?boundary_edge: boundary_start | boundary_line | boundary_arc
+
+boundary_start: "start" NUMBER "," NUMBER
+boundary_line: "line" "to" NUMBER "," NUMBER
+boundary_arc: "arc" "to" NUMBER "," NUMBER "via" NUMBER "," NUMBER
+
+// ============ LABEL ============
+label_decl: "label" STRING label_modifier*
+
+?label_modifier: label_pos
+               | label_align
+               | label_size
+               | label_rotate
+
+label_pos: "at" NUMBER "," NUMBER
+label_align: "align" ALIGN_V ALIGN_H
+label_size: "size" NUMBER
+label_rotate: "rotate" NUMBER
+
+ALIGN_V: "top" | "middle" | "bottom"
+ALIGN_H: "left" | "center" | "right"
+
+// ============ DESCRIPTION ============
+description_decl: "description" any_string
+
+any_string: STRING | TRIPLE_STRING
+
+// ============ FEATURE INSTANCE ============
+feature_inst: "feature" feature_ref "at" NUMBER "," NUMBER feature_modifier* feature_block?
+
+feature_ref: STRING | CNAME
+
+?feature_modifier: feat_rotate | feat_scale
+
+feat_rotate: "rotate" NUMBER
+// `scale 2` → uniform; `scale 2:1` → independent X:Y scaling.
+feat_scale: "scale" NUMBER (":" NUMBER)?
+
+feature_block: "{" feature_block_property* "}"
+
+?feature_block_property: description_decl | dm_notes_decl
+
+// ============ CORRIDOR ============
+// Second STRING is an optional human-readable display name. Used only as
+// the hover/tooltip label (and in the print-page legend) — it does NOT
+// render as text on the map. To draw a label on the corridor itself,
+// include an explicit `label "..."` block (same syntax as room labels).
+corridor: "corridor" STRING STRING? "{" corridor_property* "}"
+
+?corridor_property: corridor_width
+                  | segment_decl
+                  | corridor_node
+                  | corridor_run
+                  | corridor_corners
+                  | label_decl
+                  | description_decl
+                  | dm_notes_decl
+                  | background_prop
+                  | line_style_decl
+
+corridor_corners: "corners" CNAME
+
+corridor_width: "width" NUMBER
+
+// A named junction point and a straight run between two named nodes. Runs
+// are desugared into line segments; ≥3 runs sharing a node form a T / branch,
+// 4 form a crossing. Curved runs are still written with `segment arc`.
+corridor_node: "node" CNAME "at" NUMBER "," NUMBER
+corridor_run: "run" CNAME "to" CNAME
+
+segment_decl: "segment" segment_kind
+
+?segment_kind: line_segment | arc_segment
+
+line_segment: "line" "from" NUMBER "," NUMBER "to" NUMBER "," NUMBER
+arc_segment: "arc" "center" NUMBER "," NUMBER "radius" NUMBER "from-angle" NUMBER "to-angle" NUMBER sweep_modifier?
+
+sweep_modifier: "sweep" SWEEP_DIR
+
+SWEEP_DIR: "ccw" | "cw"
+
+// ============ SLICE ============
+// Cross-slice terrain: rivers, ravines, splits. Same line/arc segment
+// geometry as corridors, but rendered as a terrain band (water, dirt
+// shadow, crack) instead of a passable interior. Bridges are placed as
+// regular features on top of the slice.
+slice_decl: "slice" STRING "{" slice_property* "}"
+
+?slice_property: slice_kind
+               | slice_width
+               | segment_decl
+               | label_decl
+               | description_decl
+               | dm_notes_decl
+
+slice_kind: "kind" SLICE_KIND
+slice_width: "width" NUMBER
+
+SLICE_KIND: "river" | "ravine" | "split"
+
+// ============ DOOR ============
+door: "door" "at" NUMBER "," NUMBER "{" door_property* "}"
+
+?door_property: door_connects
+              | door_type
+              | door_state
+              | door_facing
+              | door_width
+              | description_decl
+              | dm_notes_decl
+
+door_connects: "connects" ref ("," ref)*
+door_type: "type" CNAME
+door_state: "state" CNAME
+door_facing: "facing" CNAME
+door_width: "width" NUMBER
+
+// ============ WINDOW ============
+window: "window" "at" NUMBER "," NUMBER "{" window_property* "}"
+
+?window_property: window_in | window_width | description_decl
+
+window_in: "in" ref
+window_width: "width" NUMBER
+
+// ============ MARKER ============
+// Lightweight dynamic token (party member, monster, NPC). Modifiers may
+// appear in any order; the name (after `marker`) and `at X,Y` are
+// required. `tag` is a palette key (party, ally, npc, enemy, boss,
+// neutral, unknown) OR a CSS colour literal in quotes.
+marker: "marker" STRING "at" NUMBER "," NUMBER marker_modifier*
+
+?marker_modifier: marker_tag
+                | marker_label
+                | marker_initial
+                | marker_size
+                | marker_location
+                | marker_image
+                | description_decl
+                | dm_notes_decl
+
+marker_tag:      "tag" (CNAME | STRING)
+marker_label:    "label" STRING
+marker_initial:  "initial" STRING
+marker_size:     "size" NUMBER
+marker_location: "in" ref
+marker_image:    "image" STRING
+
+// ============ TEXT ============
+// Freestanding text drawn at a fixed map position. `size` multiplies the
+// renderer's base label size; `rotate` is in degrees. Both optional.
+text_annotation: "text" STRING "at" NUMBER "," NUMBER text_modifier*
+
+?text_modifier: text_size
+              | text_rotate
+              | description_decl
+              | dm_notes_decl
+
+text_size:   "size" NUMBER
+text_rotate: "rotate" NUMBER
+
+// ============ AREA ============
+// Decorative terrain (water / lava / pit / …) drawn as a filled shape.
+// Reuses the room shape grammar but is NOT a room (no graph / numbering).
+// `kind` picks a built-in fill palette; `background` overrides it.
+area: "area" STRING area_kind? "{" area_property* "}"
+
+?area_property: room_shape
+              | area_kind
+              | label_decl
+              | description_decl
+              | dm_notes_decl
+              | background_prop
+              | line_style_decl
+
+area_kind: "kind" CNAME
+
+// ============ LAYER ============
+layer: "layer" STRING hidden_flag? "{" layer_item* "}"
+
+hidden_flag: "hidden"
+
+?layer_item: feature_inst | door | window | marker | text_annotation | area | line_feature | room | corridor | slice_decl
+
+// ============ LINE FEATURE ============
+// A styled polyline decoration drawn along a path of points: `bars`
+// (dotted), `curtain` (wavy), `barred` (small + marks). Not a connector —
+// excluded from the graph.
+line_feature: "line_feature" STRING lf_kind? "{" line_feature_property* "}"
+
+?line_feature_property: lf_kind | lf_point | description_decl | dm_notes_decl
+
+lf_kind: "kind" CNAME
+lf_point: "point" NUMBER "," NUMBER
+
+// ============ SHARED ============
+point: "(" NUMBER "," NUMBER ")"
+
+ref: CNAME ("." CNAME)*
+
+// ============ TERMINALS ============
+TRIPLE_STRING.2: /"""([\s\S]*?)"""/
+STRING: /"([^"\\]|\\.)*"/
+NUMBER: /-?\d+(\.\d+)?/
+CNAME: /[a-zA-Z_][a-zA-Z0-9_-]*/
+
+COMMENT: /#[^\n]*/
+%ignore COMMENT
+%ignore /[ \t\r\n]+/

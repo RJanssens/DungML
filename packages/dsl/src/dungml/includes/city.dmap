@@ -1,0 +1,123 @@
+# city.dmap — bundled feature_defs for urban / market / street maps.
+#
+# `include "city.dmap"` from any .dmap file. Designed for town squares,
+# market districts, street scenes, courtyards — anything where the
+# props are wheels, lanterns, stalls, and benches rather than tombs or
+# dungeon furniture.
+#
+# Includes: well_stone, fountain, market_stall, cart, wagon,
+#           lantern_post, signpost, hitching_post, barrel_stack,
+#           crate_stack, bench, planter, guard_post
+
+feature_def "well_stone" {
+  name "Well"
+  shape circle radius 0.55
+  background "#7c7264"
+  outline { color "#2a2418" width 0.08 stroke solid }
+  overlay circle radius 0.38 fill "#3a3022"
+  overlay circle radius 0.22 fill "#1a1408"
+}
+
+feature_def "fountain" {
+  name "Fountain"
+  shape circle radius 0.95
+  background "#8a8b86"
+  outline { color "#2a2818" width 0.08 stroke solid }
+  overlay circle radius 0.7 fill "#4f7c8a"
+  overlay circle radius 0.25 fill "#8a8b86"
+  overlay circle radius 0.10 fill "#86b0bd"
+}
+
+feature_def "market_stall" {
+  name "Market Stall"
+  shape rect 1.6 x 1.2
+  background "#a67b3e"
+  outline { color "#3a2a14" width 0.07 stroke solid }
+  overlay rect 1.4 x 0.30 offset 0,-0.40 fill "#5a3e1a"
+  overlay rect 1.4 x 0.30 offset 0,0.10  fill "#7a5828"
+}
+
+feature_def "cart" {
+  name "Cart"
+  shape rect 1.6 x 0.9
+  background "#7a5828"
+  outline { color "#2a1f10" width 0.06 stroke solid }
+  overlay circle radius 0.22 offset -0.55,0.50 fill "#1a1208"
+  overlay circle radius 0.22 offset 0.55,0.50 fill "#1a1208"
+}
+
+feature_def "wagon" {
+  name "Wagon"
+  shape rect 2.4 x 1.2
+  background "#6a4a22"
+  outline { color "#2a1f10" width 0.07 stroke solid }
+  overlay rect 2.2 x 0.6 offset 0,-0.05 fill "#3a2818"
+  overlay circle radius 0.30 offset -0.90,0.70 fill "#1a1208"
+  overlay circle radius 0.30 offset 0.90,0.70 fill "#1a1208"
+}
+
+feature_def "lantern_post" {
+  name "Lantern Post"
+  shape circle radius 0.25
+  background "#2a2418"
+  outline { color "#1a1408" width 0.05 stroke solid }
+  overlay circle radius 0.14 fill "#f3c14d"
+}
+
+feature_def "signpost" {
+  name "Signpost"
+  shape rect 0.28 x 0.95
+  background "#5a3e1a"
+  outline { color "#1a1208" width 0.05 stroke solid }
+  overlay rect 0.95 x 0.20 offset 0,-0.30 fill "#a8884c"
+}
+
+feature_def "hitching_post" {
+  name "Hitching Post"
+  shape rect 0.95 x 0.18
+  background "#3a2818"
+  outline { color "#1a1208" width 0.05 stroke solid }
+}
+
+feature_def "barrel_stack" {
+  name "Barrel Stack"
+  shape circle radius 0.55
+  background "#7a5828"
+  outline { color "#2a1f10" width 0.06 stroke solid }
+  overlay circle radius 0.28 offset -0.20,0 fill "#a8884c"
+  overlay circle radius 0.28 offset 0.20,0 fill "#a8884c"
+}
+
+feature_def "crate_stack" {
+  name "Crate Stack"
+  shape rect 1.0 x 1.0
+  background "#7a5828"
+  outline { color "#2a1f10" width 0.06 stroke solid }
+  overlay rect 0.42 x 0.42 offset -0.22,-0.22 fill "#a8884c"
+  overlay rect 0.42 x 0.42 offset 0.22,-0.22  fill "#a8884c"
+  overlay rect 0.42 x 0.42 offset -0.22,0.22  fill "#a8884c"
+  overlay rect 0.42 x 0.42 offset 0.22,0.22   fill "#a8884c"
+}
+
+feature_def "bench" {
+  name "Bench"
+  shape rect 1.6 x 0.35
+  background "#5a3e1a"
+  outline { color "#1a1208" width 0.05 stroke solid }
+}
+
+feature_def "planter" {
+  name "Planter"
+  shape rect 1.0 x 0.45
+  background "#5a4030"
+  outline { color "#1a1208" width 0.05 stroke solid }
+  overlay rect 0.85 x 0.30 offset 0,0 fill "#3a5530"
+}
+
+feature_def "guard_post" {
+  name "Guard Post"
+  shape rect 0.9 x 0.9
+  background "#5a5040"
+  outline { color "#1a1408" width 0.08 stroke solid }
+  overlay rect 0.5 x 0.5 offset 0,0 fill "#2a2418"
+}

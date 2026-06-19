@@ -1,0 +1,67 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg);
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.brand:hover {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.spacer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.docsLink {
+  color: var(--fg-muted);
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+.docsLink:hover {
+  color: var(--fg);
+  text-decoration: none;
+  background: var(--bg-sunken);
+}
+
+.userBlock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.userEmail {
+  font-variant: tabular-nums;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

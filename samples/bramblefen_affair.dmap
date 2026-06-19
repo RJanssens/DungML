@@ -1,0 +1,45 @@
+# The Affair at Bramblefen — a one-shot scenario bundling three maps.
+#
+# Demonstrates the `scenario { ... }` block: scenario-level boxed text
+# (read-aloud), DM notes (private), and a sequence of `map "path"`
+# references. Render with:
+#
+#     uv run dmap render-scenario samples/bramblefen_affair.dmap \
+#       -o bramblefen.html
+#
+# The output is a self-contained HTML document — one section per map,
+# print-ready (each map breaks onto its own page).
+
+scenario "The Affair at Bramblefen" {
+  description """
+  The trail of stolen cattle ends at a crack in the hillside above
+  Bramblefen Crossing. Locals say bones hang on twine from low branches
+  outside the cleft — fox skulls, mostly, but one or two too long for
+  any fox. Captain Reswick will pay 50 gp a head for the cattle's
+  return, and another 50 if the raiders are dealt with.
+  """
+  dm_notes """
+  Three-session scope. The party arrives at Bramblefen Crossing
+  (overland map) and questions Headwoman Merryn. She points them at
+  the goblin warren in the West Wood — but quietly. She will not
+  speak openly against the standing-stones fey court.
+
+  Pace:
+    • Session 1 — Bramblefen Crossing. Roleplay, optional fey hook
+      at the standing stones.
+    • Session 2 — Goblin Warren. Combat-heavy. Broken Tooth may flee
+      if reduced below 8 HP — leaves a "Goblin reprisal" clock.
+    • Session 3 — Crypt of Saint Vellis. A side hook: the ritualist
+      from the throne chamber was hired by the same patron as the
+      goblins. Resolve or escalate.
+
+  Faction reactions to a full clear:
+    • Bramblefen — Merryn cordial; free room and board for one night.
+    • Standing-stones court — neutral if PCs left the ring alone;
+      hostile clock if they took anything from the centre pillar.
+  """
+
+  map "overland.dmap"
+  map "goblin_warren.dmap"
+  map "crypt.dmap"
+}

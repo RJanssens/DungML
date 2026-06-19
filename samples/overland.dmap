@@ -1,0 +1,208 @@
+# Bramblefen Crossing — a square mile of countryside around a forest
+# crossroads, the kind of place a hex would point to on a regional map.
+# Exercises map-level backgrounds, per-room textures, dirt-road corridors,
+# and the bundled `forest.dmap` feature library.
+#
+# Layout (60 x 40, top-left origin):
+#
+#   N
+#   |   forest (W)        |   meadow (N)        |   forest (E)
+#   |   ---------- road --|--------------------|--------- road -----
+#   |   pond (SW)         |   village (centre)  |   stones (SE)
+#   S
+
+include "forest.dmap"
+
+map "Bramblefen Crossing" {
+  grid {
+    cell    18 px
+    units   yards 5
+    bounds  60 x 40
+    origin  top-left
+  }
+  renderer "classic-bw"
+  background "grass"
+  description """
+  Bramblefen Crossing — where the King's Road bends north into the
+  treeline. A handful of mossy roofs huddle around the well-stone;
+  a circle of standing stones broods on the rise to the east.
+  """
+  dm_notes """
+  Three loose threads sit on this map:
+    • Pond (SW) — a bog hag, sleeping under the lilies. Wakes on a 1
+      if anyone wades past waist-deep.
+    • Standing stones (SE) — true-name of the local fey court is
+      carved on the central pillar in Sylvan (DC 16 Investigation).
+    • Withered tree (in eastern forest) — marker for a buried cache:
+      35 sp, a tin whistle, a dwarven prayer-token (faction hook).
+  """
+}
+
+# ============ Terrain regions ============
+#
+# Each "region" is just a Room — the renderer doesn't care that we're
+# calling these forests and ponds. We layer trees and rocks as features
+# on top of each region's textured floor.
+
+room "west_woods" {
+  polygon (0,8) (16,8) (22,14) (18,22) (8,22) (0,18)
+  label "West Wood" at 9,15 size 1.2
+  background "forest"
+  line_style organic
+  description "Dense old-growth, mossy boles. A deer track threads through."
+
+  feature pine at 4,11
+  feature pine at 7,10 scale 1.1
+  feature oak  at 11,12 scale 1.2
+  feature pine at 14,11
+  feature oak  at 16,15 scale 1.1
+  feature pine at 5,15
+  feature pine at 9,18
+  feature oak  at 13,18 scale 1.0
+  feature birch at 17,18
+  feature pine at 3,17
+  feature bush  at 6,21
+  feature bush  at 12,20
+}
+
+room "east_woods" {
+  polygon (38,4) (60,4) (60,22) (50,24) (40,22) (36,16) (36,8)
+  label "East Wood" at 49,12 size 1.2
+  background "forest"
+  line_style organic
+  description "Younger, lighter — coppiced timber, hazel beneath the oaks."
+
+  feature oak  at 41,8  scale 1.1
+  feature oak  at 45,7
+  feature birch at 49,8
+  feature birch at 53,9
+  feature oak  at 57,9  scale 1.2
+  feature birch at 42,12
+  feature oak  at 46,13 scale 1.0
+  feature birch at 51,13
+  feature oak  at 56,14 scale 1.1
+  feature birch at 41,17
+  feature withered at 47,17 {
+    description "Lightning-struck. Bark blackened to the heartwood."
+    dm_notes "Buried cache marker — 1 ft down between the trunk and the boulder at 48,18."
+  }
+  feature boulder at 48,18
+  feature oak  at 53,18
+  feature birch at 57,18
+  feature bush  at 44,20
+  feature bush  at 54,21
+}
+
+room "meadow" {
+  rect 22,4 16 x 12
+  label "Long Meadow" align top center
+  background "grass"
+  description "Knee-high grass and clover. Bees hum in the warm pockets."
+
+  feature bush  at 26,9
+  feature bush  at 32,7
+  feature bush  at 35,12
+  feature boulder at 24,14
+  feature boulder at 30,5 scale 0.7
+}
+
+room "pond" {
+  polygon (4,26) (14,26) (18,30) (16,36) (10,38) (4,36) (2,32)
+  label "Lily Pond" at 10,32 size 1.1
+  background "water"
+  line_style organic
+  description "Sleek green pads. Frogs go silent as you approach."
+  dm_notes """
+  Bog hag (HP 26, AC 16) coiled in the deepest channel near (10,33).
+  Surface dimples if she's stirring; hold breath check (DC 11) to
+  retreat without alerting her.
+  """
+
+  feature bush at 5,28
+  feature bush at 17,30
+  feature bush at 9,37
+}
+
+room "village" {
+  rect 24,20 14 x 10
+  label "Bramblefen" align middle center size 1.2
+  background "dirt"
+  description """
+  Six cottages, a smithy, a well-stone in the middle of a packed-dirt
+  yard. Smoke from one chimney, smelling of bacon.
+  """
+  dm_notes """
+  Headwoman Merryn (HP 9, Cha 14) speaks first. She is paying off a
+  debt to the standing-stones fey court; if PCs disturb the stones,
+  she warns them and offers a free meal to leave the matter alone.
+  """
+
+  feature boulder at 31,25 scale 0.5 {
+    description "The well-stone. A bronze ladle hangs from a hook."
+    dm_notes "Drop a copper in the well, hear it strike water at 30 ft."
+  }
+  feature campfire at 27,24
+  feature bush     at 25,28
+  feature bush     at 37,28
+}
+
+room "stones" {
+  polygon (44,28) (52,28) (56,32) (52,38) (44,38) (40,32)
+  label "Standing Stones" at 48,34 size 1.0
+  background "grass"
+  description "Seven moss-furred monoliths, set in a ring. The grass is shorter inside."
+  dm_notes """
+  Speak any True Name aloud inside the ring during dusk and the
+  closest fey within a mile hears it. The court's herald will arrive
+  within 2d4 rounds.
+  """
+
+  feature "standing_stone" at 48,30 rotate 0
+  feature "standing_stone" at 52,32 rotate 30
+  feature "standing_stone" at 53,35 rotate 60
+  feature "standing_stone" at 48,37 rotate 90
+  feature "standing_stone" at 43,35 rotate 120
+  feature "standing_stone" at 42,32 rotate 150
+  feature "standing_stone" at 48,34 scale 1.4 {
+    description "The centre pillar. Older than the rest by a millennium."
+    dm_notes "Sylvan carving on the north face — DC 16 Investigation to spot, DC 14 Arcana to read: the fey court's true name."
+  }
+}
+
+# ============ Roads ============
+#
+# Roads are corridors with `background dirt`. They render as a packed-earth
+# strip with a dark border, naturally fitting under tree features.
+
+corridor "kings_road" "King's Road" {
+  width 1.6
+  segment line from 0,4 to 22,4
+  segment line from 22,4 to 38,4
+  segment line from 38,4 to 60,4
+  background "dirt"
+  description "A graded earthen road. Cartwheel ruts run deep."
+  dm_notes "Patrolled twice a day. Lone travellers go missing here — never on the road, always within sight of it."
+}
+
+corridor "village_lane" "Village Lane" {
+  width 1.2
+  segment line from 30,4 to 30,20
+  background "dirt"
+  description "Cart-track from the road down to the village square."
+}
+
+corridor "pond_path" "Pond Track" {
+  width 0.9
+  segment line from 24,25 to 14,28
+  background "dirt"
+  line_style organic
+  description "A footpath, mostly mud. Locals draw water here in dry summers."
+}
+
+corridor "stone_path" "Stone Path" {
+  width 0.9
+  segment line from 38,25 to 44,32
+  background "dirt"
+  line_style organic
+  description "Older than the village. Worn into the slope by centuries of bare feet."
+}

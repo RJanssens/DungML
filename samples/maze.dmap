@@ -1,0 +1,76 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# Lich-Lord's Labyrinth — a small spiral maze hewn from solid rock.
+# A single coiled path from the entrance (north-west) to the lich-lord's
+# chamber (south-east corner) — no dead ends, just a long, dizzying spiral.
+# Demonstrates: many short corridors meeting at junctions, a dark stone
+# `background`, the map-level `grid_overlay` for tactical-square play.
+#
+# Cells sit on a 2-unit grid:
+#
+#   y\x   2   4   6   8  10
+#    2    S ─ ┐   ┌ ─ ─ ─ ┐
+#    4    ┌ ─ ┘   │   ┌ ─ │     each ─ / │ is a 1-unit-wide corridor;
+#    6    │   ┌ ─ ┘   │   │     the dark cells between are unhewn rock.
+#    8    │   │   ┌ ─ ┘   │
+#   10    └ ─ ┘   └ ─ ─ ─ E
+
+map "Lich-Lord's Labyrinth" {
+  grid {
+    cell    28 px
+    units   feet 5
+    bounds  12 x 12
+    origin  top-left
+  }
+  renderer "classic-bw"
+  background "stone"
+  grid_overlay 1                 # 5-foot tactical squares across the canvas
+  description """
+  A perfect spiral cut through living basalt. The walls bear the same
+  spider-thin chisel marks from the entrance to the centre — one mason,
+  one tool, no haste.
+  """
+  dm_notes """
+  No branches, no dead ends — but the air thickens with each turn.
+  At waypoint A (the (4,4) junction), morale checks for hirelings start;
+  at waypoint B ((8,6)) the lich's whisper begins (Wis DC 12 each round).
+  The entrance seals shut behind any party crossing the (8,2) junction
+  for the second time — DC 18 Investigation from inside to find the
+  pressure plate, DC 16 Strength to lift the slab off the plate.
+  """
+}
+
+# ============ Corridors — the spiral path ============
+#
+# Read top-to-bottom in the rough order the party traverses them. Every
+# corridor is 1 unit wide; junctions are at cell centres on the 2-unit
+# grid. Same-direction collinear runs are merged into single segments.
+
+corridor "c01_entry"      { width 1 segment line from 2,2  to 4,2  }
+corridor "c02_first_drop" { width 1 segment line from 4,2  to 4,4  }
+corridor "c03_swing_west" { width 1 segment line from 2,4  to 4,4  }
+corridor "c04_left_spine" { width 1 segment line from 2,4  to 2,10 }   # long west spine
+corridor "c05_short_jog"  { width 1 segment line from 2,6  to 4,6  }
+corridor "c06_inner_v1"   { width 1 segment line from 4,6  to 4,8  }
+corridor "c07_short_jog2" { width 1 segment line from 2,8  to 4,8  }
+corridor "c08_south_run"  { width 1 segment line from 2,10 to 6,10 }
+corridor "c09_inner_v2"   { width 1 segment line from 6,8  to 6,10 }
+corridor "c10_inner_h1"   { width 1 segment line from 6,8  to 8,8  }
+corridor "c11_inner_v3"   { width 1 segment line from 8,6  to 8,8  }
+corridor "c12_inner_h2"   { width 1 segment line from 6,6  to 8,6  }
+corridor "c13_inner_v4"   { width 1 segment line from 6,4  to 6,6  }
+corridor "c14_inner_h3"   { width 1 segment line from 6,4  to 8,4  }
+corridor "c15_inner_v5"   { width 1 segment line from 8,2  to 8,4  }
+corridor "c16_top_right"  { width 1 segment line from 8,2  to 10,2 }
+corridor "c17_right_spine" { width 1 segment line from 10,2 to 10,10 }  # long east spine to exit
+
+# ============ Markers ============
+
+feature marker at 2,2 {
+  description "ENTRANCE — a stone trilithon, twice the height of a man."
+}
+
+feature marker at 10,10 {
+  description "The lich-lord's chamber lies beyond the final arch."
+  dm_notes "Beyond: 30×30 chamber not drawn on this map. Stat-block in your Foe Folio."
+}

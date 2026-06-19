@@ -1,0 +1,482 @@
+include "core.dmap"  # built-in feature library (pillar, chest, stairs, …)
+
+# The Sunken Library of Cael Voren — exercises rect, polygon, and
+# boundary-with-arc rooms; line and arc corridors; bundled + custom
+# feature_defs (via `include`); a per-room grid overlay on the hub;
+# built-in features; windows on exterior walls; doors of every type
+# and state; and a hidden layer of secrets.
+#
+# Layout (100 x 70 grid):
+#
+#   +-----------+------------------+--------------+
+#   |  ATRIUM   |   GRAND LIBRARY  | SCRIPTORIUM  |
+#   +-----------+------------------+--------------+
+#   | OBSERV.   |    CENTRAL HUB   | ARCANE VAULT |
+#   | (dome)    |    (octagon)     |              |
+#   +-----------+------------------+--------------+
+#   | FLOODED   |   SUNKEN CRYPT   | DEEP VAULT   |
+#   | GALLERY   |   (octagonal)    |              |
+#   +-----------+------------------+--------------+
+#
+# Corridors stitch through the 4-unit gaps between rows/columns.
+
+# Bring in the bundled feature library: runestone, arcane_pillar,
+# bookcase_tall, water_pool, sarcophagus_grand, sarcophagus,
+# magic_circle, spike_trap, ritual_brazier, obelisk.
+include "common-dungeon.dmap"
+
+map "The Sunken Library of Cael Voren" {
+  grid {
+    cell    20 px
+    units   feet 5
+    bounds  100 x 70
+    origin  top-left
+  }
+  renderer "classic-bw"
+  theme    dark
+  legend
+  description """
+  The entry stair ends at a bronze door long since forced. Beyond,
+  a hush — the kind that holds itself together by habit. Cael Voren's
+  library has waited a hundred years for a reader.
+  """
+  dm_notes """
+  Three faction interests are active inside:
+    • A surviving bound spirit (in the deep_vault sarcophagus) — will
+      bargain knowledge for release.
+    • A rival expedition (introduced if PCs delay past session 2) —
+      enters via the flooded gallery from the north culvert.
+    • The runestones (one per major room) form a network; activating
+      three lets the party fast-travel between hubs for one day.
+  """
+}
+
+# ============ Top row ============
+
+room "entry_atrium" {
+  rect 4,4 16 x 14
+  label "Entry Atrium" align top center size 1.1
+  description """
+  Cracked mosaic floor. Above, the ceiling shows constellations
+  in tarnished silver — half of them have fallen away.
+  """
+
+  feature "arcane_pillar" at 8,8
+  feature "arcane_pillar" at 16,8
+  feature "arcane_pillar" at 8,14
+  feature "arcane_pillar" at 16,14
+  feature altar at 12,11 scale 1.3 {
+    description "Offerings expected of visiting scholars."
+  }
+}
+
+room "grand_library" {
+  rect 26,4 40 x 14
+  label "Grand Library" at 46,9 size 1.4
+  description """
+  The pride of Cael Voren. Vaulted ceiling lost to gloom; book-spines
+  reach higher than the eye can follow. Every breath stirs old dust.
+  """
+
+  feature "bookcase_tall" at 28,7
+  feature "bookcase_tall" at 28,10
+  feature "bookcase_tall" at 28,13
+  feature "bookcase_tall" at 32,7
+  feature "bookcase_tall" at 32,10
+  feature "bookcase_tall" at 32,13
+  feature "bookcase_tall" at 60,7
+  feature "bookcase_tall" at 60,10
+  feature "bookcase_tall" at 60,13
+  feature "bookcase_tall" at 64,7
+  feature "bookcase_tall" at 64,10
+  feature "bookcase_tall" at 64,13
+
+  feature table at 44,8 scale 1.3
+  feature table at 48,8 scale 1.3
+  feature chair at 42,8
+  feature chair at 50,8
+  feature "runestone" at 46,12 scale 1.5 {
+    description "Tongue-clicks echo strangely near this stone."
+  }
+}
+
+room "scriptorium" {
+  rect 72,4 24 x 14
+  label "Scriptorium" at 84,9 size 1.2
+  description "Slanted desks line the walls. Ink-jars long dried."
+
+  feature desk at 75,7  rotate 90
+  feature desk at 75,11 rotate 90
+  feature desk at 75,15 rotate 90
+  feature desk at 93,7  rotate -90
+  feature desk at 93,11 rotate -90
+  feature desk at 93,15 rotate -90
+  feature chair at 77,7
+  feature chair at 77,11
+  feature chair at 77,15
+  feature chair at 91,7
+  feature chair at 91,11
+  feature chair at 91,15
+  feature bookshelf at 84,5
+  feature bookshelf at 84,17 rotate 180
+}
+
+# ============ Middle row ============
+
+# Curved east wall — the observation dome.
+room "observatory" {
+  boundary {
+    start 4,22
+    line to 17,22
+    arc  to 17,40 via 23,31
+    line to 4,40
+    line to 4,22
+  }
+  label "Observatory" at 11,31 size 1.2
+  description """
+  The eastern wall bulges into a dome of stone and glass. Three brass
+  armatures, all snapped, ring a central observation chair.
+  """
+
+  feature statue at 11,29 scale 1.5 {
+    description "Cael Voren himself, sextant raised to a sky he no longer sees."
+  }
+  feature "runestone" at 11,35
+  feature brazier at 7,25
+  feature brazier at 15,25
+}
+
+# Octagonal junction at the center of the complex.
+room "central_hub" {
+  polygon (28,22) (50,22) (60,28) (60,34) (50,40) (28,40) (24,34) (24,28)
+  label "The Hub" at 42,31 size 1.3
+  description "An octagonal junction. The floor is worn smoothest here."
+  grid 1
+
+  feature "arcane_pillar" at 32,26 scale 1.3
+  feature "arcane_pillar" at 52,26 scale 1.3
+  feature "arcane_pillar" at 32,36 scale 1.3
+  feature "arcane_pillar" at 52,36 scale 1.3
+  feature "sarcophagus_grand" at 42,28
+  feature "sarcophagus_grand" at 42,34 rotate 180
+}
+
+room "arcane_vault" {
+  rect 72,22 24 x 18
+  label "Arcane Vault" at 84,31 size 1.2
+  description """
+  Iron-bound shelves once held the library's most jealous secrets.
+  Most have been pried open — but not all.
+  """
+
+  feature chest at 75,25
+  feature chest at 75,29 rotate 90
+  feature chest at 75,33 rotate 90
+  feature chest at 75,37
+  feature chest at 93,25 rotate 180
+  feature chest at 93,29 rotate -90
+  feature "runestone" at 84,31 scale 2.0 {
+    description "The vault's binding stone. Cracked, but still warm."
+  }
+  feature trap at 88,36 {
+    description "The floor here clicks under any weight."
+    dm_notes """
+    Slab subsides 6 inches, releasing a cone of necrotic gas (DEX
+    DC 14, 3d6 necrotic / half). Disarmed by wedging an iron spike
+    in the slot at 88,35 — Cael Voren's apprentices left two spikes
+    behind the scriptorium's third desk for exactly this purpose.
+    """
+  }
+}
+
+# ============ Bottom row ============
+
+room "flooded_gallery" {
+  rect 4,44 16 x 22
+  label "Flooded Gallery" at 12,55 size 1.1
+  background "water"
+  description """
+  Knee-deep brackish water, in places deeper. Bookcases lean
+  drunkenly against each other. The air smells of mildew and
+  something colder.
+  """
+  dm_notes "Movement at half speed. Treat as difficult terrain; STR (Athletics) DC 10 to charge or shove."
+
+  feature rubble at 6,46 scale 1.2
+  feature rubble at 18,64 scale 0.9 rotate 30
+}
+
+room "sunken_crypt" {
+  polygon (26,44) (60,44) (62,52) (60,60) (50,66) (38,66) (28,60) (24,52)
+  label "Sunken Crypt" align bottom center size 1.2
+  description """
+  Where the abbots and arch-masters were laid. Some lids are askew.
+  None should be.
+  """
+
+  feature "sarcophagus_grand" at 32,50
+  feature "sarcophagus_grand" at 44,50
+  feature "sarcophagus_grand" at 56,50
+  feature "sarcophagus_grand" at 32,58 rotate 180
+  feature "sarcophagus_grand" at 44,58 rotate 180
+  feature "sarcophagus_grand" at 56,58 rotate 180
+  feature brazier at 28,55
+  feature brazier at 60,55
+  feature "runestone" at 44,62
+}
+
+room "deep_vault" {
+  rect 72,44 24 x 22
+  label "Deep Vault" align middle right size 1.2
+  description "Lower, drier, older. The walls smoothed by long centuries."
+
+  feature chest at 76,48
+  feature chest at 76,52
+  feature chest at 76,58
+  feature chest at 76,62
+  feature chest at 92,48 rotate 180
+  feature chest at 92,52 rotate 180
+  feature chest at 92,58 rotate 180
+  feature chest at 92,62 rotate 180
+  feature "sarcophagus_grand" at 84,55 scale 1.4 {
+    description "The first arch-master. The seal here is unbroken."
+  }
+  feature "arcane_pillar" at 80,49
+  feature "arcane_pillar" at 88,49
+  feature "arcane_pillar" at 80,61
+  feature "arcane_pillar" at 88,61
+}
+
+# ============ Corridors ============
+
+# Horizontal connectors across the top row.
+corridor "atrium_to_library" {
+  width 2
+  segment line from 20,11 to 26,11
+}
+
+corridor "library_to_scriptorium" {
+  width 2
+  segment line from 66,11 to 72,11
+}
+
+# Vertical descents from top row to middle row.
+corridor "atrium_descent" {
+  width 2
+  segment line from 12,18 to 12,22
+}
+
+corridor "library_descent" {
+  width 2
+  segment line from 46,18 to 46,22
+}
+
+# The arc descent — a spiral staircase from scriptorium down to the vault.
+# S-curve of two quarter-arcs so the corridor enters BOTH horizontal walls
+# perpendicularly. A single quarter-arc between two parallel walls can only
+# be perpendicular at one end; the other end's butt-cap then sits askew of
+# the door gap.
+corridor "scriptorium_descent" {
+  width 1.5
+  segment arc center 86,18 radius 2 from-angle 0   to-angle 90  sweep ccw
+  segment arc center 86,22 radius 2 from-angle 270 to-angle 180 sweep cw
+  description "A tight spiral staircase. The risers are uneven."
+  dm_notes """
+  Every third step is loose. Anyone descending without a Perception
+  check (DC 12) takes 1d4 bludgeoning on the way down and lands prone.
+  """
+}
+
+# Middle-row east link between the hub and arcane vault. Opt-in label —
+# explicit `label "..."` block puts the display name on the map (otherwise
+# the second-string "Reader's Walk" would only appear in the tooltip).
+corridor "hub_east_link" "Reader's Walk" {
+  width 2
+  segment line from 60,31 to 72,31
+  label "Reader's Walk" size 0.7
+  description "Brass plaques along the wall once named every scholar to pass beneath."
+}
+
+# Vertical descents from middle row to bottom row.
+corridor "observatory_descent" {
+  width 2
+  segment line from 12,40 to 12,44
+}
+
+corridor "hub_descent" {
+  width 2
+  segment line from 46,40 to 46,44
+}
+
+corridor "vault_descent" {
+  width 2
+  segment line from 84,40 to 84,44
+}
+
+# ============ Doors — top row ============
+
+door at 20,11 {
+  connects room.entry_atrium, corridor.atrium_to_library
+  type wooden
+  state closed
+  facing east
+  width 2
+}
+
+door at 26,11 {
+  connects room.grand_library, corridor.atrium_to_library
+  type arch
+  width 2
+}
+
+door at 66,11 {
+  connects room.grand_library, corridor.library_to_scriptorium
+  type arch
+  width 2
+}
+
+door at 72,11 {
+  connects room.scriptorium, corridor.library_to_scriptorium
+  type wooden
+  state closed
+  facing west
+  width 2
+}
+
+# ============ Doors — top row south ============
+
+door at 12,18 {
+  connects room.entry_atrium, corridor.atrium_descent
+  type iron
+  state locked
+  facing south
+  width 2
+  description "Heavy iron-bound oak. The lock is keyed to the master's seal."
+}
+
+door at 46,18 {
+  connects room.grand_library, corridor.library_descent
+  type arch
+  width 2
+}
+
+door at 88,18 {
+  connects room.scriptorium, corridor.scriptorium_descent
+  type wooden
+  state closed
+  facing south
+  width 1.5
+}
+
+# ============ Doors — middle row ============
+
+door at 12,22 {
+  connects room.observatory, corridor.atrium_descent
+  type arch
+  width 2
+}
+
+door at 46,22 {
+  connects room.central_hub, corridor.library_descent
+  type stone
+  state open
+  width 2
+}
+
+door at 84,22 {
+  connects room.arcane_vault, corridor.scriptorium_descent
+  type iron
+  state closed
+  facing north
+  width 1.5
+}
+
+door at 60,31 {
+  connects room.central_hub, corridor.hub_east_link
+  type arch
+  width 2
+}
+
+door at 72,31 {
+  connects room.arcane_vault, corridor.hub_east_link
+  type iron
+  state locked
+  facing west
+  width 2
+  description "Three bars. The middle one is freshly oiled."
+  dm_notes "Recently used. Whoever oiled it is still inside the deep_vault (the rival expedition's scout)."
+}
+
+# ============ Doors — middle row south ============
+
+door at 12,40 {
+  connects room.observatory, corridor.observatory_descent
+  type wooden
+  state closed
+  facing south
+  width 2
+}
+
+door at 46,40 {
+  connects room.central_hub, corridor.hub_descent
+  type stone
+  state open
+  width 2
+}
+
+door at 84,40 {
+  connects room.arcane_vault, corridor.vault_descent
+  type iron
+  state locked
+  facing south
+  width 2
+}
+
+# ============ Doors — bottom row ============
+
+door at 12,44 {
+  connects room.flooded_gallery, corridor.observatory_descent
+  type arch
+  width 2
+  description "The arch is wet through. Water runs in steady drips."
+}
+
+door at 46,44 {
+  connects room.sunken_crypt, corridor.hub_descent
+  type arch
+  width 2
+}
+
+door at 84,44 {
+  connects room.deep_vault, corridor.vault_descent
+  type iron
+  state closed
+  facing north
+  width 2
+  description "Newer than the rest. Wards still hum on the frame."
+}
+
+# ============ Windows (exterior walls) ============
+
+window at 4,9   { in room.entry_atrium width 1.5 }
+window at 4,14  { in room.entry_atrium width 1 }
+window at 96,7  { in room.scriptorium  width 1.5 }
+window at 96,12 { in room.scriptorium  width 1.5 }
+window at 96,28 { in room.arcane_vault width 1 }
+window at 96,34 { in room.arcane_vault width 1 }
+window at 96,50 { in room.deep_vault   width 1 }
+window at 96,60 { in room.deep_vault   width 1 }
+
+# ============ Hidden layer ============
+
+layer "secrets" hidden {
+  feature trap at 84,32 {
+    description "Floor plate. Releases steam from the runestone niche above."
+  }
+  feature chest at 88,38 {
+    description "Hidden under a slab. Coin and a key marked with Cael's sigil."
+  }
+  feature "runestone" at 44,40 {
+    description "Marks the spot where a body went missing. Three times."
+  }
+}

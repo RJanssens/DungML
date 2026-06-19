@@ -1,0 +1,231 @@
+.wrap {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.stageHost {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  overflow: hidden;
+  outline: none;
+}
+.stageHost:active {
+  cursor: grabbing;
+}
+/* Drawing tools: crosshair, and never the pan "grabbing" hand. */
+.stageHost.drawing,
+.stageHost.drawing:active {
+  cursor: crosshair;
+}
+.stageHost:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+/* Three stacked layers at the map's natural pixel box: map (1), the tracing
+   reference image painted semi-transparent on top (2), and the live drawing
+   preview above everything (3). */
+.mapLayer,
+.bgLayer,
+.drawLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.mapLayer {
+  z-index: 1;
+}
+.mapLayer svg {
+  display: block;
+  background: #fdfaf3;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.bgLayer {
+  z-index: 2;
+  pointer-events: none;
+  object-fit: fill;
+}
+.drawLayer {
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Live-draft styling (stroke widths are in world units). */
+.dShape {
+  fill: var(--accent);
+  fill-opacity: 0.12;
+  stroke: var(--accent);
+  stroke-width: 0.18;
+  stroke-dasharray: 0.6 0.4;
+}
+.dLine {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.25;
+  stroke-dasharray: 0.6 0.4;
+}
+.dDot {
+  fill: var(--accent);
+}
+.dDotActive {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 0.12;
+}
+.stale {
+  opacity: 0.45;
+  transition: opacity 200ms ease;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.errorBox {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  height: max-content;
+  max-width: 480px;
+  padding: 16px 20px;
+  background: rgba(179, 38, 30, 0.06);
+  border: 1px solid rgba(179, 38, 30, 0.25);
+  border-radius: var(--radius);
+  text-align: left;
+  color: var(--fg);
+}
+.errorTitle {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--error);
+}
+.errorDetail {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-muted);
+  word-break: break-word;
+}
+
+.controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.ctrlBtn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ctrlBtn:hover {
+  background: var(--bg-sunken);
+  color: var(--accent);
+}
+.zoomReadout {
+  padding: 0 6px;
+  color: var(--fg-muted);
+  font-variant: tabular-nums;
+  font-size: 12px;
+  min-width: 36px;
+  text-align: right;
+}
+.coordReadout {
+  padding: 0 6px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-variant: tabular-nums;
+  font-size: 12px;
+  border-right: 1px solid var(--border);
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: 320px;
+  padding: 8px 11px;
+  background: rgba(26, 26, 26, 0.94);
+  color: #f5f1e6;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+.tooltipTitle {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 13px;
+  color: #fff8e8;
+  margin-bottom: 3px;
+}
+
+.tooltipBody {
+  color: #d8d2c2;
+}
+
+.tooltipDm {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 184, 77, 0.35);
+  color: #f0d090;
+  font-style: italic;
+  line-height: 1.4;
+}
+.tooltipDmLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 4px;
+  background: rgba(255, 184, 77, 0.15);
+  border: 1px solid rgba(255, 184, 77, 0.45);
+  border-radius: 3px;
+  color: #ffb84d;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+

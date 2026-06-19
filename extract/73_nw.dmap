@@ -1,0 +1,71 @@
+# Draft of ../modules/1657893409500/73.jpg — NW region (caves + N rooms).
+# Coordinates read off extract/occ2.txt (30x30 occupancy grid, 1 cell = 1 unit).
+# This is a first-pass to drive the render-diff loop, not a final transcription.
+
+include "common-dungeon.dmap"
+
+map "Module 73 (NW draft)" {
+  grid { cell 26 px units feet 5 bounds 30 x 30 origin top-left }
+  renderer "classic-bw"
+}
+
+# ---- Orthogonal northern rooms ----
+room "r33" { rect 3,0 3 x 3   label "33" align top center size 0.9 }
+room "r34" { rect 8,0 3 x 2   label "34" align top center size 0.8 }
+room "r32" { rect 2,11 3 x 4  label "32" align middle center size 0.9 }
+
+# ---- Cave cluster (irregular polygons traced from the occupancy grid) ----
+room "c36" {
+  polygon (9,4) (12,4) (13,6) (12,8) (9,8) (8,6)
+  label "36" align middle center size 0.9
+  line_style organic
+  feature rubble at 10,5 scale 0.7
+}
+room "c38" {
+  polygon (4,8) (8,8) (8,11) (5,11) (3,10)
+  label "38" align middle center size 0.9
+  line_style organic
+}
+room "c35" {
+  polygon (10,10) (13,10) (14,12) (12,13) (10,12)
+  label "35" align middle center size 0.9
+  line_style organic
+}
+room "c37" {
+  polygon (6,12) (10,12) (10,15) (7,16) (5,14)
+  label "37" align bottom center size 0.9
+  line_style organic
+  feature water at 8,14 scale 1.4
+}
+room "c39" {
+  polygon (3,16) (7,16) (7,18) (4,19) (2,17)
+  label "39" align middle center size 0.9
+  line_style organic
+}
+
+# ---- Room 22: chamber with a magic circle ----
+room "r22" {
+  rect 10,15 3 x 3
+  label "22" align top center size 0.9
+  feature "magic_circle" at 11,17
+}
+
+# ---- Connecting passages between caves ----
+corridor "cave_link" {
+  width 1
+  line_style organic
+  node a  at 10,8
+  node b  at 9,11
+  node c  at 8,12
+  node d  at 12,12
+  node e  at 6,15
+  run a to b
+  run b to c
+  run c to d
+  run c to e
+}
+
+# ---- A couple of visible doors / openings ----
+door at 5,3   { connects room.r33  type wooden state closed facing south }
+door at 3,11  { connects room.r32  type wooden state closed facing west }
+window at 2,11 { in room.r32 width 1 }
