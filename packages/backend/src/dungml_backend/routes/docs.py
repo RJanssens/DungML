@@ -32,6 +32,7 @@ _DOCS: dict[str, str] = {
     "dsl-features": "dsl-features.md",
     "dsl-geometry": "dsl-geometry.md",
     "dsl-tooling": "dsl-tooling.md",
+    "dsl-reference": "dsl-reference.md",
 }
 
 

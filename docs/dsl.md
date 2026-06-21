@@ -18,6 +18,8 @@ focused sections (links open in a new tab):
 - **[Validation & tooling](/docs/dsl-tooling)** — semantic checks, the
   connectivity graph, the MCP authoring/play-session tools, the CLI,
   and a worked example.
+- **[Language reference](/docs/dsl-reference)** — every keyword, its
+  legal child elements, a description, and an example.
 
 ---
 
