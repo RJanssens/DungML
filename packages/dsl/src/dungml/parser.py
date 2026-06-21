@@ -1300,15 +1300,16 @@ class _Tx(Transformer):
                 line_features.append(item)
             elif isinstance(item, Exit):
                 exits.append(item)
-        # Hoist exits and text annotations authored inside room/corridor
-        # blocks up to the layer level, so they're handled like any other exit
-        # / text (they carry absolute coords — the nesting was organizational).
+        # Hoist exits authored inside room/corridor blocks up to the layer
+        # level, so they're handled like any other exit (absolute coords — the
+        # nesting was organizational only). Text annotations are NOT hoisted:
+        # they stay on their room/corridor so they render only when that node
+        # is visible (fog prunes the node, taking its text with it), mirroring
+        # how nested features behave.
         for r in rooms:
             exits.extend(r.exits)
-            texts.extend(r.texts)
         for c in corridors:
             exits.extend(c.exits)
-            texts.extend(c.texts)
         return Layer(
             name=name,
             hidden=hidden,
@@ -1378,15 +1379,14 @@ class _Tx(Transformer):
                 exits.append(item)
             elif isinstance(item, Layer):
                 layers.append(item)
-        # Hoist exits and text annotations authored inside top-level
-        # room/corridor blocks (those in layers are hoisted in `layer()`).
-        # Absolute coords — see `room()`.
+        # Hoist exits authored inside top-level room/corridor blocks (those in
+        # layers are hoisted in `layer()`). Absolute coords — see `room()`.
+        # Text annotations are NOT hoisted — they stay on their room/corridor
+        # so they render only when that node is visible (see `layer()`).
         for r in rooms.values():
             exits.extend(r.exits)
-            texts.extend(r.texts)
         for c in corridors.values():
             exits.extend(c.exits)
-            texts.extend(c.texts)
         if map_cfg is not None and scenario_cfg is not None:
             raise DmapParseError(
                 "file has both a top-level `map` and a `scenario` — pick one"

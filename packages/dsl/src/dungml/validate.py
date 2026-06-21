@@ -317,8 +317,10 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 )
             )
 
-    # ---- text annotations ----
-    for ta in dmap.texts:
+    # ---- text annotations (top-level + nested in rooms/corridors) ----
+    nested_texts = [ta for r in dmap.rooms.values() for ta in r.texts]
+    nested_texts += [ta for c in dmap.corridors.values() for ta in c.texts]
+    for ta in [*dmap.texts, *nested_texts]:
         if ta.size <= 0:
             diags.append(
                 _diag(

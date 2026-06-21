@@ -501,6 +501,14 @@ class _RenderContext:
             if layer.hidden:
                 continue
             all_texts.extend(layer.texts)
+        # Text nested in a room/corridor renders only when that node is part of
+        # the view: `all_rooms`/`all_corridors` already exclude hidden layers,
+        # and fog prunes undiscovered nodes, so their text drops out with them
+        # (same as nested features).
+        for r in self.all_rooms.values():
+            all_texts.extend(r.texts)
+        for c in all_corridors:
+            all_texts.extend(c.texts)
         for ta in all_texts:
             parts.append(self._text_annotation(ta))
         parts.append("</g>")

@@ -1,15 +1,16 @@
 """`text` annotations authored inside room / corridor blocks.
 
-The nesting is organizational only (absolute `at x,y` coords); the parser
-keeps them on the room/corridor and also hoists copies into the map-level
-`texts` list so the renderer / fog see them like any other text.
+The nesting binds the text to its node (absolute `at x,y` coords): it stays on
+the room/corridor and is NOT hoisted to the map level, so — like a nested
+feature — it renders only when that node is visible (fog prunes the node and
+its text together).
 """
 from __future__ import annotations
 
-from dungml import parse, render
+from dungml import parse, render, render_fogged
 
 
-def test_text_nested_in_room_is_kept_and_hoisted() -> None:
+def test_text_nested_in_room_stays_on_room_not_hoisted() -> None:
     src = """
     map "M" { grid { bounds 30 x 16 } renderer "classic-bw" }
     room "hall" {
@@ -21,11 +22,30 @@ def test_text_nested_in_room_is_kept_and_hoisted() -> None:
     # Kept on the room...
     assert len(m.rooms["hall"].texts) == 1
     assert m.rooms["hall"].texts[0].description == "Altar of the Old Gods"
-    # ...and hoisted to the map level for rendering.
-    assert len(m.texts) == 1
-    assert m.texts[0].text == "A"
+    # ...and NOT hoisted to the map level (it's bound to the room).
+    assert len(m.texts) == 0
     # The room itself did NOT absorb the text's description.
     assert m.rooms["hall"].description is None
+    # It still renders in the normal (GM) view.
+    assert ">A<" in render(m)
+
+
+def test_nested_text_hidden_when_room_undiscovered() -> None:
+    src = """
+    map "M" { grid { bounds 30 x 16 } renderer "classic-bw" }
+    room "a" { rect 2,2 8 x 8 }
+    room "b" { rect 18,2 8 x 8
+      text "Z" at 22,6 description "secret altar"
+    }
+    door at 10,5 { connects room.a, room.b }
+    """
+    m = parse(src)
+    # room.b not discovered → its nested text is gone in the players' view.
+    hidden = render_fogged(m, {"room.a"}, set(), party_location="room.a")
+    assert ">Z<" not in hidden
+    # room.b discovered → its nested text shows.
+    shown = render_fogged(m, {"room.a", "room.b"}, {"10,5"}, party_location="room.a")
+    assert ">Z<" in shown
 
 
 def test_text_nested_in_corridor_keeps_its_own_description() -> None:

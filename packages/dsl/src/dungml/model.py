@@ -235,9 +235,10 @@ class Room(BaseModel):
     # parser hoists these into the map-level `exits` list, so downstream
     # (renderer, graph, fog, validation) sees them as ordinary map exits.
     exits: list[Exit] = Field(default_factory=list)
-    # Text annotations authored inside this room's block. Like `exits`, the
-    # nesting is organizational only (absolute `at x,y` coords); the parser
-    # hoists these into the map-level `texts` list for rendering.
+    # Text annotations authored inside this room's block (absolute `at x,y`
+    # coords). Unlike `exits`, these are NOT hoisted: like `features`, they
+    # stay on the room and render only when the room is visible — fog prunes
+    # the room and its text together.
     texts: list[TextAnnotation] = Field(default_factory=list)
     grid: Optional[float] = None  # spacing (world units) for an in-room grid overlay
     grid_color: Optional[str] = None  # optional CSS color for the grid lines
@@ -306,8 +307,8 @@ class Corridor(BaseModel):
     # Exits authored inside this corridor's block — hoisted to the map-level
     # `exits` list by the parser. See Room.exits.
     exits: list[Exit] = Field(default_factory=list)
-    # Text annotations authored inside this corridor's block — hoisted to the
-    # map-level `texts` list by the parser. Absolute coords. See Room.texts.
+    # Text annotations authored inside this corridor's block (absolute coords).
+    # NOT hoisted — render only when the corridor is visible. See Room.texts.
     texts: list[TextAnnotation] = Field(default_factory=list)
     span: SourceSpan = Field(default_factory=SourceSpan)
 
