@@ -1,7 +1,7 @@
 """`exit` — a cross-map transition linking to a map + position elsewhere."""
 from __future__ import annotations
 
-from dungml import build_graph, fog_of_war, parse, render, validate
+from dungml import build_graph, fog_of_war, parse, render, render_fogged, validate
 
 
 def _map(body: str) -> str:
@@ -85,6 +85,33 @@ def test_secret_exit_hidden_in_fog():
     m2 = parse(_map('exit at 3,4 { to "cellar" at 10,2 }'))
     fogged2 = fog_of_war(m2, {"room.r"}, set())
     assert len(fogged2.exits) == 1
+
+
+def test_exit_nested_in_room_stays_on_room_not_hoisted():
+    m = parse(_map('room "b" { rect 0,0 6 x 6  exit at 3,3 { to "cellar" at 1,1 } }'))
+    # Bound to the room, not lifted to the map-level list.
+    assert m.exits == []
+    assert len(m.rooms["b"].exits) == 1
+    # Still rendered in the normal (GM) view.
+    assert 'class="exit"' in render(m)
+
+
+def test_nested_exit_hidden_until_its_room_is_discovered():
+    body = 'room "b" { rect 0,0 6 x 6  exit at 3,3 { to "cellar" at 1,1 label "Trapdoor" } }'
+    m = parse(_map(body))
+    # room.b undiscovered → its nested exit is pruned with it.
+    hidden = render_fogged(m, {"room.r"}, set(), party_location="room.r")
+    assert "Trapdoor" not in hidden
+    # room.b discovered → the exit shows.
+    shown = render_fogged(m, {"room.r", "room.b"}, set(), party_location="room.r")
+    assert "Trapdoor" in shown
+
+
+def test_secret_nested_exit_stripped_even_in_a_discovered_room():
+    body = 'room "b" { rect 0,0 6 x 6  exit at 3,3 { to "vault" at 1,1 secret } }'
+    m = parse(_map(body))
+    fogged = fog_of_war(m, {"room.r", "room.b"}, set())
+    assert fogged.rooms["b"].exits == []
 
 
 def test_exit_inside_layer():

@@ -1358,11 +1358,25 @@ class _RenderContext:
         )
 
     def _all_exits(self) -> list[Exit]:
-        """Top-level exits plus those in visible layers."""
+        """Freestanding exits (top-level + visible layers) plus exits nested in
+        visible rooms/corridors.
+
+        Nested exits ride along with their node's visibility: `all_rooms` and
+        the corridor set below already exclude hidden layers, and fog prunes
+        undiscovered nodes, so a nested exit drops out with its parent (like a
+        nested feature)."""
         out: list[Exit] = list(self.dmap.exits)
         for layer in self.dmap.layers:
             if not layer.hidden:
                 out.extend(layer.exits)
+        for r in self.all_rooms.values():
+            out.extend(r.exits)
+        corrs: list[Corridor] = list(self.dmap.corridors.values())
+        for layer in self.dmap.layers:
+            if not layer.hidden:
+                corrs.extend(layer.corridors)
+        for c in corrs:
+            out.extend(c.exits)
         return out
 
     def _exit(self, ex: Exit) -> str:
@@ -2820,11 +2834,24 @@ class _RenderContext:
     # --- line features (bars / curtain / barred) ---
 
     def _all_line_features(self) -> list[LineFeature]:
-        """Top-level line features plus those in visible layers."""
+        """Freestanding line features (top-level + visible layers) plus those
+        nested in visible rooms/corridors.
+
+        Nested line features ride along with their node's visibility (like
+        nested features/exits): `all_rooms` and the corridor set exclude hidden
+        layers, and fog prunes undiscovered nodes."""
         out: list[LineFeature] = list(self.dmap.line_features)
         for layer in self.dmap.layers:
             if not layer.hidden:
                 out.extend(layer.line_features)
+        for r in self.all_rooms.values():
+            out.extend(r.line_features)
+        corrs: list[Corridor] = list(self.dmap.corridors.values())
+        for layer in self.dmap.layers:
+            if not layer.hidden:
+                corrs.extend(layer.corridors)
+        for c in corrs:
+            out.extend(c.line_features)
         return out
 
     def _polyline_path(self, pts: list[Vec2]) -> str:

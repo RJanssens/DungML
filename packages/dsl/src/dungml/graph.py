@@ -335,12 +335,17 @@ def fog_of_war(
     def keep_marker(location: Optional[str]) -> bool:
         return location is None or location in nodes
 
-    def strip_secret_features(host) -> None:
+    def strip_secret(host) -> None:
+        # Secret features (per-instance or per-type) and secret exits are
+        # GM-only — drop them even when the host node itself is discovered.
         feats = getattr(host, "features", None)
         if feats:
             host.features = [
                 f for f in feats if not (f.secret or f.ref in secret_refs)
             ]
+        exits = getattr(host, "exits", None)
+        if exits:
+            host.exits = [e for e in exits if not e.secret]
 
     out = dmap.model_copy(deep=True)
     out.rooms = {n: r for n, r in out.rooms.items() if f"room.{n}" in nodes}
@@ -348,9 +353,9 @@ def fog_of_war(
         n: c for n, c in out.corridors.items() if f"corridor.{n}" in nodes
     }
     for r in out.rooms.values():
-        strip_secret_features(r)
+        strip_secret(r)
     for c in out.corridors.values():
-        strip_secret_features(c)
+        strip_secret(c)
     out.doors = [d for d in out.doors if door_key(d) in doors]
 
     # A door's `trapped` flag is GM-only knowledge — never expose it in the
@@ -373,9 +378,9 @@ def fog_of_war(
             c for c in layer.corridors if f"corridor.{c.name}" in nodes
         ]
         for r in layer.rooms:
-            strip_secret_features(r)
+            strip_secret(r)
         for c in layer.corridors:
-            strip_secret_features(c)
+            strip_secret(c)
         layer.doors = [d for d in layer.doors if door_key(d) in doors]
         _hide_traps(layer.doors)
         layer.windows = [w for w in layer.windows if keep_window(w.in_ref)]

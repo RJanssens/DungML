@@ -400,6 +400,13 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
 
     for lf in dmap.line_features:
         check_line_feature(lf, scope="map")
+    # Line features nested in rooms/corridors aren't hoisted — check in place.
+    for name, room in dmap.rooms.items():
+        for lf in room.line_features:
+            check_line_feature(lf, scope=f"room '{name}'")
+    for name, corr in dmap.corridors.items():
+        for lf in corr.line_features:
+            check_line_feature(lf, scope=f"corridor '{name}'")
 
     # ---- exits (cross-map transitions) ----
     # The target map lives elsewhere in the project, so we can't verify it
@@ -428,6 +435,13 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
 
     for ex in dmap.exits:
         check_exit(ex, scope="map")
+    # Exits nested in rooms/corridors aren't hoisted, so check them in place.
+    for name, room in dmap.rooms.items():
+        for ex in room.exits:
+            check_exit(ex, scope=f"room '{name}'")
+    for name, corr in dmap.corridors.items():
+        for ex in corr.exits:
+            check_exit(ex, scope=f"corridor '{name}'")
 
     # ---- layers ----
     for layer in dmap.layers:
@@ -439,6 +453,20 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
             check_line_feature(lf, scope=f"layer '{layer.name}'")
         for ex in layer.exits:
             check_exit(ex, scope=f"layer '{layer.name}'")
+        for room in layer.rooms:
+            for ex in room.exits:
+                check_exit(ex, scope=f"layer '{layer.name}' room '{room.name}'")
+            for lf in room.line_features:
+                check_line_feature(
+                    lf, scope=f"layer '{layer.name}' room '{room.name}'"
+                )
+        for corr in layer.corridors:
+            for ex in corr.exits:
+                check_exit(ex, scope=f"layer '{layer.name}' corridor '{corr.name}'")
+            for lf in corr.line_features:
+                check_line_feature(
+                    lf, scope=f"layer '{layer.name}' corridor '{corr.name}'"
+                )
 
     # ---- overlapping areas (warning) ----
     # Compared only within a scope: top-level rooms/corridors together, and

@@ -172,6 +172,7 @@ room: "room" STRING "{" room_property* "}"
               | feature_inst
               | exit_decl
               | text_annotation
+              | line_feature
               | room_grid
               | background_prop
               | line_style_decl
@@ -258,6 +259,7 @@ corridor: "corridor" STRING STRING? "{" corridor_property* "}"
                   | feature_inst
                   | exit_decl
                   | text_annotation
+                  | line_feature
                   | label_decl
                   | description_decl
                   | dm_notes_decl

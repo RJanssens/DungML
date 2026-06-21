@@ -230,16 +230,19 @@ class Room(BaseModel):
     description: Optional[str] = None  # boxed text — read to players
     dm_notes: Optional[str] = None  # private notes — traps, secrets, hooks
     features: list[FeatureInstance] = Field(default_factory=list)
-    # Exits authored inside this room's block. Like `features`, the nesting is
-    # organizational only (the `at x,y` coords are absolute world coords). The
-    # parser hoists these into the map-level `exits` list, so downstream
-    # (renderer, graph, fog, validation) sees them as ordinary map exits.
+    # Exits authored inside this room's block (absolute `at x,y` coords). Like
+    # `features`/`texts`, these are NOT hoisted: they stay on the room and
+    # render only when the room is visible — fog prunes the room and its exits
+    # together (a secret nested exit is stripped even in a discovered room).
     exits: list[Exit] = Field(default_factory=list)
     # Text annotations authored inside this room's block (absolute `at x,y`
     # coords). Unlike `exits`, these are NOT hoisted: like `features`, they
     # stay on the room and render only when the room is visible — fog prunes
     # the room and its text together.
     texts: list[TextAnnotation] = Field(default_factory=list)
+    # Line-feature decorations authored inside this room's block (absolute
+    # coords). Not hoisted — render only when the room is visible, like texts.
+    line_features: list[LineFeature] = Field(default_factory=list)
     grid: Optional[float] = None  # spacing (world units) for an in-room grid overlay
     grid_color: Optional[str] = None  # optional CSS color for the grid lines
     # Floor background. CSS color or built-in texture id; overrides the
@@ -304,12 +307,15 @@ class Corridor(BaseModel):
     # Room.features, the `at x,y` coordinates are absolute world coords — the
     # nesting is organizational, not a relative offset.
     features: list[FeatureInstance] = Field(default_factory=list)
-    # Exits authored inside this corridor's block — hoisted to the map-level
-    # `exits` list by the parser. See Room.exits.
+    # Exits authored inside this corridor's block (absolute coords). NOT
+    # hoisted — render only when the corridor is visible. See Room.exits.
     exits: list[Exit] = Field(default_factory=list)
     # Text annotations authored inside this corridor's block (absolute coords).
     # NOT hoisted — render only when the corridor is visible. See Room.texts.
     texts: list[TextAnnotation] = Field(default_factory=list)
+    # Line-feature decorations authored inside this corridor's block. NOT
+    # hoisted — render only when the corridor is visible. See Room.line_features.
+    line_features: list[LineFeature] = Field(default_factory=list)
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 

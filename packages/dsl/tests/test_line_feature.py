@@ -1,7 +1,7 @@
 """`line_feature` — bars (dotted), curtain (wavy), barred (+ marks)."""
 from __future__ import annotations
 
-from dungml import parse, render, validate
+from dungml import parse, render, render_fogged, validate
 
 
 def _map(body: str) -> str:
@@ -75,3 +75,36 @@ def test_valid_line_feature_clean():
         parse(_map('line_feature "f" { kind barred point 1,2 point 8,2 }'))
     )
     assert not any(d.severity == "error" for d in diags)
+
+
+def test_nested_in_room_stays_on_room_not_hoisted():
+    m = parse(_map(
+        'room "b" { rect 0,0 6 x 6 '
+        '  line_feature "f" { kind bars point 1,1 point 5,1 } }'
+    ))
+    # Bound to the room, not lifted to the map-level list.
+    assert m.line_features == []
+    assert len(m.rooms["b"].line_features) == 1
+    # Still rendered in the normal (GM) view.
+    assert "line-feature" in render(m)
+
+
+def test_nested_line_feature_hidden_until_room_discovered():
+    body = (
+        'room "b" { rect 0,0 6 x 6 '
+        '  line_feature "f" { kind curtain point 1,1 point 5,1 } }'
+    )
+    m = parse(_map(body))
+    hidden = render_fogged(m, {"room.r"}, set(), party_location="room.r")
+    assert 'class="line-features"' not in hidden
+    shown = render_fogged(m, {"room.r", "room.b"}, set(), party_location="room.r")
+    assert 'class="line-features"' in shown
+
+
+def test_nested_in_corridor():
+    m = parse(_map(
+        'corridor "c" { width 2 segment line from 0,8 to 12,8 '
+        '  line_feature "f" { kind barred point 4,7 point 4,9 } }'
+    ))
+    assert len(m.corridors["c"].line_features) == 1
+    assert not any(d.severity == "error" for d in validate(m))
