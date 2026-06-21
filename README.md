@@ -6,27 +6,19 @@ A DSL, backend, and web editor for tabletop RPG map layout — dungeons, buildin
 
 ```
 packages/
-  dsl/       # Grammar, parser, semantic model, validator, renderer ABC + built-ins
-  backend/   # FastAPI service (P3)
-  web/       # React + Monaco editor (P4)
-samples/     # Canonical .dmap files
-docs/        # DSL reference
-```
-
-## Current phase
-
-**P4 — web editor** (React + Monaco SPA with live preview, served by the backend).
-
-## Layout
-
-```
-packages/
   dsl/       # Grammar, parser, semantic model, validator, renderer ABC + classic-bw
   backend/   # FastAPI service (auth, projects, maps, DSL API)
   web/       # React + Monaco editor SPA
   mcp/       # MCP server (project/map CRUD, render, play-session pathfinding)
 samples/     # Canonical .dmap files
+docs/        # DSL reference
 ```
+
+## Requirements
+
+- Python 3.12 or newer
+- [uv](https://docs.astral.sh/uv/) for Python dependency management
+- Node.js (with `npm`) to build the web editor SPA
 
 ## Quickstart
 
