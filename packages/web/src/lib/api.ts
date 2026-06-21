@@ -15,13 +15,43 @@ import type {
 
 const TOKEN_KEY = "dungml.token";
 
+// Runtime configuration. The SPA leaves these at their defaults (same-origin
+// requests, token in localStorage). The embeddable widget calls configureApi()
+// to point at a cross-origin dungml backend and supply a host-managed token.
+let baseUrl = "";
+let tokenSource: () => string | null = () =>
+  localStorage.getItem(TOKEN_KEY);
+
+export function configureApi(opts: {
+  /** Origin of the dungml backend, e.g. "https://dungml.example.com".
+   * Empty string (default) means same-origin. Trailing slash is trimmed. */
+  baseUrl?: string;
+  /** Returns the current bearer token (called on every request, so it can
+   * return a freshly-refreshed token). Overrides the localStorage default. */
+  getToken?: () => string | null;
+}): void {
+  if (opts.baseUrl !== undefined) baseUrl = opts.baseUrl.replace(/\/$/, "");
+  if (opts.getToken !== undefined) tokenSource = opts.getToken;
+}
+
+/** Absolute URL for an API path, honouring the configured base origin. */
+export function apiUrl(path: string): string {
+  return `${baseUrl}${path}`;
+}
+
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return tokenSource();
 }
 
 export function setToken(token: string | null): void {
   if (token === null) localStorage.removeItem(TOKEN_KEY);
   else localStorage.setItem(TOKEN_KEY, token);
+}
+
+/** Authorization header for the current token (empty if none). */
+function authHeaders(): Record<string, string> {
+  const tok = getToken();
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
 }
 
 export class ApiError extends Error {
@@ -42,11 +72,8 @@ async function request<T>(
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (opts.auth !== false) {
-    const tok = getToken();
-    if (tok) headers["Authorization"] = `Bearer ${tok}`;
-  }
-  const res = await fetch(path, {
+  if (opts.auth !== false) Object.assign(headers, authHeaders());
+  const res = await fetch(apiUrl(path), {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -101,22 +128,20 @@ export const projects = {
   // direct fetch (not `request`) because the body is binary, and carries the
   // bearer token so the protected route authorises.
   export: async (id: string): Promise<Blob> => {
-    const tok = getToken();
-    const res = await fetch(`/api/projects/${id}/export`, {
-      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    const res = await fetch(apiUrl(`/api/projects/${id}/export`), {
+      headers: authHeaders(),
     });
     if (!res.ok) throw new ApiError(res.status, null, `export failed (${res.status})`);
     return res.blob();
   },
   // Create a new project from an uploaded `.dmapproj` archive (multipart).
   import: async (file: File): Promise<Project> => {
-    const tok = getToken();
     const fd = new FormData();
     fd.append("file", file);
     // Don't set Content-Type — the browser adds the multipart boundary.
-    const res = await fetch("/api/projects/import", {
+    const res = await fetch(apiUrl("/api/projects/import"), {
       method: "POST",
-      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+      headers: authHeaders(),
       body: fd,
     });
     if (!res.ok) {

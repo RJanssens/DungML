@@ -14,7 +14,8 @@ export type Tool =
   | "feature"
   | "text"
   | "area"
-  | "line";
+  | "line"
+  | "exit";
 
 /** Click-to-add-vertex tools (the rest are drag or single-click). */
 export const VERTEX_TOOLS: ReadonlySet<Tool> = new Set<Tool>([
@@ -89,13 +90,14 @@ export function snapPt(p: Pt, snap: boolean, step = 1): Pt {
 /** Snap to the centre of a grid cell (single-cell features sit mid-cell). */
 export function snapCellCenter(p: Pt, snap: boolean, resolution = 1): Pt {
   if (snap) {
-    // Snap to the centre of each (1/resolution)-sized sub-cell, so res 1 is
-    // the whole-cell centre (x.5) and res 2 gives twice as many dots, etc.
+    // Subdivide with step 1/resolution, anchored at the cell centre (x.5).
+    // Res 1 → the cell centre (x.5); higher resolutions add finer points that
+    // include the cell edges / gridlines — so res 2 snaps to multiples of 0.5
+    // (x.0 and x.5), res 4 to multiples of 0.25, etc. (Anchoring at the centre
+    // is what keeps res 1 mid-cell while still exposing gridlines when finer.)
     const n = Math.max(1, resolution);
-    return {
-      x: Math.floor(p.x * n) / n + 0.5 / n,
-      y: Math.floor(p.y * n) / n + 0.5 / n,
-    };
+    const snap1 = (v: number) => Math.round((v - 0.5) * n) / n + 0.5;
+    return { x: snap1(p.x), y: snap1(p.y) };
   }
   return { x: round2(p.x), y: round2(p.y) };
 }
@@ -147,7 +149,8 @@ const SORT_RANK: Record<string, number> = {
   area: 9,
   marker: 10,
   text: 11,
-  layer: 12,
+  exit: 12,
+  layer: 13,
 };
 const SORT_KEYWORDS = Object.keys(SORT_RANK);
 
@@ -155,6 +158,110 @@ interface TopBlock {
   kw: string;
   id: string; // quoted id for room/corridor (drives the sort), else ""
   start: number; // index of the keyword
+}
+
+// Canonical order of the statements *inside* a room / corridor block, so two
+// equivalent blocks normalise to byte-identical text. Lower rank emits first;
+// an unrecognised keyword sorts last, keeping its original relative position.
+const ROOM_PROP_RANK: Record<string, number> = {
+  rect: 0, polygon: 0, circle: 0, boundary: 0, // the room shape (only one)
+  grid: 1,
+  background: 2,
+  line_style: 3,
+  allow_overlap: 4,
+  label: 5,
+  description: 6,
+  dm_notes: 7,
+  feature: 8,
+};
+const CORRIDOR_PROP_RANK: Record<string, number> = {
+  width: 0,
+  corners: 1,
+  node: 2,
+  run: 3,
+  segment: 4,
+  background: 5,
+  line_style: 6,
+  label: 7,
+  description: 8,
+  dm_notes: 9,
+  feature: 10,
+};
+
+/** Indices of a block's outermost `{ }`, string/comment aware. null if none. */
+function outerBraces(text: string): { open: number; close: number } | null {
+  let i = 0, depth = 0, open = -1, comment = false;
+  let str: '"' | '"""' | null = null;
+  const n = text.length;
+  while (i < n) {
+    const c = text[i];
+    if (comment) { if (c === "\n") comment = false; i++; continue; }
+    if (str === '"""') { if (text.startsWith('"""', i)) { str = null; i += 3; } else i++; continue; }
+    if (str === '"') { if (c === "\\") i += 2; else { if (c === '"') str = null; i++; } continue; }
+    if (c === "#") { comment = true; i++; continue; }
+    if (text.startsWith('"""', i)) { str = '"""'; i += 3; continue; }
+    if (c === '"') { str = '"'; i++; continue; }
+    if (c === "{") { if (depth === 0) open = i; depth++; i++; continue; }
+    if (c === "}") { depth--; if (depth === 0) return { open, close: i }; i++; continue; }
+    i++;
+  }
+  return null;
+}
+
+/** True if `line` (a single source line) is self-contained: balanced braces,
+ *  no unterminated string, no triple-quote run left open. A trailing `#`
+ *  comment is fine. Used to detect statements that spill across lines. */
+function isBalancedLine(line: string): boolean {
+  let depth = 0;
+  let str: '"' | '"""' | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (str === '"""') { if (line.startsWith('"""', i)) { str = null; i += 2; } continue; }
+    if (str === '"') { if (c === "\\") i++; else if (c === '"') str = null; continue; }
+    if (c === "#") return depth === 0 && str === null; // rest of line is a comment
+    if (line.startsWith('"""', i)) { str = '"""'; i += 2; continue; }
+    if (c === '"') { str = '"'; continue; }
+    if (c === "{") depth++;
+    else if (c === "}") depth--;
+  }
+  return depth === 0 && str === null;
+}
+
+/** Reorder the statements inside one room/corridor block into canonical order
+ *  and drop blank lines. Conservative: returns the block unchanged if any
+ *  statement spans multiple lines (boundary block, inline feature block,
+ *  triple-quoted description) — reindenting those could corrupt string
+ *  content, so we leave such blocks exactly as written. */
+function normalizeBlockBody(blockText: string, rank: Record<string, number>): string {
+  const br = outerBraces(blockText);
+  if (!br) return blockText;
+  const header = blockText.slice(0, br.open + 1); // "...room \"x\" {"
+  const footer = blockText.slice(br.close);       // "}" + any trailing text
+  const body = blockText.slice(br.open + 1, br.close);
+
+  interface Stmt { kw: string; lines: string[]; idx: number }
+  const stmts: Stmt[] = [];
+  let pending: string[] = []; // comment lines awaiting their statement
+  let order = 0;
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    if (line === "") continue;                 // redundant blank line — drop
+    if (line.startsWith("#")) { pending.push(line); continue; }
+    if (!isBalancedLine(line)) return blockText; // multi-line statement — bail
+    const kw = (/^([A-Za-z_][A-Za-z0-9_]*)/.exec(line)?.[1]) ?? "";
+    stmts.push({ kw, lines: [...pending, line], idx: order++ });
+    pending = [];
+  }
+  if (pending.length || stmts.length === 0) return blockText; // dangling comment / empty
+
+  stmts.sort((a, b) => {
+    const ra = a.kw in rank ? rank[a.kw] : 999;
+    const rb = b.kw in rank ? rank[b.kw] : 999;
+    return ra !== rb ? ra - rb : a.idx - b.idx; // stable within a rank
+  });
+
+  const inner = stmts.flatMap((s) => s.lines.map((l) => "  " + l)).join("\n");
+  return header.replace(/\s*$/, "") + "\n" + inner + "\n" + footer;
 }
 
 /** Find every top-level declaration, brace/string/comment aware. */
@@ -252,7 +359,15 @@ export function sortSource(src: string): string {
     return a.idx - b.idx; // stable within a group
   });
 
-  const parts = [preamble.trim(), ...items.map((it) => it.text.trim())].filter(Boolean);
+  const parts = [
+    preamble.trim(),
+    ...items.map((it) => {
+      const t = it.text.trim();
+      if (it.kw === "room") return normalizeBlockBody(t, ROOM_PROP_RANK);
+      if (it.kw === "corridor") return normalizeBlockBody(t, CORRIDOR_PROP_RANK);
+      return t;
+    }),
+  ].filter(Boolean);
   return parts.join("\n\n") + "\n";
 }
 
@@ -288,23 +403,30 @@ export function uniqueName(source: string, base: string): string {
 
 // ---- snippet emitters (each returns a block to append to the source) ----
 
+// The drawn label drops the `room_` prefix from the generated id, so a room
+// named `room_13` shows just `13` on the map. Non-`room_` ids (e.g. `cave_3`,
+// or a hand-typed name) are used verbatim.
+function roomLabel(name: string): string {
+  return name.replace(/^room_/, "");
+}
+
 export function emitRect(name: string, a: Pt, b: Pt): string {
   const x = Math.min(a.x, b.x);
   const y = Math.min(a.y, b.y);
   const w = Math.abs(b.x - a.x);
   const h = Math.abs(b.y - a.y);
-  return `\nroom "${name}" {\n  rect ${num(x)},${num(y)} ${num(w)} x ${num(h)}\n  label "${name}"\n}\n`;
+  return `\nroom "${name}" {\n  rect ${num(x)},${num(y)} ${num(w)} x ${num(h)}\n  label "${roomLabel(name)}"\n}\n`;
 }
 
 export function emitCircle(name: string, center: Pt, edge: Pt): string {
   const r = round2(dist(center, edge));
-  return `\nroom "${name}" {\n  circle at ${num(center.x)},${num(center.y)} radius ${num(r)}\n  label "${name}"\n}\n`;
+  return `\nroom "${name}" {\n  circle at ${num(center.x)},${num(center.y)} radius ${num(r)}\n  label "${roomLabel(name)}"\n}\n`;
 }
 
 export function emitPolygon(name: string, pts: Pt[], organic = false): string {
   const body = pts.map((p) => `(${num(p.x)},${num(p.y)})`).join(" ");
   const ls = organic ? "\n  line_style organic" : "";
-  return `\nroom "${name}" {\n  polygon ${body}${ls}\n  label "${name}"\n}\n`;
+  return `\nroom "${name}" {\n  polygon ${body}${ls}\n  label "${roomLabel(name)}"\n}\n`;
 }
 
 // Corridors are emitted in the `node`/`run` form so a single corridor can
@@ -350,10 +472,27 @@ export type DraftShape =
       facing: string; // "auto" → let the renderer infer the leaf side
       trapped?: boolean;
     }
-  | { kind: "feature"; at: Pt; ref: string; rotate?: number; scale?: number }
+  | {
+      kind: "feature";
+      at: Pt;
+      ref: string;
+      rotate?: number;
+      scale?: number;
+      // "room.name" / "corridor.name" to nest the feature inside that block,
+      // or null/undefined to add it as a top-level (global) declaration.
+      region?: string | null;
+    }
   | { kind: "text"; at: Pt; content: string; size?: number }
   | { kind: "area"; pts: Pt[]; areaKind: string; organic?: boolean }
-  | { kind: "lineFeature"; pts: Pt[]; lineKind: string };
+  | { kind: "lineFeature"; pts: Pt[]; lineKind: string }
+  | {
+      kind: "exit";
+      at: Pt;
+      targetMap: string; // destination map name/id within the project
+      targetPos: Pt; // landing coordinates on the destination map
+      label?: string;
+      secret?: boolean;
+    };
 
 export function emitShape(source: string, shape: DraftShape): string {
   switch (shape.kind) {
@@ -384,6 +523,8 @@ export function emitShape(source: string, shape: DraftShape): string {
         shape.trapped ?? false,
       );
     case "feature":
+      // A region is handled by insertFeatureInRegion (which rewrites the whole
+      // source); emitShape only ever produces the top-level/global form.
       return emitFeature(shape.at, shape.ref, shape.rotate ?? 0, shape.scale ?? 1);
     case "text":
       return emitText(shape.at, shape.content, shape.size ?? 1);
@@ -400,7 +541,33 @@ export function emitShape(source: string, shape: DraftShape): string {
         shape.pts,
         shape.lineKind,
       );
+    case "exit":
+      return emitExit(
+        shape.at,
+        shape.targetMap,
+        shape.targetPos,
+        shape.label ?? "",
+        shape.secret ?? false,
+      );
   }
+}
+
+/** A cross-map transition: stepping on `at` sends the party to `targetMap` at
+ *  `targetPos`. `to "…" at …` is required; label/secret are optional. */
+export function emitExit(
+  at: Pt,
+  targetMap: string,
+  targetPos: Pt,
+  label = "",
+  secret = false,
+): string {
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const lines: string[] = [
+    `  to "${esc(targetMap)}" at ${num(targetPos.x)},${num(targetPos.y)}`,
+  ];
+  if (label.trim()) lines.push(`  label "${esc(label.trim())}"`);
+  if (secret) lines.push(`  secret`);
+  return `\nexit at ${num(at.x)},${num(at.y)} {\n${lines.join("\n")}\n}\n`;
 }
 
 /** A styled polyline decoration (bars / curtain / barred). */
@@ -435,18 +602,63 @@ export function emitText(at: Pt, content: string, size = 1): string {
   return s + "\n";
 }
 
+/** The bare `feature …` statement (no surrounding newlines). Shared by the
+ *  top-level emitter and the in-room inserter. */
+function featureStmt(at: Pt, ref: string, rotate = 0, scale = 1): string {
+  // Bare identifiers stay unquoted; ids with hyphens (e.g. stairs-up) need quotes.
+  const r = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(ref) ? ref : `"${ref}"`;
+  let s = `feature ${r} at ${num(at.x)},${num(at.y)}`;
+  if (rotate) s += ` rotate ${num(rotate)}`;
+  if (scale !== 1) s += ` scale ${num(scale)}`;
+  return s;
+}
+
 export function emitFeature(
   at: Pt,
   ref: string,
   rotate = 0,
   scale = 1,
 ): string {
-  // Bare identifiers stay unquoted; ids with hyphens (e.g. stairs-up) need quotes.
-  const r = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(ref) ? ref : `"${ref}"`;
-  let s = `\nfeature ${r} at ${num(at.x)},${num(at.y)}`;
-  if (rotate) s += ` rotate ${num(rotate)}`;
-  if (scale !== 1) s += ` scale ${num(scale)}`;
-  return s + "\n";
+  return `\n${featureStmt(at, ref, rotate, scale)}\n`;
+}
+
+/** Insert a `feature …` statement inside an existing `room`/`corridor` block,
+ *  so the feature belongs to that node. `region` is "room.name" /
+ *  "corridor.name" (as produced by the preview's hit-test). Returns the
+ *  rewritten source, or null if the block can't be located (caller should then
+ *  fall back to a top-level feature). */
+export function insertFeatureInRegion(
+  source: string,
+  region: string,
+  at: Pt,
+  ref: string,
+  rotate = 0,
+  scale = 1,
+): string | null {
+  const dot = region.indexOf(".");
+  if (dot < 0) return null;
+  const kind = region.slice(0, dot);
+  const name = region.slice(dot + 1);
+  if (kind !== "room" && kind !== "corridor") return null;
+
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^([ \\t]*)(${kind})\\s+"${esc}"`, "m");
+  const m = re.exec(source);
+  if (!m) return null;
+  const indent = m[1]; // the block's own indentation (usually "")
+  const kwIdx = m.index + indent.length;
+
+  // Find this block's braces, scanning from the keyword onward.
+  const rest = source.slice(kwIdx);
+  const br = outerBraces(rest);
+  if (!br) return null;
+  const closeIdx = kwIdx + br.close; // index of the matching "}" in `source`
+
+  const stmt = `${indent}  ${featureStmt(at, ref, rotate, scale)}\n`;
+  // Ensure the statement starts on its own line, before the closing brace.
+  const before = source.slice(0, closeIdx);
+  const lead = before.endsWith("\n") ? "" : "\n";
+  return before + lead + stmt + source.slice(closeIdx);
 }
 
 export function emitDoor(

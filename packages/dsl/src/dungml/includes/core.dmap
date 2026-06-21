@@ -36,6 +36,7 @@ feature_def "portcullis" {
 }
 
 feature_def "pit-trap" {
+  secret
   glyph {
     circle stroke at 0,0 radius 0.35
     line stroke from -0.25,-0.25 to 0.25,0.25
@@ -44,8 +45,9 @@ feature_def "pit-trap" {
 }
 
 # Generic trap mark — a "T" in a circle (use `pit-trap`, `dart-trap`,
-# `fire-trap` for specific kinds).
+# `fire-trap`, `spear-trap`, `slime-trap` for specific kinds).
 feature_def "trap" {
+  secret
   glyph {
     circle stroke at 0,0 radius 0.35
     line stroke from -0.2,-0.16 to 0.2,-0.16
@@ -72,6 +74,7 @@ feature_def "pit" {
 # opens above). The letter strokes use the same `stroke` role as the
 # enclosing circle.
 feature_def "floor-trapdoor" {
+  secret
   glyph {
     circle stroke at 0,0 radius 0.35
     line stroke from -0.12,-0.18 to -0.12,0.2
@@ -81,6 +84,7 @@ feature_def "floor-trapdoor" {
 }
 
 feature_def "ceiling-trapdoor" {
+  secret
   glyph {
     circle stroke at 0,0 radius 0.35
     path stroke "M0.13,-0.16 Q-0.2,-0.18 -0.18,0 Q-0.2,0.18 0.13,0.16" fill-color "none"
@@ -88,6 +92,7 @@ feature_def "ceiling-trapdoor" {
 }
 
 feature_def "dart-trap" {
+  secret
   glyph {
     circle stroke at 0,0 radius 0.35
     line stroke from -0.22,0 to 0.16,0
@@ -96,9 +101,29 @@ feature_def "dart-trap" {
 }
 
 feature_def "fire-trap" {
+  secret
   glyph {
     circle stroke at 0,0 radius 0.35
     path fill "M0,-0.26 C0.2,-0.04 0.13,0.2 0,0.22 C-0.13,0.2 -0.2,-0.04 0,-0.26 Z"
+  }
+}
+
+# Spear / spike trap — an upward spear (shaft + filled head) in a circle.
+feature_def "spear-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from 0,0.24 to 0,-0.08
+    polygon fill (0,-0.28) (-0.11,-0.06) (0.11,-0.06)
+  }
+}
+
+# Slime / ooze trap — a dripping blob in a circle.
+feature_def "slime-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    path fill "M-0.2,-0.06 Q-0.22,-0.22 0,-0.22 Q0.22,-0.22 0.2,-0.06 Q0.24,0.1 0.12,0.1 Q0.14,0.24 0.02,0.16 Q-0.1,0.24 -0.12,0.1 Q-0.24,0.1 -0.2,-0.06 Z"
   }
 }
 

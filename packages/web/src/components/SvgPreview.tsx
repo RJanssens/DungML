@@ -42,6 +42,12 @@ const WHEEL_FACTOR = 1.15;
 const KEYBOARD_FACTOR = 1.25;
 const CLOSE_DIST = 0.75; // world units: click this near the start to close a polygon
 
+/** Round a world coordinate to 0.1 and drop a trailing ".0" for display. */
+function fmtCoord(v: number): string {
+  const r = Math.round(v * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
 export function SvgPreview({
   svg,
   error,
@@ -59,6 +65,7 @@ export function SvgPreview({
   featureType = "pit-trap",
   featureRotate = 0,
   featureScale = 1,
+  featureGlobal = false,
   corridorOrganic = false,
   corridorStraight = false,
   textContent = "",
@@ -66,8 +73,14 @@ export function SvgPreview({
   areaKind = "water",
   areaOrganic = true,
   lineKind = "bars",
+  exitTargetMap = "",
+  exitTargetX = 0,
+  exitTargetY = 0,
+  exitLabel = "",
+  exitSecret = false,
   pathCheck = false,
   connectivity = null,
+  focusTarget = null,
   onEmit,
   onPick,
 }: {
@@ -96,6 +109,9 @@ export function SvgPreview({
   featureType?: string;
   featureRotate?: number;
   featureScale?: number;
+  /** Force features to be added globally (top-level) even when dropped on a
+   * room/corridor. When false, a feature dropped on a node nests inside it. */
+  featureGlobal?: boolean;
   /** Draw corridors with an organic (wavy) wall style. */
   corridorOrganic?: boolean;
   /** Draw corridors with straight (sharp) corners instead of rounded. */
@@ -108,9 +124,19 @@ export function SvgPreview({
   areaOrganic?: boolean;
   /** Line-feature tool: which style to draw (bars / curtain / barred). */
   lineKind?: string;
+  /** Exit tool: destination map + landing position, optional label/secret. */
+  exitTargetMap?: string;
+  exitTargetX?: number;
+  exitTargetY?: number;
+  exitLabel?: string;
+  exitSecret?: boolean;
   /** Pathing check: tint each room/corridor by whether a door touches it. */
   pathCheck?: boolean;
   connectivity?: { kind: string; name: string; connected: boolean }[] | null;
+  /** A node id ("room.x" / "corridor.y") to enable a "focus" toggle that
+   * zooms to that node (+1 cell of margin) and re-frames when it changes.
+   * Null hides the toggle. Used by the play view to follow the party. */
+  focusTarget?: string | null;
   /** Called with a completed shape; the editor turns it into a snippet. */
   onEmit?: (shape: DraftShape) => void;
   /** Select-mode: a click on a room/corridor (jump-to-definition). */
@@ -135,7 +161,14 @@ export function SvgPreview({
   const [viewBox, setViewBox] = useState<string | null>(null);
   const [meta, setMeta] = useState<MapMeta | null>(null);
   const [tip, setTip] = useState<
-    | { x: number; y: number; title: string; body: string; dmNotes: string }
+    | {
+        x: number;
+        y: number;
+        title: string;
+        body: string;
+        dmNotes: string;
+        coords: string;
+      }
     | null
   >(null);
 
@@ -247,6 +280,10 @@ export function SvgPreview({
     setTy((ch - natural.h * s) / 2);
   }, [natural]);
 
+  // "Focus on party" toggle (play view): see focusOnTarget below the zoom
+  // helpers — it needs clampScale, which is defined there.
+  const [focused, setFocused] = useState(false);
+
   useLayoutEffect(() => {
     fit();
   }, [fit]);
@@ -293,6 +330,61 @@ export function SvgPreview({
     [clampScale],
   );
 
+  // Zoom/centre on the `focusTarget` node (a room/corridor) plus one cell of
+  // margin. Reads the rendered SVG's data-room/data-corridor bbox; the viewBox
+  // is in cell units, so PAD=1 is one cell. Returns false if the node isn't in
+  // the current (possibly fogged) render.
+  const focusOnTarget = useCallback((): boolean => {
+    const container = containerRef.current;
+    const el = mapRef.current?.querySelector("svg") as SVGSVGElement | null;
+    if (!container || !el || !natural || !focusTarget) return false;
+    const dot = focusTarget.indexOf(".");
+    const kind = dot >= 0 ? focusTarget.slice(0, dot) : "room";
+    const name = dot >= 0 ? focusTarget.slice(dot + 1) : focusTarget;
+    const attr = kind === "corridor" ? "data-corridor" : "data-room";
+    let nodes: NodeListOf<Element>;
+    try {
+      nodes = el.querySelectorAll(`[${attr}="${name.replace(/(["\\])/g, "\\$1")}"]`);
+    } catch {
+      return false;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    nodes.forEach((n) => {
+      const g = n as SVGGraphicsElement;
+      if (typeof g.getBBox !== "function") return;
+      const b = g.getBBox();
+      if (!b.width && !b.height) return;
+      minX = Math.min(minX, b.x);
+      minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.width);
+      maxY = Math.max(maxY, b.y + b.height);
+    });
+    if (!Number.isFinite(minX)) return false;
+    const PAD = 1; // one cell of margin
+    minX -= PAD; minY -= PAD; maxX += PAD; maxY += PAD;
+    const vb = el.viewBox.baseVal;
+    const fx = natural.w / vb.width;
+    const fy = natural.h / vb.height;
+    const pxX = (minX - vb.x) * fx;
+    const pxY = (minY - vb.y) * fy;
+    const pxW = (maxX - minX) * fx;
+    const pxH = (maxY - minY) * fy;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    if (cw <= 0 || ch <= 0 || pxW <= 0 || pxH <= 0) return false;
+    const s = clampScale(Math.min(cw / pxW, ch / pxH) * 0.94);
+    setScale(s);
+    setTx(cw / 2 - (pxX + pxW / 2) * s);
+    setTy(ch / 2 - (pxY + pxH / 2) * s);
+    return true;
+  }, [natural, focusTarget, clampScale]);
+
+  // Re-frame on the party whenever focus is on and the target/SVG changes.
+  // Declared after the fit() effect, so focus wins when both fire on a reload.
+  useLayoutEffect(() => {
+    if (focused) focusOnTarget();
+  }, [focused, focusOnTarget, svg]);
+
   // --- drawing helpers ---
 
   const mapSvg = useCallback(
@@ -305,16 +397,29 @@ export function SvgPreview({
       const el = mapSvg();
       if (!el || !meta) return null;
       const world = svgToWorld(screenToSvg(el, clientX, clientY), meta);
-      // Single-cell features sit at cell centres; corridors and doors snap on a
-      // double-resolution (half-cell) grid; rooms snap to whole cells. The
-      // snap resolution subdivides that further (2 = twice as many dots, …).
-      if (FEATURE_TOOLS.has(tool))
+      // Single-cell features and exits sit at cell centres; corridors and doors
+      // snap on a double-resolution (half-cell) grid; rooms snap to whole cells.
+      // The snap resolution subdivides that further (2 = twice as many dots, …).
+      if (FEATURE_TOOLS.has(tool) || tool === "exit")
         return snapCellCenter(world, snap, snapResolution);
       const base = tool === "corridor" || tool === "door" ? 0.5 : 1;
       const step = base / Math.max(1, snapResolution);
       return snapPt(world, snap, step);
     },
     [mapSvg, meta, snap, snapResolution, tool],
+  );
+
+  // Exact world coordinates under a client point, formatted for display.
+  // Unlike `worldFromEvent` this applies no snapping — it's an inspection
+  // readout, not an emit point. Returns "" when geometry isn't ready.
+  const worldUnderCursor = useCallback(
+    (clientX: number, clientY: number): string => {
+      const el = mapSvg();
+      if (!el || !meta) return "";
+      const w = svgToWorld(screenToSvg(el, clientX, clientY), meta);
+      return `${fmtCoord(w.x)}, ${fmtCoord(w.y)}`;
+    },
+    [mapSvg, meta],
   );
 
   // Which room/corridor (if any) covers a world point — read off the rendered
@@ -449,12 +554,26 @@ export function SvgPreview({
           trapped: doorTrapped,
         });
       } else if (FEATURE_TOOLS.has(tool)) {
+        // By default a feature dropped on a room/corridor nests inside that
+        // node; "global" forces a top-level feature, and one dropped on empty
+        // space (no region under the cursor) is global regardless.
+        const region = featureGlobal ? null : regionAt(w);
         onEmit?.({
           kind: "feature",
           at: w,
           ref: featureType,
           rotate: featureRotate,
           scale: featureScale,
+          region,
+        });
+      } else if (tool === "exit") {
+        onEmit?.({
+          kind: "exit",
+          at: w,
+          targetMap: exitTargetMap,
+          targetPos: { x: exitTargetX, y: exitTargetY },
+          label: exitLabel,
+          secret: exitSecret,
         });
       } else if (tool === "text") {
         // Use the toolbar's text if set; otherwise prompt so a click always
@@ -512,11 +631,14 @@ export function SvgPreview({
       }
       return;
     }
-    // Hover-tooltip (select mode only).
+    // Hover-tooltip (select mode only). Exact (unsnapped) world coordinates
+    // under the cursor always show — even over empty map space — so the
+    // readout tells you precisely where you are, not the snapped draw grid.
     const target = e.target as Element | null;
     const el = target?.closest(
       "[data-description],[data-label],[data-ref],[data-room],[data-corridor],[data-dm-notes]",
     ) as Element | null;
+    const coords = worldUnderCursor(e.clientX, e.clientY);
     if (el) {
       const body = el.getAttribute("data-description") ?? "";
       const dmNotes = el.getAttribute("data-dm-notes") ?? "";
@@ -526,11 +648,13 @@ export function SvgPreview({
         el.getAttribute("data-room") ??
         el.getAttribute("data-corridor") ??
         "";
-      if (title || body || dmNotes) {
-        setTip({ x: e.clientX, y: e.clientY, title, body, dmNotes });
+      if (title || body || dmNotes || coords) {
+        setTip({ x: e.clientX, y: e.clientY, title, body, dmNotes, coords });
       } else if (tip) {
         setTip(null);
       }
+    } else if (coords) {
+      setTip({ x: e.clientX, y: e.clientY, title: "", body: "", dmNotes: "", coords });
     } else if (tip) {
       setTip(null);
     }
@@ -699,6 +823,28 @@ export function SvgPreview({
                 : ""}
             </span>
           ) : null}
+          {focusTarget ? (
+            <button
+              type="button"
+              className={`${styles.ctrlBtn} ${focused ? styles.ctrlBtnActive : ""}`}
+              onClick={() => {
+                setFocused((f) => {
+                  const next = !f;
+                  if (next) focusOnTarget();
+                  return next;
+                });
+              }}
+              title={
+                focused
+                  ? "Following the party — click to stop"
+                  : "Focus on the party's location"
+              }
+              aria-label="Focus on the party"
+              aria-pressed={focused}
+            >
+              ⌖
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.ctrlBtn}
@@ -726,7 +872,10 @@ export function SvgPreview({
           <button
             type="button"
             className={styles.ctrlBtn}
-            onClick={fit}
+            onClick={() => {
+              setFocused(false);
+              fit();
+            }}
             title="Fit to view (0)"
             aria-label="Fit to view"
           >
@@ -745,6 +894,9 @@ export function SvgPreview({
         >
           {tip.title ? (
             <div className={styles.tooltipTitle}>{tip.title}</div>
+          ) : null}
+          {tip.coords ? (
+            <div className={styles.tooltipCoords}>{tip.coords}</div>
           ) : null}
           {tip.body ? (
             <div className={styles.tooltipBody}>{tip.body}</div>
@@ -836,8 +988,8 @@ function renderDraft(
     return dot(cursor, "text-cursor");
   }
 
-  // Door / single-cell feature: a 1-unit marker at the cursor cell.
-  if (tool === "door" || FEATURE_TOOLS.has(tool)) {
+  // Door / single-cell feature / exit: a 1-unit marker at the cursor cell.
+  if (tool === "door" || tool === "exit" || FEATURE_TOOLS.has(tool)) {
     if (!cursor) return null;
     const q = s(cursor);
     return (

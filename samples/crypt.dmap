@@ -57,7 +57,13 @@ room "entry_hall" {
     description "Iron-bound. The lock is freshly oiled."
   }
   feature rubble at 6,12 scale 0.8 rotate 15
+  feature spear-trap at 10,9 {
+    description "Pressure plate before the chest — spears from the floor."
+    dm_notes "DEX DC 14 or 2d6 piercing. Disarmed by the lever behind the north pillar."
+  }
 }
+
+text "REQVIESCAT" at 26,3.4 size 0.9 rotate -5
 
 room "throne_chamber" {
   # Hexagonal hall with short vertical jambs at the east and west doors so
@@ -95,6 +101,9 @@ room "vestry_alcove" {
   description "A semicircular alcove with a domed niche."
 
   feature brazier at 46,24
+  feature slime-trap at 49,26 {
+    description "Green ichor weeps from a cracked flagstone — a gelatinous guardian."
+  }
 }
 
 # ---------- Corridors ----------
@@ -122,6 +131,8 @@ door at 15,10 {
   state closed
   facing east
   width 1
+  trapped
+  dm_notes "Needle trap in the latch — CON DC 12 or 1 HP + sleep (DC 13)."
 }
 
 door at 17,10 {

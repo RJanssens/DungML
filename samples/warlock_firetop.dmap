@@ -347,8 +347,17 @@ door at 26,61  { connects room.junction,        room.guardroom_lower type wooden
 door at 38,61  { connects room.junction,        room.alcove          type arch }
 door at 32,64  { connects room.junction,        corridor.approach    type arch }
 door at 32,70  { connects corridor.approach,    room.throne_chamber  type iron state locked facing north width 1.5
+                 trapped
                  description "Iron-bound, runes flickering at the hinges."
-                 dm_notes "Opens to the brass key from the cistern. Forcing it (DC 18 Athletics) wakes the skeletons one round early." }
+                 dm_notes "Opens to the brass key from the cistern. Forcing it (DC 18 Athletics) wakes the skeletons one round early. Glyph of warding on the frame: 3d8 fire, DEX DC 15 half." }
+
+# A lava fissure splitting the throne dais — Firetop lives up to its name.
+# A decorative `area`, not a room (stays out of the connectivity graph).
+area "throne_lava" kind lava {
+  polygon (25,76.5) (31,75.5) (35,78) (30,79.5) (24,79) (22,77.5)
+  line_style organic
+  label "Lava"
+}
 
 # ====================================================================
 # HIDDEN — traps + secrets

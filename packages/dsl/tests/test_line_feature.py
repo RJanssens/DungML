@@ -42,6 +42,18 @@ def test_barred_render_plus_marks():
     assert svg.count('class="line-feature"') > 4
 
 
+def test_step_render_two_parallel_lines():
+    svg = render(parse(_map('line_feature "f" { kind step point 1,2 point 10,2 }')))
+    # Two thin parallel polylines tagged as a step.
+    assert 'data-kind="step"' in svg
+    assert svg.count('class="line-feature"') == 2
+
+
+def test_step_kind_is_known():
+    diags = validate(parse(_map('line_feature "f" { kind step point 1,2 point 8,2 }')))
+    assert not any("unknown kind" in d.message for d in diags)
+
+
 def test_single_point_is_an_error():
     diags = validate(parse(_map('line_feature "f" { kind bars point 3,3 }')))
     assert any(

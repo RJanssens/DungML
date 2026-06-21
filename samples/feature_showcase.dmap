@@ -1,0 +1,117 @@
+# Feature Showcase — a tour of dungml's modern map features:
+#   • text annotations (free-standing labels)
+#   • terrain areas: water / lava / pit (not rooms — pure decoration)
+#   • line features: bars, curtain
+#   • trapped doors (the `trapped` flag, shown only outside fog-of-war)
+#   • the spear-trap and slime-trap glyphs
+# Open it in the editor, or hit "Play" to explore it under fog-of-war.
+include "core.dmap"
+
+map "Feature Showcase" {
+  grid {
+    cell    32 px
+    units   feet 5
+    bounds  34 x 24
+    origin  top-left
+  }
+  renderer "classic-bw"
+  background "#d8d2c4"
+}
+
+text "The Proving Vault" at 16,1.4 size 1.8
+
+# ---- Entry hall ----
+room "entry" {
+  rect 2,3 8 x 6
+  label "Entry Hall"
+}
+feature stairs-up at 3,4
+
+# A trapped door into the gallery (closed AND trapped — the X shows for the
+# GM; players won't see it in the fog-of-war play view until discovered).
+door at 10,6 {
+  connects room.entry, room.gallery
+  type wooden
+  state closed
+  trapped
+}
+
+# ---- Gallery with a reflecting pool (water area) ----
+room "gallery" {
+  rect 10,2 12 x 8
+  label "Gallery"
+}
+area "pool" kind water {
+  polygon (12,4) (18,4.5) (19,7.5) (13,8) (11,6)
+  line_style organic
+  label "Reflecting Pool"
+}
+feature statue at 11,3
+feature statue at 21,3
+
+# Iron bars across the gallery's east opening (line feature).
+line_feature "gallery_bars" kind bars { point 22,4.5 point 22,7.5 }
+door at 22,6 {
+  connects room.gallery, corridor.east_pass
+  type portcullis
+  state locked
+}
+
+# ---- East passage to the trapped cells ----
+corridor "east_pass" {
+  width 1
+  node n1 at 22,6
+  node n2 at 26,6
+  run n1 to n2
+}
+room "traproom" {
+  rect 26,3 6 x 7
+  label "Trapped Cells"
+}
+feature spear-trap at 28,5
+feature slime-trap at 30,5
+feature dart-trap at 29,8
+door at 26,6 {
+  connects corridor.east_pass, room.traproom
+  type wooden
+  state closed
+  trapped
+}
+
+# ---- Lower level: a cinder hall with lava and a pit ----
+room "lava_hall" {
+  rect 4,12 14 x 9
+  label "Cinder Hall"
+}
+area "lava" kind lava {
+  polygon (6,15) (12,14.5) (14,18) (9,20) (5,18)
+  line_style organic
+  label "Lava"
+}
+area "the_drop" kind pit {
+  rect 14,16 3 x 3
+}
+feature brazier at 5,13
+feature brazier at 17,13
+
+# A gauzy curtain dividing the hall.
+line_feature "curtain" kind curtain { point 11,12 point 11,16 }
+
+# Stairwell down from the gallery into the cinder hall.
+corridor "stairwell" {
+  width 1
+  node n1 at 13,10
+  node n2 at 13,12
+  run n1 to n2
+}
+feature stairs-down at 13,11
+door at 13,10 {
+  connects room.gallery, corridor.stairwell
+  type open
+}
+door at 13,12 {
+  connects corridor.stairwell, room.lava_hall
+  type open
+}
+
+text "Beware the cinders" at 11,21.4 size 0.9

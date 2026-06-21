@@ -1,0 +1,76 @@
+# dungeon.dmap — extra feature_defs for dungeon maps: ruined / decayed
+# dressing that complements core.dmap.
+#
+# `include "dungeon.dmap"` from any .dmap file to bring these in. Local
+# feature_defs in the including file win on name collision, so you can
+# override any of these without editing this library.
+#
+# Includes: fallen-pillar, broken-pillar, bones, cobweb, grate, stalagmite.
+
+# A toppled column: the black base dot (same as core's `pillar`) with a grey
+# shaft lying about one cell diagonally to the lower-right.
+feature_def "fallen-pillar" {
+  name "Fallen Pillar"
+  glyph {
+    circle fill at 0,0 radius 0.13
+    line stroke from 0.05,0.05 to 0.78,0.78 stroke-color "#888888" stroke-width 0.16
+  }
+}
+
+# A snapped-off column stump — a hollow ring (vs the solid `pillar` dot).
+feature_def "broken-pillar" {
+  name "Broken Pillar"
+  glyph {
+    circle stroke at 0,0 radius 0.14 stroke-width 0.07
+  }
+}
+
+# Scattered bones — a pale crossed pair.
+feature_def "bones" {
+  name "Bones"
+  glyph {
+    line stroke from -0.25,-0.2 to 0.25,0.2 stroke-color "#777777" stroke-width 0.08
+    line stroke from -0.25,0.2 to 0.25,-0.2 stroke-color "#777777" stroke-width 0.08
+  }
+}
+
+# Cobweb — radial threads and two sagging arcs anchored in the top-left corner.
+feature_def "cobweb" {
+  name "Cobweb"
+  glyph {
+    line stroke from -0.35,-0.35 to 0.35,-0.35 stroke-color "#999999" stroke-width 0.04
+    line stroke from -0.35,-0.35 to -0.35,0.35 stroke-color "#999999" stroke-width 0.04
+    line stroke from -0.35,-0.35 to 0.3,0.3   stroke-color "#999999" stroke-width 0.04
+    path stroke "M0.1,-0.35 Q-0.12,-0.12 -0.35,0.1" fill-color "none" stroke-color "#999999" stroke-width 0.03
+    path stroke "M0.3,-0.35 Q0,0 -0.35,0.3"         fill-color "none" stroke-color "#999999" stroke-width 0.03
+  }
+}
+
+# Floor grate / drain — a square frame with two bars.
+feature_def "grate" {
+  name "Grate"
+  glyph {
+    rect stroke at -0.3,-0.3 0.6 x 0.6 stroke-width 0.06
+    line stroke from -0.1,-0.3 to -0.1,0.3 stroke-width 0.05
+    line stroke from 0.1,-0.3 to 0.1,0.3   stroke-width 0.05
+  }
+}
+
+# Stalagmite — a solid cave spike rising from the floor.
+feature_def "stalagmite" {
+  name "Stalagmite"
+  glyph {
+    polygon fill (0,-0.32) (-0.18,0.28) (0.18,0.28)
+  }
+}
+
+# Turnstile — a full-cell ring with a horizontal bar through it and a central
+# pivot dot (the outer circle spans one square).
+feature_def "turnstile" {
+  name "Turnstile"
+  glyph {
+    circle stroke at 0,0 radius 0.5
+    line stroke from -0.5,0 to 0.5,0
+    circle fill at 0,0 radius 0.1
+  }
+}

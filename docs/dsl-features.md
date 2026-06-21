@@ -157,11 +157,30 @@ feature altar       at 12,11 scale 1.3 rotate 90 {
 - `rotate N` (degrees) and `scale N` (multiplier) are optional.
 - An optional `{ description "..." }` block attaches an instance-level
   description, overriding the `feature_def` description for this
-  particular instance.
+  particular instance. The block also accepts `secret` (see below).
 
 Features may be placed inside a `room`, inside a `layer`, or at the top
 level of the file. They are visual dressing only — they do not
 participate in the [connectivity graph](/docs/dsl-tooling).
+
+### `secret` — GM-only features (hidden until discovered)
+
+Add `secret` to a `feature_def` to make **every instance** of that type
+GM-only, or to a single instance's `{ ... }` block to hide just that one:
+
+```dmap
+feature_def "trap" { secret  glyph { ... } }   # all traps are GM-only
+
+feature chest at 6,6 { secret }                # this chest only
+```
+
+Secret features are stripped from the **fogged players' view**
+(play-session renders with the default `view=discovered`) — exactly like a
+door's `trapped` flag. They still draw in the **full GM view**
+(`view=full`) and in the plain editor/preview render. The bundled
+`core.dmap` already marks the trap family (`trap`, `pit-trap`,
+`dart-trap`, `fire-trap`, `spear-trap`, `slime-trap`, `floor-trapdoor`,
+`ceiling-trapdoor`) `secret`; the open `pit` is left visible.
 
 ---
 

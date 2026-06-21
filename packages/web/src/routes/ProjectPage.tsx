@@ -5,8 +5,45 @@ import * as api from "../lib/api";
 import type { MapKind, MapSummary } from "../lib/types";
 import { Button, Card, EmptyState, Input } from "../components/Primitives";
 import { AppHeader, PageBody, PageShell } from "../components/Layout";
+import { Icon } from "../components/icons";
+import { SvgPreview } from "../components/SvgPreview";
 import { relativeTime } from "./ProjectsPage";
 import styles from "./Lists.module.css";
+
+// Build a throwaway map that lays out one labelled instance of every
+// `feature_def` in a library file, so the "eye" button can render a contact
+// sheet of the library's features. The library source is prepended verbatim
+// (it carries the defs); we append a map block + a grid of feature instances.
+const FEATURE_DEF_RE = /feature_def\s+"([^"]+)"/g;
+function buildFeatureSheet(
+  librarySource: string,
+  title: string,
+): { source: string; count: number } {
+  const names = [...librarySource.matchAll(FEATURE_DEF_RE)].map((m) => m[1]);
+  const uniq = [...new Set(names)];
+  const cols = Math.max(1, Math.min(6, Math.ceil(Math.sqrt(uniq.length))));
+  const rows = Math.max(1, Math.ceil(uniq.length / cols));
+  const CELL = 4; // cells per feature, leaving room for the label below it
+  const W = cols * CELL;
+  const H = rows * CELL;
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const placed = uniq.flatMap((nm, i) => {
+    const x = (i % cols) * CELL + CELL / 2;
+    const y = Math.floor(i / cols) * CELL + CELL / 2 - 0.5;
+    return [
+      `feature "${esc(nm)}" at ${x},${y}`,
+      `text "${esc(nm)}" at ${x},${y + 1.4} size 0.5`,
+    ];
+  });
+  const source =
+    `${librarySource}\n\n` +
+    `map "${esc(title)}" {\n` +
+    `  grid { units feet 5 bounds ${W} x ${H} }\n` +
+    `  renderer "classic-bw"\n}\n\n` +
+    placed.join("\n") +
+    "\n";
+  return { source, count: uniq.length };
+}
 
 const STARTER_DMAP = `# Built-in feature library (pillar, stairs, chest, …). Remove this line
 # if you don't use built-in features, or swap it for your own template.
@@ -20,6 +57,9 @@ map "Untitled" {
     origin  top-left
   }
   renderer "classic-bw"
+  room_numbers off
+  background "#CCC"
+  corners straight
 }
 
 room "main" {
@@ -273,6 +313,33 @@ function MapRow({ map, projectId }: { map: MapSummary; projectId: string }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(map.name);
+  const isLibrary = map.kind === "library";
+
+  // Feature contact sheet (the "eye" button on library files).
+  const [sheet, setSheet] = useState<{
+    loading: boolean;
+    svg?: string;
+    error?: string;
+    notice?: string;
+  } | null>(null);
+  async function openSheet() {
+    setSheet({ loading: true });
+    try {
+      const detail = await api.maps.get(map.id);
+      const { source, count } = buildFeatureSheet(
+        detail.source,
+        `Features — ${map.name}`,
+      );
+      if (count === 0) {
+        setSheet({ loading: false, notice: "No feature_defs in this file." });
+        return;
+      }
+      const { svg } = await api.dsl.render(source);
+      setSheet({ loading: false, svg });
+    } catch (e) {
+      setSheet({ loading: false, error: String((e as Error)?.message ?? e) });
+    }
+  }
   const rename = useMutation({
     mutationFn: (n: string) => api.maps.update(map.id, { name: n }),
     onSuccess: () => {
@@ -316,19 +383,80 @@ function MapRow({ map, projectId }: { map: MapSummary; projectId: string }) {
         </Link>
       )}
       <div className={styles.itemActions}>
+        {isLibrary ? (
+          <Button
+            variant="ghost"
+            onClick={openSheet}
+            title="Preview all features defined in this library file"
+          >
+            <Icon name="eye" size={15} />
+          </Button>
+        ) : null}
         <Button variant="ghost" onClick={() => setEditing((v) => !v)}>
           Rename
         </Button>
         <Button
           variant="danger"
           onClick={() => {
-            const label = map.kind === "library" ? "library file" : "map";
+            const label = isLibrary ? "library file" : "map";
             if (confirm(`Delete ${label} "${map.name}"?`)) remove.mutate();
           }}
         >
           Delete
         </Button>
       </div>
+
+      {sheet ? (
+        <div
+          onClick={() => setSheet(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "2rem",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              borderRadius: 8,
+              width: "min(900px, 90vw)",
+              height: "min(80vh, 800px)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.5rem 0.75rem",
+                borderBottom: "1px solid #ddd",
+              }}
+            >
+              <strong>Features — {map.name}</strong>
+              <Button variant="ghost" onClick={() => setSheet(null)}>
+                Close
+              </Button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <SvgPreview
+                svg={sheet.svg ?? null}
+                loading={sheet.loading}
+                error={sheet.error ?? null}
+                notice={sheet.notice ?? null}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </li>
   );
 }

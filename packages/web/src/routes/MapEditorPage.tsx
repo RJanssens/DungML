@@ -25,6 +25,7 @@ import {
   emitShape,
   findDefinition,
   hasCellGrid,
+  insertFeatureInRegion,
   setCellGrid,
   sortSource,
   type DraftShape,
@@ -42,6 +43,17 @@ export function MapEditorPage() {
     queryFn: () => api.maps.get(mapId),
     enabled: !!mapId,
   });
+
+  // Sibling maps in this project — the destinations the exit tool can target
+  // (other renderable maps; library files and this map itself are excluded).
+  const { data: projectMaps = [] } = useQuery({
+    queryKey: ["maps", map?.project_id ?? ""],
+    queryFn: () => api.maps.list(map?.project_id ?? ""),
+    enabled: !!map?.project_id,
+  });
+  const exitMapOptions = projectMaps
+    .filter((m) => m.kind !== "library" && m.id !== mapId)
+    .map((m) => m.name);
 
   const [source, setSource] = useState<string>("");
   const [lastSaved, setLastSaved] = useState<string>("");
@@ -68,6 +80,7 @@ export function MapEditorPage() {
   const [featureType, setFeatureType] = useState("pit-trap");
   const [featureRotate, setFeatureRotate] = useState(0);
   const [featureScale, setFeatureScale] = useState(1);
+  const [featureGlobal, setFeatureGlobal] = useState(false);
   // Feature types available to this map — the feature_defs its includes
   // resolve to (plus any defined locally). `featureTypes` is the flat list
   // (for default-selection); `featureGroups` splits them by source file for
@@ -81,6 +94,11 @@ export function MapEditorPage() {
   const [areaKind, setAreaKind] = useState("water");
   const [areaOrganic, setAreaOrganic] = useState(true);
   const [lineKind, setLineKind] = useState("bars");
+  const [exitTargetMap, setExitTargetMap] = useState("");
+  const [exitTargetX, setExitTargetX] = useState(0);
+  const [exitTargetY, setExitTargetY] = useState(0);
+  const [exitLabel, setExitLabel] = useState("");
+  const [exitSecret, setExitSecret] = useState(false);
   const [pathCheck, setPathCheck] = useState(false);
   const [connectionsMode, setConnectionsMode] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -158,9 +176,24 @@ export function MapEditorPage() {
     }
   }, [traceKey, bgImage, bgOpacity]);
 
-  // A completed shape becomes a .dmap block appended to the source.
+  // A completed shape becomes a .dmap block appended to the source. A feature
+  // dropped on a room/corridor is nested inside that block instead (the preview
+  // sets `region`); if the block can't be located we fall back to appending.
   const onEmit = useCallback((shape: DraftShape) => {
-    setSource((s) => s + emitShape(s, shape));
+    setSource((s) => {
+      if (shape.kind === "feature" && shape.region) {
+        const nested = insertFeatureInRegion(
+          s,
+          shape.region,
+          shape.at,
+          shape.ref,
+          shape.rotate ?? 0,
+          shape.scale ?? 1,
+        );
+        if (nested) return nested;
+      }
+      return s + emitShape(s, shape);
+    });
   }, []);
 
   // Jump-to-definition: reveal a line in the editor (nonce forces re-trigger).
@@ -483,6 +516,8 @@ export function MapEditorPage() {
             onFeatureRotate={setFeatureRotate}
             featureScale={featureScale}
             onFeatureScale={setFeatureScale}
+            featureGlobal={featureGlobal}
+            onFeatureGlobal={setFeatureGlobal}
             corridorOrganic={corridorOrganic}
             onCorridorOrganic={setCorridorOrganic}
             corridorStraight={corridorStraight}
@@ -497,6 +532,17 @@ export function MapEditorPage() {
             onAreaOrganic={setAreaOrganic}
             lineKind={lineKind}
             onLineKind={setLineKind}
+            exitTargetMap={exitTargetMap}
+            onExitTargetMap={setExitTargetMap}
+            exitMapOptions={exitMapOptions}
+            exitTargetX={exitTargetX}
+            onExitTargetX={setExitTargetX}
+            exitTargetY={exitTargetY}
+            onExitTargetY={setExitTargetY}
+            exitLabel={exitLabel}
+            onExitLabel={setExitLabel}
+            exitSecret={exitSecret}
+            onExitSecret={setExitSecret}
             pathCheck={pathCheck}
             onPathCheck={setPathCheck}
             connectionsMode={connectionsMode}
@@ -526,6 +572,7 @@ export function MapEditorPage() {
               featureType={featureType}
               featureRotate={featureRotate}
               featureScale={featureScale}
+              featureGlobal={featureGlobal}
               corridorOrganic={corridorOrganic}
               corridorStraight={corridorStraight}
               textContent={textContent}
@@ -533,6 +580,11 @@ export function MapEditorPage() {
               areaKind={areaKind}
               areaOrganic={areaOrganic}
               lineKind={lineKind}
+              exitTargetMap={exitTargetMap}
+              exitTargetX={exitTargetX}
+              exitTargetY={exitTargetY}
+              exitLabel={exitLabel}
+              exitSecret={exitSecret}
               pathCheck={pathCheck}
               connectivity={connectivity}
               onEmit={onEmit}

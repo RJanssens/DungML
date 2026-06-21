@@ -1,7 +1,8 @@
 # Geometry
 
 Part of the [dungml DSL reference](/docs/dsl). Covers the spatial
-declarations: rooms, corridors, slices, doors, windows, markers, layers.
+declarations: rooms, corridors, slices, doors, windows, markers, exits,
+layers.
 
 ## `room` — walled spaces
 
@@ -313,6 +314,53 @@ strict convention.
 Markers inside a `hidden` layer are parsed and validated, but the
 renderer skips them — useful for tokens that should only appear in
 DM-facing exports.
+
+---
+
+## `exit` — cross-map transitions
+
+```dmap
+exit at 3,4 {
+  to "cellar" at 10,2
+  label "Down to the cellar"
+  description "A trapdoor set into the flagstones."
+  dm_notes "Lands the party beside the wine racks (area 7)."
+  secret
+}
+```
+
+An `exit` is a point that links *out of this map* to a position on
+**another map in the same project**. Stepping onto it sends the party to
+`target_map` at the given landing coordinates — the cross-map equivalent
+of a stairway between floors. The minimal form is just the placement plus
+a target:
+
+```dmap
+exit at 3,4 { to "cellar" at 10,2 }
+```
+
+| Property        | Notes |
+|-----------------|-------|
+| `at X,Y`        | required — where the exit sits on *this* map (world units) |
+| `to "MAP" at TX,TY` | required — the destination map's name/id within the project, and the landing coordinates on it |
+| `label`         | optional on-map caption, drawn beneath the portal pad |
+| `description`   | optional free text — surfaced via `data-description` |
+| `dm_notes`      | optional DM-only text — surfaced via `data-dm-notes` |
+| `secret`        | mark the exit GM-only: stripped from the fogged players' view until discovered, like a secret door |
+
+Unlike a [`door`](#door--openings-on-walls) — which `connects` two nodes
+*within* one map and so feeds the [connectivity graph](/docs/dsl-tooling)
+— an exit leaves the map entirely. It is therefore **not** a graph node
+or edge: pathfinding within a single map ignores it. Resolving
+`target_map` to an actual map is a whole-project concern (the DSL
+validator only checks that the target name is non-empty and the placement
+is in bounds, since the other map isn't visible from this file).
+
+The renderer draws an indigo "portal" pad with an up-and-out arrow and
+emits the target as data attributes (`data-exit-to`, `data-target-x`,
+`data-target-y`) so an interactive play view can route a click to the
+destination map. Like markers, exits inside a `hidden` layer are skipped
+by the renderer.
 
 ---
 

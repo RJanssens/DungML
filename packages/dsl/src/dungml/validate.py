@@ -25,7 +25,7 @@ KNOWN_AREA_KINDS = {
     "water", "lava", "pit", "chasm", "mud", "acid", "ice", "blood",
     "slime", "swamp",
 }
-KNOWN_LINE_FEATURE_KINDS = {"bars", "curtain", "barred"}
+KNOWN_LINE_FEATURE_KINDS = {"bars", "curtain", "barred", "step"}
 from .model import (
     BoundaryRoom,
     CircleRoom,
@@ -198,6 +198,8 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
             diags.append(
                 _diag("warning", f"corridor '{name}' has no segments", corr.span)
             )
+        for fi in corr.features:
+            check_feature_inst(fi, scope=f"corridor '{name}'")
 
     # ---- doors ----
     for door in dmap.doors:
@@ -397,6 +399,34 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     for lf in dmap.line_features:
         check_line_feature(lf, scope="map")
 
+    # ---- exits (cross-map transitions) ----
+    # The target map lives elsewhere in the project, so we can't verify it
+    # (or the landing coordinates) here — that's a whole-project concern the
+    # backend resolves. We only check what's local: a non-empty target and an
+    # in-bounds placement.
+    def check_exit(ex, *, scope: str) -> None:
+        where = "" if scope == "map" else f" in {scope}"
+        if not ex.target_map.strip():
+            diags.append(
+                _diag(
+                    "error",
+                    f"exit at {ex.position}{where} has an empty target map name",
+                    ex.span,
+                )
+            )
+        if not _in_bounds(ex.position, bw, bh):
+            diags.append(
+                _diag(
+                    "warning",
+                    f"exit at {ex.position}{where} is outside the map bounds "
+                    f"({bw} x {bh})",
+                    ex.span,
+                )
+            )
+
+    for ex in dmap.exits:
+        check_exit(ex, scope="map")
+
     # ---- layers ----
     for layer in dmap.layers:
         for fi in layer.features:
@@ -405,6 +435,8 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
             check_area(a, scope=f"layer '{layer.name}'")
         for lf in layer.line_features:
             check_line_feature(lf, scope=f"layer '{layer.name}'")
+        for ex in layer.exits:
+            check_exit(ex, scope=f"layer '{layer.name}'")
 
     # ---- overlapping areas (warning) ----
     # Compared only within a scope: top-level rooms/corridors together, and

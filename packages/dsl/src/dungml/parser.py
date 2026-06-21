@@ -27,6 +27,7 @@ from .model import (
     Corridor,
     Door,
     DungeonMap,
+    Exit,
     FeatureDef,
     FeatureInstance,
     GlyphCircle,
@@ -226,6 +227,9 @@ class _Tx(Transformer):
     def theme_prop(self, items: list[Any]) -> tuple[str, Any]:
         return ("theme", _ident(items[0]))
 
+    def map_corners_decl(self, items: list[Any]) -> tuple[str, Any]:
+        return ("default_corners", _ident(items[0]))
+
     def legend_prop(self, items: list[Any]) -> tuple[str, Any]:
         return ("legend", True)
 
@@ -331,6 +335,7 @@ class _Tx(Transformer):
         title = None
         cell_grid = None
         cell_grid_color = None
+        default_corners = None
         for item in items[1:]:
             if isinstance(item, GridConfig):
                 grid = item
@@ -358,6 +363,8 @@ class _Tx(Transformer):
                     title = val
                 elif key == "cell_grid":
                     cell_grid, cell_grid_color = val
+                elif key == "default_corners":
+                    default_corners = val
         return MapConfig(
             name=name,
             grid=grid,
@@ -374,6 +381,7 @@ class _Tx(Transformer):
             title=title,
             cell_grid=cell_grid,
             cell_grid_color=cell_grid_color,
+            default_corners=default_corners,
         )
 
     # ----- scenario -----
@@ -538,6 +546,9 @@ class _Tx(Transformer):
     def display_name_decl(self, items: list[Any]) -> tuple[str, Any]:
         return ("display_name", _strip_string(items[0]))
 
+    def secret_decl(self, items: list[Any]) -> tuple[str, Any]:
+        return ("secret", True)
+
     def feature_def(self, items: list[Any]) -> FeatureDef:
         name = _strip_string(items[0])
         shape: Shape | None = None
@@ -547,6 +558,7 @@ class _Tx(Transformer):
         overlays: list[Overlay] = []
         description = None
         display_name = None
+        secret = False
         for item in items[1:]:
             if not isinstance(item, tuple):
                 continue
@@ -565,6 +577,8 @@ class _Tx(Transformer):
                 description = val
             elif key == "display_name":
                 display_name = val
+            elif key == "secret":
+                secret = val
         if shape is None and not glyph:
             raise DmapParseError(
                 f"feature_def '{name}' must have a `shape` or a `glyph` block"
@@ -583,6 +597,7 @@ class _Tx(Transformer):
             overlays=overlays,
             description=description,
             display_name=display_name,
+            secret=secret,
         )
 
     # ----- label -----
@@ -647,9 +662,10 @@ class _Tx(Transformer):
         return ("scale", (sx, sy))
 
     def feature_block(self, items: list[Any]) -> tuple[str, Any]:
-        # description_decl and dm_notes_decl tuples appear inside.
+        # description_decl, dm_notes_decl and secret_decl tuples appear inside.
         description = None
         dm_notes = None
+        secret = False
         for item in items:
             if not isinstance(item, tuple):
                 continue
@@ -657,7 +673,12 @@ class _Tx(Transformer):
                 description = item[1]
             elif item[0] == "dm_notes":
                 dm_notes = item[1]
-        return ("inline_block", {"description": description, "dm_notes": dm_notes})
+            elif item[0] == "secret":
+                secret = True
+        return (
+            "inline_block",
+            {"description": description, "dm_notes": dm_notes, "secret": secret},
+        )
 
     def feature_inst(self, items: list[Any]) -> FeatureInstance:
         # items: [ref, x, y, *modifiers, optional inline_block tuple]
@@ -669,6 +690,7 @@ class _Tx(Transformer):
         scale_y = None
         description = None
         dm_notes = None
+        secret = False
         for item in items[3:]:
             if not isinstance(item, tuple):
                 continue
@@ -680,6 +702,7 @@ class _Tx(Transformer):
             elif key == "inline_block":
                 description = val.get("description")
                 dm_notes = val.get("dm_notes")
+                secret = bool(val.get("secret"))
         return FeatureInstance(
             ref=ref,
             position=(x, y),
@@ -688,6 +711,7 @@ class _Tx(Transformer):
             scale_y=scale_y,
             description=description,
             dm_notes=dm_notes,
+            secret=secret,
         )
 
     # ----- room -----
@@ -858,10 +882,13 @@ class _Tx(Transformer):
         background = None
         line_style = None
         line_style_amount = None
-        corners = "round"
+        corners = None
+        features: list[FeatureInstance] = []
         for item in items[rest_start:]:
             if isinstance(item, (LineSegment, ArcSegment)):
                 segments.append(item)
+            elif isinstance(item, FeatureInstance):
+                features.append(item)
             elif isinstance(item, tuple):
                 key, val = item
                 if key == "width":
@@ -898,6 +925,7 @@ class _Tx(Transformer):
             line_style=line_style,
             line_style_amount=line_style_amount,
             corners=corners,
+            features=features,
         )
 
     # ----- slice -----
@@ -1167,6 +1195,51 @@ class _Tx(Transformer):
             description=description, dm_notes=dm_notes,
         )
 
+    # ----- exit -----
+
+    def exit_target(self, items: list[Any]) -> tuple[str, Any]:
+        target_map = _strip_string(items[0])
+        target_position = (_num(items[1]), _num(items[2]))
+        return ("target", (target_map, target_position))
+
+    def exit_decl(self, items: list[Any]) -> Exit:
+        x = _num(items[0])
+        y = _num(items[1])
+        target_map: str | None = None
+        target_position: tuple[float, float] | None = None
+        label = None
+        secret = False
+        description = None
+        dm_notes = None
+        for item in items[2:]:
+            if not isinstance(item, tuple):
+                continue
+            key, val = item
+            if key == "target":
+                target_map, target_position = val
+            elif key == "label":
+                label = val
+            elif key == "secret":
+                secret = True
+            elif key == "description":
+                description = val
+            elif key == "dm_notes":
+                dm_notes = val
+        if target_map is None or target_position is None:
+            raise DmapParseError(
+                f"exit at ({_num(items[0])},{_num(items[1])}) is missing its "
+                f"`to \"map\" at X,Y` target"
+            )
+        return Exit(
+            position=(x, y),
+            target_map=target_map,
+            target_position=target_position,
+            label=label,
+            secret=secret,
+            description=description,
+            dm_notes=dm_notes,
+        )
+
     # ----- layer -----
 
     def hidden_flag(self, items: list[Any]) -> tuple[str, Any]:
@@ -1185,6 +1258,7 @@ class _Tx(Transformer):
         texts: list[TextAnnotation] = []
         areas: list[Area] = []
         line_features: list[LineFeature] = []
+        exits: list[Exit] = []
         for item in items[1:]:
             if isinstance(item, tuple) and item[0] == "hidden":
                 hidden = item[1]
@@ -1208,6 +1282,8 @@ class _Tx(Transformer):
                 areas.append(item)
             elif isinstance(item, LineFeature):
                 line_features.append(item)
+            elif isinstance(item, Exit):
+                exits.append(item)
         return Layer(
             name=name,
             hidden=hidden,
@@ -1221,6 +1297,7 @@ class _Tx(Transformer):
             texts=texts,
             areas=areas,
             line_features=line_features,
+            exits=exits,
         )
 
     # ----- start -----
@@ -1239,6 +1316,7 @@ class _Tx(Transformer):
         texts: list[TextAnnotation] = []
         areas: list[Area] = []
         line_features: list[LineFeature] = []
+        exits: list[Exit] = []
         layers: list[Layer] = []
         for item in items:
             if isinstance(item, MapConfig):
@@ -1271,6 +1349,8 @@ class _Tx(Transformer):
                 areas.append(item)
             elif isinstance(item, LineFeature):
                 line_features.append(item)
+            elif isinstance(item, Exit):
+                exits.append(item)
             elif isinstance(item, Layer):
                 layers.append(item)
         if map_cfg is not None and scenario_cfg is not None:
@@ -1299,6 +1379,7 @@ class _Tx(Transformer):
             texts=texts,
             areas=areas,
             line_features=line_features,
+            exits=exits,
             layers=layers,
             scenario=scenario_cfg,
         )
@@ -1369,6 +1450,13 @@ def _attach_spans(tree: Any, model: DungeonMap) -> None:
                     and t.span.line == 0
                 ):
                     t.span = _span(node)
+                    break
+
+        elif node.data == "exit_decl":
+            x, y = float(str(node.children[0])), float(str(node.children[1]))
+            for ex in model.exits:
+                if ex.position == (x, y) and ex.span.line == 0:
+                    ex.span = _span(node)
                     break
 
         elif node.data == "area":

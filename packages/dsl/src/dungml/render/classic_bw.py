@@ -27,6 +27,7 @@ from ..model import (
     Corridor,
     Door,
     DungeonMap,
+    Exit,
     FeatureDef,
     FeatureInstance,
     GlyphCircle,
@@ -80,12 +81,13 @@ AREA_KINDS: dict[str, tuple[str, str]] = {
 AREA_OUTLINE_STROKE = 0.12
 TRAIL_MARK = 0.12  # half-size of each x
 TRAIL_STROKE = 0.05  # x-mark stroke width
-# `line_feature` styling (bars / curtain / barred).
+# `line_feature` styling (bars / curtain / barred / step).
 LINE_FEATURE_STROKE = 0.07
 CURTAIN_AMP = 0.13  # wave amplitude (perpendicular to the path)
 CURTAIN_WAVELEN = 0.5  # wave length along the path
 BARRED_SPACING = 0.5  # gap between `+` marks
 BARRED_MARK = 0.12  # half-size of each `+`
+STEP_GAP = 0.15  # half-distance between the two thin parallel lines
 LABEL_BASE_SIZE = 0.9
 LABEL_INSET = 0.5  # world-unit padding from the room bbox for relative-aligned labels
 DOOR_WIDTH_DEFAULT = 1.0
@@ -430,10 +432,13 @@ class _RenderContext:
                 parts.append(self._window(w))
             parts.append("</g>")
 
-        # Features (room-attached + top-level + visible layer).
+        # Features (room-attached + corridor-attached + top-level + visible layer).
         parts.append('<g class="features">')
         for r in self.all_rooms.values():
             for fi in r.features:
+                parts.append(self._feature(fi))
+        for c in all_corridors:
+            for fi in c.features:
                 parts.append(self._feature(fi))
         for fi in self.dmap.features:
             parts.append(self._feature(fi))
@@ -462,6 +467,15 @@ class _RenderContext:
             parts.append('<g class="markers">')
             for m in all_markers:
                 parts.append(self._marker(m))
+            parts.append("</g>")
+
+        # Cross-map exits (transitions to another map in the project). Drawn
+        # with markers so they overlay furniture but sit under labels.
+        all_exits = self._all_exits()
+        if all_exits:
+            parts.append('<g class="exits">')
+            for ex in all_exits:
+                parts.append(self._exit(ex))
             parts.append("</g>")
 
         # Party start marker (where the PCs begin when the map loads).
@@ -1005,7 +1019,10 @@ class _RenderContext:
             attrs += f' data-dm-notes="{escape(c.dm_notes)}"'
         filter_attr = self._organic_filter_attr(c.line_style, c.line_style_amount)
         # Corner style at bends/junctions: round (default) or straight (sharp).
-        join = "miter" if c.corners == "straight" else "round"
+        # Per-corridor `corners` wins; otherwise inherit the map-level default;
+        # otherwise "round".
+        corners = c.corners or self.dmap.map.default_corners or "round"
+        join = "miter" if corners == "straight" else "round"
         label_layer = self._corridor_label(c) if c.label is not None else ""
 
         # Zero-width corridor: draw the centerline as a single line (a route
@@ -1233,6 +1250,63 @@ class _RenderContext:
             f'dominant-baseline="central">S</text>'
             f"</g>"
         )
+
+    def _all_exits(self) -> list[Exit]:
+        """Top-level exits plus those in visible layers."""
+        out: list[Exit] = list(self.dmap.exits)
+        for layer in self.dmap.layers:
+            if not layer.hidden:
+                out.extend(layer.exits)
+        return out
+
+    def _exit(self, ex: Exit) -> str:
+        """A cross-map transition: a rounded "portal" pad with an up-and-out
+        arrow. Carries the target map + landing coords as data attributes so
+        an interactive play view can route a click to the destination map."""
+        x, y = ex.position
+        cy = self.y(y)
+        tx, ty = ex.target_position
+        accent = "#5b4b8a"  # indigo — distinct from the green party-start
+        attrs = (
+            f'class="exit" '
+            f'data-exit-to="{escape(ex.target_map)}" '
+            f'data-target-x="{_n(tx)}" data-target-y="{_n(ty)}"'
+        )
+        label_text = ex.label.text if ex.label is not None else None
+        if label_text:
+            attrs += f' data-label="{escape(label_text)}"'
+        if ex.description:
+            attrs += f' data-description="{escape(ex.description)}"'
+        if ex.dm_notes:
+            attrs += f' data-dm-notes="{escape(ex.dm_notes)}"'
+        # Rounded pad.
+        pad = (
+            f'<rect x="{_n(x - 0.5)}" y="{_n(cy - 0.5)}" width="1" height="1" '
+            f'rx="0.16" fill="#fff" stroke="{accent}" stroke-width="0.1"/>'
+        )
+        # Up-and-out arrow (chevron head + stem), pointing toward the top of
+        # the tile — "leave the map here".
+        arrow = (
+            f'<path d="M {_n(x)},{_n(cy - 0.34)} '
+            f'L {_n(x - 0.28)},{_n(cy - 0.02)} '
+            f'L {_n(x - 0.1)},{_n(cy - 0.02)} '
+            f'L {_n(x - 0.1)},{_n(cy + 0.32)} '
+            f'L {_n(x + 0.1)},{_n(cy + 0.32)} '
+            f'L {_n(x + 0.1)},{_n(cy - 0.02)} '
+            f'L {_n(x + 0.28)},{_n(cy - 0.02)} Z" '
+            f'fill="{accent}"/>'
+        )
+        parts = [f"<g {attrs}>", pad, arrow]
+        # Optional label beneath the pad.
+        if label_text:
+            parts.append(
+                f'<text x="{_n(x)}" y="{_n(cy + 0.92)}" '
+                f'font-family="Georgia,serif" font-size="0.5" '
+                f'fill="{accent}" text-anchor="middle" '
+                f'dominant-baseline="hanging">{escape(label_text)}</text>'
+            )
+        parts.append("</g>")
+        return "".join(parts)
 
     def _corridor_path(self, c: Corridor) -> str:
         """Build the centerline path, starting a fresh sub-path whenever a
@@ -2653,6 +2727,36 @@ class _RenderContext:
             f"{_n(x)},{_n(self.y(y))}" for x, y in pts
         )
 
+    def _offset_polyline(self, pts: list[Vec2], offset: float) -> list[Vec2]:
+        """Shift the polyline sideways by `offset` (world units).
+
+        Each vertex moves along the averaged normal of its adjacent
+        segments so the two lines stay parallel through corners.
+        """
+        n = len(pts)
+        out: list[Vec2] = []
+        for i, (x, y) in enumerate(pts):
+            nx = ny = 0.0
+            # segment ending at i and segment starting at i
+            for a, b in (
+                (pts[i - 1], pts[i]) if i > 0 else (None, None),
+                (pts[i], pts[i + 1]) if i < n - 1 else (None, None),
+            ):
+                if a is None:
+                    continue
+                dx, dy = b[0] - a[0], b[1] - a[1]
+                length = math.hypot(dx, dy)
+                if length <= 1e-9:
+                    continue
+                nx += -dy / length  # perpendicular
+                ny += dx / length
+            mag = math.hypot(nx, ny)
+            if mag <= 1e-9:
+                out.append((x, y))
+            else:
+                out.append((x + nx / mag * offset, y + ny / mag * offset))
+        return out
+
     def _line_feature(self, lf: LineFeature) -> str:
         pts = lf.points
         if len(pts) < 2:
@@ -2669,6 +2773,16 @@ class _RenderContext:
                 self._plus_marks_between(a, b) for a, b in zip(pts, pts[1:])
             )
             return f'<g {attrs}>{marks}</g>'
+        if kind == "step":
+            # Two thin parallel lines straddling the path.
+            d1 = self._polyline_path(self._offset_polyline(pts, STEP_GAP))
+            d2 = self._polyline_path(self._offset_polyline(pts, -STEP_GAP))
+            return (
+                f'<g {attrs}>'
+                f'<path class="line-feature" d="{d1}"/>'
+                f'<path class="line-feature" d="{d2}"/>'
+                f'</g>'
+            )
         if kind == "curtain":
             d = self._wavy_path(pts)
         elif kind == "bars":

@@ -155,6 +155,11 @@
   background: var(--bg-sunken);
   color: var(--accent);
 }
+.ctrlBtnActive,
+.ctrlBtnActive:hover {
+  background: var(--accent);
+  color: var(--bg-elevated);
+}
 .zoomReadout {
   padding: 0 6px;
   color: var(--fg-muted);
@@ -192,6 +197,14 @@
   font-weight: 600;
   font-size: 13px;
   color: #fff8e8;
+  margin-bottom: 3px;
+}
+
+.tooltipCoords {
+  font-family: var(--mono);
+  font-variant: tabular-nums;
+  font-size: 11px;
+  color: #b7d6c2;
   margin-bottom: 3px;
 }
 

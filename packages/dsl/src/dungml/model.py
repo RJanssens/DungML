@@ -134,6 +134,10 @@ class FeatureDef(BaseModel):
     overlays: list[Overlay] = Field(default_factory=list)
     description: Optional[str] = None
     display_name: Optional[str] = None  # human-readable label override
+    # GM-only: instances of this feature type are stripped from the fogged
+    # players' view (e.g. traps). The full GM view still draws them. A feature
+    # instance can also opt in individually (see FeatureInstance.secret).
+    secret: bool = False
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -159,6 +163,9 @@ class FeatureInstance(BaseModel):
     scale_y: Optional[float] = None
     description: Optional[str] = None
     dm_notes: Optional[str] = None
+    # Mark this single instance GM-only (hidden in the fogged players' view)
+    # even if its feature type isn't secret by default.
+    secret: bool = False
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -279,8 +286,14 @@ class Corridor(BaseModel):
     # Wall edge style — "solid" or "organic". See Room.line_style.
     line_style: Optional[str] = None
     line_style_amount: Optional[float] = None  # waviness multiplier for organic
-    # Corner style at bends/junctions: "round" (default) or "straight" (sharp).
-    corners: str = "round"
+    # Corner style at bends/junctions: "round" or "straight" (sharp).
+    # `None` (default) inherits the map-level `corners` setting, which itself
+    # falls back to "round". See MapConfig.default_corners.
+    corners: Optional[str] = None
+    # Features placed on this corridor (pillars, rubble, portcullis, …). Like
+    # Room.features, the `at x,y` coordinates are absolute world coords — the
+    # nesting is organizational, not a relative offset.
+    features: list[FeatureInstance] = Field(default_factory=list)
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -397,12 +410,36 @@ class LineFeature(BaseModel):
     """A styled polyline decoration drawn along a path of points.
 
     `kind` selects the look: `bars` (dotted line), `curtain` (wavy line),
-    `barred` (small `+` marks along the path). Not a connector — excluded
-    from the connectivity graph.
+    `barred` (small `+` marks along the path), `step` (two thin parallel
+    lines straddling the path). Not a connector — excluded from the
+    connectivity graph.
     """
     name: str
     kind: str = "bars"
     points: list[Vec2] = Field(default_factory=list)
+    description: Optional[str] = None
+    dm_notes: Optional[str] = None
+    span: SourceSpan = Field(default_factory=SourceSpan)
+
+
+class Exit(BaseModel):
+    """A cross-map transition: a point that links to a position on another
+    map in the same project.
+
+    Placed at `position` on this map; stepping onto it sends the party to
+    `target_map` (the target map's name/id within the project) at
+    `target_position`. Unlike a `door` — which connects two nodes *within*
+    one map and feeds the connectivity graph — an exit leaves the map
+    entirely, so it's not part of the single-map graph. The backend (which
+    knows the whole project) resolves `target_map` to the actual map.
+    """
+    position: Vec2
+    target_map: str  # name/id of the destination map within the project
+    target_position: Vec2  # landing coordinates on the destination map
+    label: Optional[Label] = None  # opt-in on-map label
+    # GM-only: stripped from the fogged players' view until discovered, like a
+    # secret door or a `secret` feature.
+    secret: bool = False
     description: Optional[str] = None
     dm_notes: Optional[str] = None
     span: SourceSpan = Field(default_factory=SourceSpan)
@@ -423,6 +460,7 @@ class Layer(BaseModel):
     texts: list[TextAnnotation] = Field(default_factory=list)
     areas: list[Area] = Field(default_factory=list)
     line_features: list[LineFeature] = Field(default_factory=list)
+    exits: list[Exit] = Field(default_factory=list)
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -465,6 +503,10 @@ class MapConfig(BaseModel):
     # Prefix on-map room labels with their sequential number ("1. Hall").
     # `room_numbers off` in the map block turns this off (labels show bare).
     room_numbers: bool = True
+    # Map-wide default corridor corner style ("round" | "straight"). Applies
+    # to every corridor that doesn't set its own `corners`. `None` (default)
+    # means the renderer falls back to "round".
+    default_corners: Optional[str] = None
     # Optional on-map title. Uses the same alignment logic as labels (against
     # the full map bbox); defaults to top-centre when no `at`/`align` is given.
     title: Optional[Label] = None
@@ -502,6 +544,7 @@ class DungeonMap(BaseModel):
     texts: list[TextAnnotation] = Field(default_factory=list)
     areas: list[Area] = Field(default_factory=list)
     line_features: list[LineFeature] = Field(default_factory=list)
+    exits: list[Exit] = Field(default_factory=list)
     layers: list[Layer] = Field(default_factory=list)
     # Set on files whose top-level construct is `scenario "..." { ... }`
     # instead of (or as well as) a `map { ... }` block.

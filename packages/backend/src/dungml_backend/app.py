@@ -67,20 +67,29 @@ def create_app() -> FastAPI:
     app.include_router(api)
     app.include_router(meta.router)  # /health at root
 
-    # Web Component for embedding maps in any HTML page — served from a
-    # fixed path so consumers can drop in a single <script> tag.
-    component_path = STATIC_DIR / "dungml-map.js"
-    if component_path.exists():
-        @app.get(
-            "/dungml-map.js",
-            include_in_schema=False,
-            response_class=FileResponse,
-        )
-        async def _serve_dungml_map_js() -> FileResponse:
-            return FileResponse(
-                component_path,
-                media_type="application/javascript",
-                headers={"cache-control": "public, max-age=300"},
+    # Single-file embeddables served from fixed paths so consumers can drop in
+    # one <script> tag: the map Web Component and the play-view widget. Each
+    # needs an explicit route — otherwise the SPA fallback below would shadow
+    # the real file with index.html.
+    for embed_name in ("dungml-map.js", "dungml-play.js"):
+        embed_path = STATIC_DIR / embed_name
+
+        def _make_embed_route(path: Path):
+            async def _serve_embed() -> FileResponse:
+                return FileResponse(
+                    path,
+                    media_type="application/javascript",
+                    headers={"cache-control": "public, max-age=300"},
+                )
+
+            return _serve_embed
+
+        if embed_path.exists():
+            app.add_api_route(
+                f"/{embed_name}",
+                _make_embed_route(embed_path),
+                include_in_schema=False,
+                response_class=FileResponse,
             )
 
     if STATIC_DIR.exists():

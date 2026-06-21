@@ -5,8 +5,10 @@ import {
   ArrowDownAZ,
   Circle,
   DoorClosed,
+  Eye,
   GripHorizontal,
   Hexagon,
+  LogOut,
   MousePointer2,
   Sparkles,
   Spline,
@@ -29,7 +31,9 @@ const ICONS: Record<string, LucideIcon> = {
   text: Type,
   area: Waves,
   line: GripHorizontal,
+  exit: LogOut,
   sort: ArrowDownAZ,
+  eye: Eye,
 };
 
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {

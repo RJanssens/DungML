@@ -70,6 +70,15 @@ room "east_bank" {
   description "Rougher ground — heather and broken outcrops between the trees."
 }
 
+# A still backwater eddy off the main channel — a decorative water `area`
+# (not a room, so it stays out of the connectivity graph).
+area "mill_pool" kind water {
+  polygon (4,20) (9,19.5) (11,23) (8,26) (4,25.5) (3,22.5)
+  line_style organic
+  label "Mill Pool"
+}
+text "Ford — impassable in flood" at 11,2 size 0.8
+
 # ============ Road ============
 #
 # The King's Road runs east-west, broken only by the bridge.

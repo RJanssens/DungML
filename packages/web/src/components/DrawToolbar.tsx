@@ -16,12 +16,13 @@ const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: "text", label: "Text", hint: "Type the text and pick a size in the toolbar, then click the map to place it at that fixed point." },
   { id: "area", label: "Terrain area", hint: "Pick a kind (water, lava, pit…) in the toolbar, then click each corner of the pool/area; double-click or Enter to close, Esc cancels. Not a room." },
   { id: "line", label: "Line feature", hint: "Pick a style (bars, curtain, barred) in the toolbar, then click each point along the line; double-click or Enter to finish, Esc cancels." },
+  { id: "exit", label: "Exit", hint: "Set the destination map + landing position in the toolbar, then click where the exit sits on this map. Stepping on it sends the party to the other map." },
 ];
 
 // Built-in terrain kinds for the area tool (mirror the renderer palette).
 const AREA_KINDS = ["water", "lava", "pit", "chasm", "mud", "acid", "ice", "blood", "slime", "swamp"];
-// Line-feature styles (mirror the renderer): bars=dotted, curtain=wavy, barred=+.
-const LINE_KINDS = ["bars", "curtain", "barred"];
+// Line-feature styles (mirror the renderer): bars=dotted, curtain=wavy, barred=+, step=2 thin lines.
+const LINE_KINDS = ["bars", "curtain", "barred", "step"];
 
 const DOOR_TYPES = ["wooden", "open", "double", "one-way", "arch", "gates", "portcullis", "iron", "stone", "secret", "concealed", "smashed"];
 const DOOR_STATES = ["closed", "open", "locked"];
@@ -62,6 +63,8 @@ export function DrawToolbar({
   onFeatureRotate,
   featureScale,
   onFeatureScale,
+  featureGlobal,
+  onFeatureGlobal,
   corridorOrganic,
   onCorridorOrganic,
   corridorStraight,
@@ -76,6 +79,17 @@ export function DrawToolbar({
   onAreaOrganic,
   lineKind,
   onLineKind,
+  exitTargetMap,
+  onExitTargetMap,
+  exitMapOptions,
+  exitTargetX,
+  onExitTargetX,
+  exitTargetY,
+  onExitTargetY,
+  exitLabel,
+  onExitLabel,
+  exitSecret,
+  onExitSecret,
   pathCheck,
   onPathCheck,
   connectionsMode,
@@ -111,6 +125,8 @@ export function DrawToolbar({
   onFeatureRotate: (n: number) => void;
   featureScale: number;
   onFeatureScale: (n: number) => void;
+  featureGlobal: boolean;
+  onFeatureGlobal: (v: boolean) => void;
   corridorOrganic: boolean;
   onCorridorOrganic: (v: boolean) => void;
   corridorStraight: boolean;
@@ -125,6 +141,17 @@ export function DrawToolbar({
   onAreaOrganic: (v: boolean) => void;
   lineKind: string;
   onLineKind: (v: string) => void;
+  exitTargetMap: string;
+  onExitTargetMap: (v: string) => void;
+  exitMapOptions: string[];
+  exitTargetX: number;
+  onExitTargetX: (n: number) => void;
+  exitTargetY: number;
+  onExitTargetY: (n: number) => void;
+  exitLabel: string;
+  onExitLabel: (v: string) => void;
+  exitSecret: boolean;
+  onExitSecret: (v: boolean) => void;
   pathCheck: boolean;
   onPathCheck: (p: boolean) => void;
   connectionsMode: boolean;
@@ -345,6 +372,18 @@ export function DrawToolbar({
               disabled={disabled}
             />
           </label>
+          <label
+            className={styles.snap}
+            title="Always add the feature as a top-level declaration. When off, a feature dropped on a room/corridor is nested inside it (features on empty space are always global)."
+          >
+            <input
+              type="checkbox"
+              checked={featureGlobal}
+              onChange={(e) => onFeatureGlobal(e.target.checked)}
+              disabled={disabled}
+            />
+            Global
+          </label>
         </div>
       ) : null}
 
@@ -445,6 +484,74 @@ export function DrawToolbar({
               </option>
             ))}
           </select>
+        </div>
+      ) : null}
+
+      {tool === "exit" ? (
+        <div className={styles.group} role="group" aria-label="Exit options">
+          <select
+            className={styles.select}
+            value={exitTargetMap}
+            onChange={(e) => onExitTargetMap(e.target.value)}
+            disabled={disabled}
+            title="Map this exit leads to (other maps in this project)"
+          >
+            <option value="">Destination map…</option>
+            {/* The current value may name a map that isn't in the list (e.g.
+                renamed/deleted, or hand-typed in the editor) — keep it
+                selectable so the dropdown still reflects the source. */}
+            {exitTargetMap && !exitMapOptions.includes(exitTargetMap) ? (
+              <option value={exitTargetMap}>{exitTargetMap}</option>
+            ) : null}
+            {exitMapOptions.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <label className={styles.numField} title="Landing X on the destination map">
+            →X
+            <input
+              type="number"
+              className={styles.num}
+              value={exitTargetX}
+              step={1}
+              onChange={(e) => onExitTargetX(Number(e.target.value) || 0)}
+              disabled={disabled}
+            />
+          </label>
+          <label className={styles.numField} title="Landing Y on the destination map">
+            →Y
+            <input
+              type="number"
+              className={styles.num}
+              value={exitTargetY}
+              step={1}
+              onChange={(e) => onExitTargetY(Number(e.target.value) || 0)}
+              disabled={disabled}
+            />
+          </label>
+          <input
+            type="text"
+            className={styles.select}
+            value={exitLabel}
+            placeholder="Label (optional)"
+            onChange={(e) => onExitLabel(e.target.value)}
+            disabled={disabled}
+            title="On-map label for the exit (optional)"
+          />
+          <label
+            className={styles.snap}
+            title="Mark the exit secret (GM only — hidden from the players' fog-of-war view until discovered)"
+          >
+            <input
+              type="checkbox"
+              checked={exitSecret}
+              onChange={(e) => onExitSecret(e.target.checked)}
+              disabled={disabled}
+            />
+            Secret
+          </label>
         </div>
       ) : null}
 

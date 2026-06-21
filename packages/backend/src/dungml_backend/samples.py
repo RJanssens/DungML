@@ -30,6 +30,7 @@ def _find_samples_dir() -> Path | None:
 # Title case the slug-ish filename for display.
 _NICE_NAMES = {
     "quickstart": "Quickstart (start here)",
+    "feature_showcase": "Feature Showcase (text, terrain, traps)",
     "cottage": "Miller's Cottage",
     "crypt": "Crypt of Saint Vellis",
     "sunken_library": "The Sunken Library of Cael Voren",

@@ -1,0 +1,50 @@
+<!doctype html>
+<!--
+  Minimal example: embed the dungml fog-of-war play view in any web page.
+
+  Serve this file from anywhere (it can be a different origin than dungml).
+  Replace BASE_URL, MAP_ID and the token with your own values. For a real
+  deployment your host app should mint/forward the token server-side rather
+  than hard-coding it here.
+
+  The dungml backend must allow this page's origin via CORS — set
+  DUNGML_CORS_ORIGINS (defaults to "*" in dev). Auth is unchanged: a normal
+  dungml bearer token that owns the map.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>dungml play — embed example</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      header { padding: 0.5rem 1rem; background: #1b1b1b; color: #eee; }
+      #map { height: calc(100vh - 48px); }
+    </style>
+  </head>
+  <body>
+    <header>Host application — embedded dungml play view below</header>
+    <div id="map"></div>
+
+    <!-- 1. Load the widget bundle from the dungml backend. -->
+    <script src="http://127.0.0.1:8000/dungml-play.js"></script>
+
+    <!-- 2. Mount it. -->
+    <script>
+      const BASE_URL = "http://127.0.0.1:8000";
+      const MAP_ID = "REPLACE_WITH_MAP_UUID";
+      const TOKEN = "REPLACE_WITH_BEARER_TOKEN";
+
+      DungmlPlay.mount(document.getElementById("map"), {
+        baseUrl: BASE_URL,
+        mapId: MAP_ID,
+        // Static token shown for brevity; use getToken for refreshable tokens:
+        //   getToken: () => myApp.currentDungmlToken,
+        token: TOKEN,
+      });
+
+      // Later, to tear down:
+      //   DungmlPlay.unmount(document.getElementById("map"));
+    </script>
+  </body>
+</html>

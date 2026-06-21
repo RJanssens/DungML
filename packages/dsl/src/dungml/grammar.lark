@@ -16,6 +16,7 @@ start: top_level*
           | text_annotation
           | area
           | line_feature
+          | exit_decl
           | layer
           | include_decl
 
@@ -45,10 +46,14 @@ map_block: "map" STRING "{" map_property* "}"
              | room_numbers_decl
              | map_title_decl
              | cell_grid_decl
+             | map_corners_decl
              | description_decl
              | dm_notes_decl
 
 renderer_prop: "renderer" STRING
+// Map-wide default corner style for corridors ("round" | "straight").
+// A per-corridor `corners` overrides this; if neither is set, "round".
+map_corners_decl: "corners" CNAME
 party_start_decl: "party_start" NUMBER "," NUMBER
 room_numbers_decl: "room_numbers" CNAME
 map_title_decl: "title" STRING label_modifier*
@@ -88,6 +93,11 @@ feature_def: "feature_def" STRING "{" feature_def_property* "}"
                      | overlay_decl
                      | description_decl
                      | display_name_decl
+                     | secret_decl
+
+// Mark a feature type (or a single instance) as GM-only: stripped from the
+// fogged players' view, still drawn in the full GM view.
+secret_decl: "secret"
 
 background_prop: "background" STRING
 display_name_decl: "name" STRING
@@ -229,7 +239,7 @@ feat_scale: "scale" NUMBER (":" NUMBER)?
 
 feature_block: "{" feature_block_property* "}"
 
-?feature_block_property: description_decl | dm_notes_decl
+?feature_block_property: description_decl | dm_notes_decl | secret_decl
 
 // ============ CORRIDOR ============
 // Second STRING is an optional human-readable display name. Used only as
@@ -243,6 +253,7 @@ corridor: "corridor" STRING STRING? "{" corridor_property* "}"
                   | corridor_node
                   | corridor_run
                   | corridor_corners
+                  | feature_inst
                   | label_decl
                   | description_decl
                   | dm_notes_decl
@@ -373,18 +384,33 @@ layer: "layer" STRING hidden_flag? "{" layer_item* "}"
 
 hidden_flag: "hidden"
 
-?layer_item: feature_inst | door | window | marker | text_annotation | area | line_feature | room | corridor | slice_decl
+?layer_item: feature_inst | door | window | marker | text_annotation | area | line_feature | exit_decl | room | corridor | slice_decl
 
 // ============ LINE FEATURE ============
 // A styled polyline decoration drawn along a path of points: `bars`
-// (dotted), `curtain` (wavy), `barred` (small + marks). Not a connector —
-// excluded from the graph.
+// (dotted), `curtain` (wavy), `barred` (small + marks), `step` (two thin
+// parallel lines). Not a connector — excluded from the graph.
 line_feature: "line_feature" STRING lf_kind? "{" line_feature_property* "}"
 
 ?line_feature_property: lf_kind | lf_point | description_decl | dm_notes_decl
 
 lf_kind: "kind" CNAME
 lf_point: "point" NUMBER "," NUMBER
+
+// ============ EXIT ============
+// A cross-map transition placed at `at X,Y`: stepping on it sends the party
+// to another map in the same project. `to "map" at TX,TY` names the target
+// map and the landing position within it. Optional `label` draws on the map;
+// `secret` hides it from the fogged players' view until discovered.
+exit_decl: "exit" "at" NUMBER "," NUMBER "{" exit_property* "}"
+
+?exit_property: exit_target
+              | label_decl
+              | description_decl
+              | dm_notes_decl
+              | secret_decl
+
+exit_target: "to" STRING "at" NUMBER "," NUMBER
 
 // ============ SHARED ============
 point: "(" NUMBER "," NUMBER ")"
