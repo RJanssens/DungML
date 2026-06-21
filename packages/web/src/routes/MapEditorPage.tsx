@@ -5,7 +5,13 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useBlocker,
+  useNavigate,
+  useParams,
+  type BlockerFunction,
+} from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "../lib/api";
 import { ApiError } from "../lib/api";
@@ -25,7 +31,7 @@ import {
   emitShape,
   findDefinition,
   hasCellGrid,
-  insertFeatureInRegion,
+  insertSnippetInRegion,
   setCellGrid,
   sortSource,
   type DraftShape,
@@ -99,6 +105,7 @@ export function MapEditorPage() {
   const [exitTargetY, setExitTargetY] = useState(0);
   const [exitLabel, setExitLabel] = useState("");
   const [exitSecret, setExitSecret] = useState(false);
+  const [exitGlobal, setExitGlobal] = useState(false);
   const [pathCheck, setPathCheck] = useState(false);
   const [connectionsMode, setConnectionsMode] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -177,22 +184,21 @@ export function MapEditorPage() {
   }, [traceKey, bgImage, bgOpacity]);
 
   // A completed shape becomes a .dmap block appended to the source. A feature
-  // dropped on a room/corridor is nested inside that block instead (the preview
-  // sets `region`); if the block can't be located we fall back to appending.
+  // or exit dropped on a room/corridor is nested inside that block instead (the
+  // preview sets `region`); if the block can't be located we fall back to
+  // appending.
   const onEmit = useCallback((shape: DraftShape) => {
     setSource((s) => {
-      if (shape.kind === "feature" && shape.region) {
-        const nested = insertFeatureInRegion(
-          s,
-          shape.region,
-          shape.at,
-          shape.ref,
-          shape.rotate ?? 0,
-          shape.scale ?? 1,
-        );
+      const snippet = emitShape(s, shape);
+      const region =
+        shape.kind === "feature" || shape.kind === "exit"
+          ? shape.region
+          : null;
+      if (region) {
+        const nested = insertSnippetInRegion(s, region, snippet);
         if (nested) return nested;
       }
-      return s + emitShape(s, shape);
+      return s + snippet;
     });
   }, []);
 
@@ -375,7 +381,9 @@ export function MapEditorPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [onSave]);
 
-  // Warn before unloading the tab with unsaved changes.
+  // Warn before unloading the tab (close / reload / external link) with unsaved
+  // changes. This covers full-page unloads; in-app navigation is handled by the
+  // router blocker below.
   useEffect(() => {
     if (!dirty) return;
     function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -385,6 +393,28 @@ export function MapEditorPage() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
+
+  // Confirm before leaving the editor via in-app navigation (breadcrumb, header
+  // links, the browser Back button, …) while there are unsaved changes. Only
+  // blocks an actual route change, not a same-page update.
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) =>
+      dirty && currentLocation.pathname !== nextLocation.pathname,
+    [dirty],
+  );
+  const blocker = useBlocker(shouldBlock);
+  useEffect(() => {
+    if (blocker.state !== "blocked") return;
+    if (
+      window.confirm(
+        "You have unsaved changes to this map. Leave without saving?",
+      )
+    ) {
+      blocker.proceed();
+    } else {
+      blocker.reset();
+    }
+  }, [blocker]);
 
   function downloadSvg() {
     const svg = preview?.svg;
@@ -543,6 +573,8 @@ export function MapEditorPage() {
             onExitLabel={setExitLabel}
             exitSecret={exitSecret}
             onExitSecret={setExitSecret}
+            exitGlobal={exitGlobal}
+            onExitGlobal={setExitGlobal}
             pathCheck={pathCheck}
             onPathCheck={setPathCheck}
             connectionsMode={connectionsMode}
@@ -585,6 +617,7 @@ export function MapEditorPage() {
               exitTargetY={exitTargetY}
               exitLabel={exitLabel}
               exitSecret={exitSecret}
+              exitGlobal={exitGlobal}
               pathCheck={pathCheck}
               connectivity={connectivity}
               onEmit={onEmit}

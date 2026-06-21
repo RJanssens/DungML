@@ -778,6 +778,7 @@ class _Tx(Transformer):
         description = None
         dm_notes = None
         features: list[FeatureInstance] = []
+        exits: list[Exit] = []
         grid: float | None = None
         grid_color: str | None = None
         background = None
@@ -789,6 +790,8 @@ class _Tx(Transformer):
                 shape = item
             elif isinstance(item, FeatureInstance):
                 features.append(item)
+            elif isinstance(item, Exit):
+                exits.append(item)
             elif isinstance(item, tuple):
                 key, val = item
                 if key == "label":
@@ -814,6 +817,7 @@ class _Tx(Transformer):
             description=description,
             dm_notes=dm_notes,
             features=features,
+            exits=exits,
             grid=grid,
             grid_color=grid_color,
             background=background,
@@ -884,11 +888,14 @@ class _Tx(Transformer):
         line_style_amount = None
         corners = None
         features: list[FeatureInstance] = []
+        exits: list[Exit] = []
         for item in items[rest_start:]:
             if isinstance(item, (LineSegment, ArcSegment)):
                 segments.append(item)
             elif isinstance(item, FeatureInstance):
                 features.append(item)
+            elif isinstance(item, Exit):
+                exits.append(item)
             elif isinstance(item, tuple):
                 key, val = item
                 if key == "width":
@@ -926,6 +933,7 @@ class _Tx(Transformer):
             line_style_amount=line_style_amount,
             corners=corners,
             features=features,
+            exits=exits,
         )
 
     # ----- slice -----
@@ -1284,6 +1292,13 @@ class _Tx(Transformer):
                 line_features.append(item)
             elif isinstance(item, Exit):
                 exits.append(item)
+        # Hoist exits authored inside room/corridor blocks up to the layer
+        # level, so they're handled like any other exit (they carry absolute
+        # coords — the nesting was organizational only).
+        for r in rooms:
+            exits.extend(r.exits)
+        for c in corridors:
+            exits.extend(c.exits)
         return Layer(
             name=name,
             hidden=hidden,
@@ -1353,6 +1368,12 @@ class _Tx(Transformer):
                 exits.append(item)
             elif isinstance(item, Layer):
                 layers.append(item)
+        # Hoist exits authored inside top-level room/corridor blocks (those in
+        # layers are hoisted in `layer()`). Absolute coords — see `room()`.
+        for r in rooms.values():
+            exits.extend(r.exits)
+        for c in corridors.values():
+            exits.extend(c.exits)
         if map_cfg is not None and scenario_cfg is not None:
             raise DmapParseError(
                 "file has both a top-level `map` and a `scenario` — pick one"

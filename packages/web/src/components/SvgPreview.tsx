@@ -78,6 +78,7 @@ export function SvgPreview({
   exitTargetY = 0,
   exitLabel = "",
   exitSecret = false,
+  exitGlobal = false,
   pathCheck = false,
   connectivity = null,
   focusTarget = null,
@@ -130,6 +131,9 @@ export function SvgPreview({
   exitTargetY?: number;
   exitLabel?: string;
   exitSecret?: boolean;
+  /** Force exits to be added globally (top-level) even when dropped on a
+   * room/corridor. When false, an exit dropped on a node nests inside it. */
+  exitGlobal?: boolean;
   /** Pathing check: tint each room/corridor by whether a door touches it. */
   pathCheck?: boolean;
   connectivity?: { kind: string; name: string; connected: boolean }[] | null;
@@ -567,6 +571,10 @@ export function SvgPreview({
           region,
         });
       } else if (tool === "exit") {
+        // Like features: an exit dropped on a room/corridor nests inside that
+        // node by default; "global" forces top-level, and one on empty space
+        // (no region under the cursor) is global regardless.
+        const region = exitGlobal ? null : regionAt(w);
         onEmit?.({
           kind: "exit",
           at: w,
@@ -574,6 +582,7 @@ export function SvgPreview({
           targetPos: { x: exitTargetX, y: exitTargetY },
           label: exitLabel,
           secret: exitSecret,
+          region,
         });
       } else if (tool === "text") {
         // Use the toolbar's text if set; otherwise prompt so a click always

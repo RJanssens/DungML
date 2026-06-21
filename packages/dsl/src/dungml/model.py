@@ -230,6 +230,11 @@ class Room(BaseModel):
     description: Optional[str] = None  # boxed text — read to players
     dm_notes: Optional[str] = None  # private notes — traps, secrets, hooks
     features: list[FeatureInstance] = Field(default_factory=list)
+    # Exits authored inside this room's block. Like `features`, the nesting is
+    # organizational only (the `at x,y` coords are absolute world coords). The
+    # parser hoists these into the map-level `exits` list, so downstream
+    # (renderer, graph, fog, validation) sees them as ordinary map exits.
+    exits: list[Exit] = Field(default_factory=list)
     grid: Optional[float] = None  # spacing (world units) for an in-room grid overlay
     grid_color: Optional[str] = None  # optional CSS color for the grid lines
     # Floor background. CSS color or built-in texture id; overrides the
@@ -294,6 +299,9 @@ class Corridor(BaseModel):
     # Room.features, the `at x,y` coordinates are absolute world coords — the
     # nesting is organizational, not a relative offset.
     features: list[FeatureInstance] = Field(default_factory=list)
+    # Exits authored inside this corridor's block — hoisted to the map-level
+    # `exits` list by the parser. See Room.exits.
+    exits: list[Exit] = Field(default_factory=list)
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 

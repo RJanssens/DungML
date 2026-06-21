@@ -492,6 +492,9 @@ export type DraftShape =
       targetPos: Pt; // landing coordinates on the destination map
       label?: string;
       secret?: boolean;
+      // "room.name" / "corridor.name" to nest the exit inside that block, or
+      // null/undefined to add it as a top-level (global) declaration.
+      region?: string | null;
     };
 
 export function emitShape(source: string, shape: DraftShape): string {
@@ -523,7 +526,7 @@ export function emitShape(source: string, shape: DraftShape): string {
         shape.trapped ?? false,
       );
     case "feature":
-      // A region is handled by insertFeatureInRegion (which rewrites the whole
+      // A region is handled by insertSnippetInRegion (which rewrites the whole
       // source); emitShape only ever produces the top-level/global form.
       return emitFeature(shape.at, shape.ref, shape.rotate ?? 0, shape.scale ?? 1);
     case "text":
@@ -622,18 +625,16 @@ export function emitFeature(
   return `\n${featureStmt(at, ref, rotate, scale)}\n`;
 }
 
-/** Insert a `feature …` statement inside an existing `room`/`corridor` block,
- *  so the feature belongs to that node. `region` is "room.name" /
- *  "corridor.name" (as produced by the preview's hit-test). Returns the
- *  rewritten source, or null if the block can't be located (caller should then
- *  fall back to a top-level feature). */
-export function insertFeatureInRegion(
+/** Insert an emitted snippet (a top-level `feature` / `exit` block, as produced
+ *  by the emit* helpers) inside an existing `room`/`corridor` block, re-indented
+ *  to sit one level in, so the declaration belongs to that node. `region` is
+ *  "room.name" / "corridor.name" (as produced by the preview's hit-test).
+ *  Returns the rewritten source, or null if the block can't be located (caller
+ *  should then fall back to appending the snippet at the top level). */
+export function insertSnippetInRegion(
   source: string,
   region: string,
-  at: Pt,
-  ref: string,
-  rotate = 0,
-  scale = 1,
+  snippet: string,
 ): string | null {
   const dot = region.indexOf(".");
   if (dot < 0) return null;
@@ -654,7 +655,15 @@ export function insertFeatureInRegion(
   if (!br) return null;
   const closeIdx = kwIdx + br.close; // index of the matching "}" in `source`
 
-  const stmt = `${indent}  ${featureStmt(at, ref, rotate, scale)}\n`;
+  // Re-indent every line of the snippet one level inside the block. A single
+  // `feature …` line becomes `  feature …`; a multi-line `exit … { … }` block
+  // keeps its relative indentation on top of the extra level.
+  const body = snippet.replace(/^\n+|\n+$/g, "");
+  const stmt =
+    body
+      .split("\n")
+      .map((l) => (l ? `${indent}  ${l}` : l))
+      .join("\n") + "\n";
   // Ensure the statement starts on its own line, before the closing brace.
   const before = source.slice(0, closeIdx);
   const lead = before.endsWith("\n") ? "" : "\n";

@@ -90,6 +90,8 @@ export function DrawToolbar({
   onExitLabel,
   exitSecret,
   onExitSecret,
+  exitGlobal,
+  onExitGlobal,
   pathCheck,
   onPathCheck,
   connectionsMode,
@@ -152,6 +154,8 @@ export function DrawToolbar({
   onExitLabel: (v: string) => void;
   exitSecret: boolean;
   onExitSecret: (v: boolean) => void;
+  exitGlobal: boolean;
+  onExitGlobal: (v: boolean) => void;
   pathCheck: boolean;
   onPathCheck: (p: boolean) => void;
   connectionsMode: boolean;
@@ -551,6 +555,18 @@ export function DrawToolbar({
               disabled={disabled}
             />
             Secret
+          </label>
+          <label
+            className={styles.snap}
+            title="Always add the exit as a top-level declaration. When off, an exit dropped on a room/corridor is nested inside it (exits on empty space are always global)."
+          >
+            <input
+              type="checkbox"
+              checked={exitGlobal}
+              onChange={(e) => onExitGlobal(e.target.checked)}
+              disabled={disabled}
+            />
+            Global
           </label>
         </div>
       ) : null}

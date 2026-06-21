@@ -1,4 +1,8 @@
-import { Routes, Route } from "react-router-dom";
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  Route,
+} from "react-router-dom";
 import { LoginPage } from "./routes/LoginPage";
 import { RegisterPage } from "./routes/RegisterPage";
 import { ProjectsPage } from "./routes/ProjectsPage";
@@ -9,9 +13,12 @@ import { PlayPage } from "./routes/PlayPage";
 import { DocsPage } from "./routes/DocsPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
-export function App() {
-  return (
-    <Routes>
+// A data router (createBrowserRouter) rather than <BrowserRouter>/<Routes> so
+// the data-router-only navigation APIs are available — notably useBlocker,
+// which the map editor uses to confirm before discarding unsaved changes.
+export const router = createBrowserRouter(
+  createRoutesFromElements(
+    <>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/docs" element={<DocsPage />} />
@@ -56,6 +63,6 @@ export function App() {
           </ProtectedRoute>
         }
       />
-    </Routes>
-  );
-}
+    </>,
+  ),
+);
