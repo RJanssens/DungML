@@ -171,6 +171,7 @@ room: "room" STRING "{" room_property* "}"
               | dm_notes_decl
               | feature_inst
               | exit_decl
+              | text_annotation
               | room_grid
               | background_prop
               | line_style_decl
@@ -256,6 +257,7 @@ corridor: "corridor" STRING STRING? "{" corridor_property* "}"
                   | corridor_corners
                   | feature_inst
                   | exit_decl
+                  | text_annotation
                   | label_decl
                   | description_decl
                   | dm_notes_decl
@@ -355,7 +357,13 @@ marker_image:    "image" STRING
 // ============ TEXT ============
 // Freestanding text drawn at a fixed map position. `size` multiplies the
 // renderer's base label size; `rotate` is in degrees. Both optional.
-text_annotation: "text" STRING "at" NUMBER "," NUMBER text_modifier*
+// Two interchangeable forms: inline modifiers, or a braced block (like
+// `exit at … { … }`) for longer descriptions. Higher rule priority so a
+// trailing `description`/`dm_notes` in the inline form binds to the text
+// annotation rather than the enclosing room/corridor block (both accept
+// those keywords, so the sequence is otherwise ambiguous).
+text_annotation.2: "text" STRING "at" NUMBER "," NUMBER text_modifier*
+                 | "text" STRING "at" NUMBER "," NUMBER "{" text_modifier* "}"
 
 ?text_modifier: text_size
               | text_rotate

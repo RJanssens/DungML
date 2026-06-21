@@ -382,9 +382,13 @@ class _RenderContext:
                 continue
             all_corridors.extend(layer.corridors)
         if all_corridors:
+            # Positions of every connector (door / cross-map exit). A corridor
+            # end with no connector here is a dead end and gets capped.
+            connectors = [d.position for d in doors]
+            connectors.extend(ex.position for ex in self._all_exits())
             parts.append('<g class="corridors">')
             for c in all_corridors:
-                parts.append(self._corridor(c))
+                parts.append(self._corridor(c, connectors))
             parts.append("</g>")
 
         # Global cell grid inside corridors. The clip is the corridor floor
@@ -1000,13 +1004,17 @@ class _RenderContext:
 
     # --- corridors ---
 
-    def _corridor(self, c: Corridor) -> str:
+    def _corridor(self, c: Corridor, connectors: list[Vec2] | None = None) -> str:
         """Render a corridor as two stacked strokes of the centerline.
 
         Outer stroke (wide, dark) draws the walls; inner stroke (slightly
         narrower, floor-coloured) carves the corridor band on top. L-junctions
         and arc transitions sort themselves out naturally because both strokes
         follow the same path — no parallel-wall stitching needed.
+
+        `connectors` is the list of door / exit positions on the map: a
+        terminal corridor end with no connector there is a dead end and gets
+        a flat wall cap drawn across its mouth.
         """
         floor_d = self._corridor_path(c)
         if not floor_d:
@@ -1083,7 +1091,97 @@ class _RenderContext:
         # block. The display_name (second STRING after the slug) is for
         # tooltips and the print legend only — it never renders on the map.
         label_layer = self._corridor_label(c) if c.label is not None else ""
-        return wall_layer + floor_layer + label_layer
+        # Cap dead ends: degree-1 terminal endpoints with no connector. Drawn
+        # after the floor so the cap reads as a flat wall closing the mouth.
+        cap_layer = self._corridor_caps(c, connectors or [], filter_attr)
+        return wall_layer + floor_layer + cap_layer + label_layer
+
+    def _corridor_caps(
+        self,
+        c: Corridor,
+        connectors: list[Vec2],
+        filter_attr: str,
+    ) -> str:
+        """Flat wall caps across every dead-end mouth of a corridor.
+
+        A free end (a line-segment endpoint shared by no other segment) that
+        has no door / exit at it is a dead end. The two-stroke draw leaves
+        such an end open (floor flush to the edge, no dark line across it);
+        this paints a wall-coloured band across the mouth to close it.
+        Branches, bends and junctions (degree > 1) and ends with a connector
+        are left open."""
+        half = c.width / 2.0
+        if half <= 0:
+            return ""
+        # Every segment endpoint (line + arc) for degree counting.
+        all_ends: list[Vec2] = []
+        for s in c.segments:
+            if isinstance(s, LineSegment):
+                all_ends.append(s.start)
+                all_ends.append(s.end)
+            else:
+                all_ends.append(_arc_endpoint(s, s.from_angle))
+                all_ends.append(_arc_endpoint(s, s.to_angle))
+
+        def degree(pt: Vec2) -> int:
+            return sum(
+                1
+                for q in all_ends
+                if abs(q[0] - pt[0]) <= 1e-6 and abs(q[1] - pt[1]) <= 1e-6
+            )
+
+        tol = max(half, 0.5) + 0.25
+        out: list[str] = []
+        seen: set[tuple[float, float]] = set()
+        for s in c.segments:
+            if not isinstance(s, LineSegment):
+                continue
+            for pt, other in ((s.start, s.end), (s.end, s.start)):
+                key = (round(pt[0], 6), round(pt[1], 6))
+                if key in seen:
+                    continue
+                if degree(pt) != 1:
+                    continue  # bend / branch / junction, not a free end
+                if any(
+                    math.hypot(px - pt[0], py - pt[1]) <= tol
+                    for px, py in connectors
+                ):
+                    continue  # a door / exit opens here — leave it open
+                seen.add(key)
+                dx, dy = pt[0] - other[0], pt[1] - other[1]
+                L = math.hypot(dx, dy) or 1.0
+                out.append(
+                    self._corridor_cap(c, pt, (dx / L, dy / L), half, filter_attr)
+                )
+        return "".join(out)
+
+    def _corridor_cap(
+        self,
+        c: Corridor,
+        end: Vec2,
+        outward: Vec2,
+        half: float,
+        filter_attr: str,
+    ) -> str:
+        """A wall-coloured quad sealing one dead-end mouth, squared to the
+        corridor's own direction and matching the side-wall thickness."""
+        ex, ey = end
+        ux, uy = outward
+        nx, ny = -uy, ux
+        edge = half + WALL_STROKE  # outer half-width of the wall band
+        back = WALL_STROKE * 0.5  # overlap into the floor to hide the seam
+        fwd = WALL_STROKE  # cap thickness beyond the end
+        iL = (ex + nx * edge - ux * back, ey + ny * edge - uy * back)
+        iR = (ex - nx * edge - ux * back, ey - ny * edge - uy * back)
+        oL = (ex + nx * edge + ux * fwd, ey + ny * edge + uy * fwd)
+        oR = (ex - nx * edge + ux * fwd, ey - ny * edge + uy * fwd)
+        pts = " ".join(
+            f"{_n(x)},{_n(self.y(y))}" for x, y in (iL, oL, oR, iR)
+        )
+        return (
+            f'<polygon class="corridor-cap" data-corridor="{escape(c.name)}" '
+            f'points="{pts}" fill="#111" stroke="none"{filter_attr}/>'
+        )
 
     def _corridor_label(self, c: Corridor) -> str:
         """Draw an explicit corridor label.

@@ -2,6 +2,7 @@
 import { useRef, type ChangeEvent } from "react";
 import type { Tool } from "../lib/draw";
 import { Icon } from "./icons";
+import { FeatureSelect } from "./FeatureSelect";
 import styles from "./DrawToolbar.module.css";
 
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
@@ -73,6 +74,10 @@ export function DrawToolbar({
   onTextContent,
   textSize,
   onTextSize,
+  textDescription,
+  onTextDescription,
+  textGlobal,
+  onTextGlobal,
   areaKind,
   onAreaKind,
   areaOrganic,
@@ -137,6 +142,10 @@ export function DrawToolbar({
   onTextContent: (v: string) => void;
   textSize: number;
   onTextSize: (n: number) => void;
+  textDescription: string;
+  onTextDescription: (v: string) => void;
+  textGlobal: boolean;
+  onTextGlobal: (v: boolean) => void;
   areaKind: string;
   onAreaKind: (v: string) => void;
   areaOrganic: boolean;
@@ -327,32 +336,13 @@ export function DrawToolbar({
 
       {tool === "feature" ? (
         <div className={styles.group} role="group" aria-label="Feature options">
-          <select
-            className={styles.select}
+          <FeatureSelect
             value={featureType}
-            onChange={(e) => onFeatureType(e.target.value)}
+            onChange={onFeatureType}
+            groups={featureGroups}
+            fallback={features}
             disabled={disabled}
-            title="Feature type"
-          >
-            {featureGroups.length ? (
-              // Grouped by source include file (each sorted); groups sorted.
-              featureGroups.map((g) => (
-                <optgroup key={g.source} label={g.source}>
-                  {g.names.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </optgroup>
-              ))
-            ) : (
-              features.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))
-            )}
-          </select>
+          />
           <label className={styles.numField} title="Rotation (degrees)">
             ⟳
             <input
@@ -442,6 +432,27 @@ export function DrawToolbar({
               onChange={(e) => onTextSize(Number(e.target.value) || 1)}
               disabled={disabled}
             />
+          </label>
+          <input
+            type="text"
+            className={styles.select}
+            value={textDescription}
+            placeholder="Description (key meaning)"
+            onChange={(e) => onTextDescription(e.target.value)}
+            disabled={disabled}
+            title="What the glyph means — shown as a hover tooltip / map key"
+          />
+          <label
+            className={styles.snap}
+            title="Always add the text as a top-level declaration. When off, text dropped on a room/corridor is nested inside it (text on empty space is always global)."
+          >
+            <input
+              type="checkbox"
+              checked={textGlobal}
+              onChange={(e) => onTextGlobal(e.target.checked)}
+              disabled={disabled}
+            />
+            Global
           </label>
         </div>
       ) : null}

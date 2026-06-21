@@ -482,7 +482,17 @@ export type DraftShape =
       // or null/undefined to add it as a top-level (global) declaration.
       region?: string | null;
     }
-  | { kind: "text"; at: Pt; content: string; size?: number }
+  | {
+      kind: "text";
+      at: Pt;
+      content: string;
+      size?: number;
+      // Legend/key meaning of the glyph — surfaced as a hover tooltip.
+      description?: string;
+      // "room.name" / "corridor.name" to nest the text inside that block, or
+      // null/undefined to add it as a top-level (global) declaration.
+      region?: string | null;
+    }
   | { kind: "area"; pts: Pt[]; areaKind: string; organic?: boolean }
   | { kind: "lineFeature"; pts: Pt[]; lineKind: string }
   | {
@@ -530,7 +540,9 @@ export function emitShape(source: string, shape: DraftShape): string {
       // source); emitShape only ever produces the top-level/global form.
       return emitFeature(shape.at, shape.ref, shape.rotate ?? 0, shape.scale ?? 1);
     case "text":
-      return emitText(shape.at, shape.content, shape.size ?? 1);
+      // A region is handled by insertSnippetInRegion (which rewrites the whole
+      // source); emitShape only ever produces the top-level/global form.
+      return emitText(shape.at, shape.content, shape.size ?? 1, shape.description ?? "");
     case "area":
       return emitArea(
         uniqueName(source, "area"),
@@ -597,11 +609,13 @@ export function emitArea(
 }
 
 /** Freestanding text at a fixed map position. `\"` is escaped so quotes in
- *  the content don't terminate the DSL string. */
-export function emitText(at: Pt, content: string, size = 1): string {
-  const safe = content.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  let s = `\ntext "${safe}" at ${num(at.x)},${num(at.y)}`;
+ *  the content don't terminate the DSL string. An optional `description`
+ *  documents what the glyph means (rendered as a hover tooltip / key). */
+export function emitText(at: Pt, content: string, size = 1, description = ""): string {
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  let s = `\ntext "${esc(content)}" at ${num(at.x)},${num(at.y)}`;
   if (size !== 1) s += ` size ${num(size)}`;
+  if (description.trim()) s += ` description "${esc(description.trim())}"`;
   return s + "\n";
 }
 

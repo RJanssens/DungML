@@ -97,6 +97,8 @@ export function MapEditorPage() {
   const [corridorStraight, setCorridorStraight] = useState(false);
   const [textContent, setTextContent] = useState("");
   const [textSize, setTextSize] = useState(1);
+  const [textDescription, setTextDescription] = useState("");
+  const [textGlobal, setTextGlobal] = useState(false);
   const [areaKind, setAreaKind] = useState("water");
   const [areaOrganic, setAreaOrganic] = useState(true);
   const [lineKind, setLineKind] = useState("bars");
@@ -191,7 +193,9 @@ export function MapEditorPage() {
     setSource((s) => {
       const snippet = emitShape(s, shape);
       const region =
-        shape.kind === "feature" || shape.kind === "exit"
+        shape.kind === "feature" ||
+        shape.kind === "exit" ||
+        shape.kind === "text"
           ? shape.region
           : null;
       if (region) {
@@ -556,6 +560,10 @@ export function MapEditorPage() {
             onTextContent={setTextContent}
             textSize={textSize}
             onTextSize={setTextSize}
+            textDescription={textDescription}
+            onTextDescription={setTextDescription}
+            textGlobal={textGlobal}
+            onTextGlobal={setTextGlobal}
             areaKind={areaKind}
             onAreaKind={setAreaKind}
             areaOrganic={areaOrganic}
@@ -609,6 +617,8 @@ export function MapEditorPage() {
               corridorStraight={corridorStraight}
               textContent={textContent}
               textSize={textSize}
+              textDescription={textDescription}
+              textGlobal={textGlobal}
               areaKind={areaKind}
               areaOrganic={areaOrganic}
               lineKind={lineKind}

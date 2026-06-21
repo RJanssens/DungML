@@ -70,6 +70,8 @@ export function SvgPreview({
   corridorStraight = false,
   textContent = "",
   textSize = 1,
+  textDescription = "",
+  textGlobal = false,
   areaKind = "water",
   areaOrganic = true,
   lineKind = "bars",
@@ -120,6 +122,10 @@ export function SvgPreview({
   /** Text tool: the content to place and its font-size multiplier. */
   textContent?: string;
   textSize?: number;
+  /** Text tool: optional description (key meaning, shown as a tooltip). */
+  textDescription?: string;
+  /** Text tool: force a top-level text instead of nesting in the region. */
+  textGlobal?: boolean;
   /** Area tool: terrain kind and whether to give it an organic edge. */
   areaKind?: string;
   areaOrganic?: boolean;
@@ -589,7 +595,19 @@ export function SvgPreview({
         // does something (rather than silently no-op on an empty field).
         const preset = textContent.trim();
         const content = (preset || window.prompt("Text to place:", "") || "").trim();
-        if (content) onEmit?.({ kind: "text", at: w, content, size: textSize });
+        // Like features/exits: text dropped on a room/corridor nests inside
+        // that node by default; "global" forces top-level, and one on empty
+        // space (no region under the cursor) is global regardless.
+        const region = textGlobal ? null : regionAt(w);
+        if (content)
+          onEmit?.({
+            kind: "text",
+            at: w,
+            content,
+            size: textSize,
+            description: textDescription,
+            region,
+          });
       } else if (DRAG_TOOLS.has(tool)) {
         dragStart.current = w;
         setDraft([w]);
