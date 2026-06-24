@@ -24,6 +24,6 @@ def test_current_user_jit_provisions_once(tmp_path, monkeypatch):
     db = _db(tmp_path, monkeypatch)
     u1 = current_user(db, authorization="Bearer dev-user")
     u2 = current_user(db, authorization="Bearer dev-user")
-    assert u1.subject == "dev-user".replace("dev-user", "dev-user") or u1.subject  # subject set
+    assert u1.subject == "dev-user"
     assert u1.id == u2.id  # same row reused, not duplicated
     assert db.query(models.User).filter_by(subject=u1.subject).count() == 1

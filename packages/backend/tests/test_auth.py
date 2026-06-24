@@ -21,7 +21,7 @@ def test_me_requires_auth(client):
 def test_me_returns_current_user(auth_client):
     r = auth_client.get("/api/auth/me")
     assert r.status_code == 200
-    assert r.json()["subject"]  # the dev-user subject
+    assert r.json()["subject"] == "dev-user"
 
 
 def test_invalid_token_format_rejected(client):

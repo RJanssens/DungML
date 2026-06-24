@@ -1,4 +1,4 @@
-"""ORM models — users, sessions, projects, maps, play-sessions."""
+"""ORM models — users, projects, maps, play-sessions."""
 from __future__ import annotations
 
 import uuid
@@ -32,7 +32,6 @@ class User(Base):
     projects: Mapped[list["Project"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-
 
 
 class Project(Base):
