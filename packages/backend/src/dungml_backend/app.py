@@ -18,7 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import config
 from .db import get_sessionmaker, init_schema
 from .library import backfill_core_maps
-from .routes import auth, docs, dsl, maps, meta, projects, sessions
+from .routes import auth, contract, docs, dsl, maps, meta, projects, sessions
 
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_HTML = STATIC_DIR / "index.html"
@@ -65,7 +65,8 @@ def create_app() -> FastAPI:
     api.include_router(sessions.router)
     api.include_router(docs.router)
     app.include_router(api)
-    app.include_router(meta.router)  # /health at root
+    app.include_router(meta.router)       # /health at root
+    app.include_router(contract.router)   # /maps/{external_id}/… contract at root
 
     # Single-file embeddables served from fixed paths so consumers can drop in
     # one <script> tag: the map Web Component and the play-view widget. Each
