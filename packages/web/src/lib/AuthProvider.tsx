@@ -1,81 +1,82 @@
-// Auth context: holds the current user, exposes login/register/logout.
+// Auth context: wraps the OIDC useAuth hook and publishes its values on a
+// React context so all pages can consume auth state via a single import.
 //
-// The token is persisted in localStorage by the API client. On mount we
-// try /api/auth/me to validate the stored token; if that fails we clear
-// it and start unauthenticated.
+// The OIDC hook (./useAuth) owns token acquisition and storage.
+// This provider wires the live token into the api client via configureApi,
+// and optionally fetches the display name from /api/auth/me once a token
+// is present.
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import * as api from "./api";
+import { useAuth as useOidcAuth } from "./useAuth";
+import { configureApi, auth as apiAuth } from "./api";
 import type { User } from "./types";
 
 interface AuthState {
+  token: string | null;
+  ready: boolean;
+  mode: "dev" | "keycloak";
   user: User | null;
+  login: () => void;
+  register: () => void;
+  logout: () => void;
+  // Kept for future Task-4 consumers; no-op until Task 4 wires the dev-token
+  // form (LoginPage/RegisterPage will be rewritten to call login() / register()
+  // without arguments).
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
 }
 
 const AuthCtx = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const oidc = useOidcAuth();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
 
+  // Wire the OIDC token into the api client so every fetch carries Bearer.
   useEffect(() => {
+    configureApi({ getToken: () => oidc.token });
+  }, [oidc.token]);
+
+  // Best-effort: load the display name from /api/auth/me when a token arrives.
+  useEffect(() => {
+    if (!oidc.token) {
+      setUser(null);
+      return;
+    }
     let cancelled = false;
     (async () => {
-      const tok = api.getToken();
-      if (!tok) {
-        if (!cancelled) setLoading(false);
-        return;
-      }
       try {
-        const me = await api.auth.me();
+        const me = await apiAuth.me();
         if (!cancelled) setUser(me);
       } catch {
-        api.setToken(null);
-      } finally {
-        if (!cancelled) setLoading(false);
+        // Non-fatal: token is valid for API calls even without a display name.
+        if (!cancelled) setUser(null);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await api.auth.login(email, password);
-    api.setToken(res.token);
-    setUser(res.user);
-  }, []);
-
-  const register = useCallback(async (email: string, password: string) => {
-    const res = await api.auth.register(email, password);
-    api.setToken(res.token);
-    setUser(res.user);
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await api.auth.logout();
-    } catch {
-      /* always clear locally */
-    }
-    api.setToken(null);
-    setUser(null);
-  }, []);
+  }, [oidc.token]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, login, register, logout }),
-    [user, loading, login, register, logout],
+    () => ({
+      token: oidc.token,
+      ready: oidc.ready,
+      mode: oidc.mode,
+      user,
+      login: oidc.login,
+      register: oidc.register,
+      logout: oidc.logout,
+      // `loading` mirrors `!ready` so legacy consumers (ProtectedRoute etc.)
+      // keep compiling until Task 4 migrates them to `ready`.
+      loading: !oidc.ready,
+    }),
+    [oidc.token, oidc.ready, oidc.mode, oidc.login, oidc.register, oidc.logout, user],
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

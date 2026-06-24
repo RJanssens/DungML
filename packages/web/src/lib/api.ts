@@ -1,6 +1,5 @@
-// Typed wrappers around the FastAPI backend. The token is read from
-// localStorage on each call so the AuthProvider can update it without
-// re-creating the client.
+// Typed wrappers around the FastAPI backend. The token is supplied by the
+// OIDC AuthProvider via configureApi({ getToken }) on every request.
 import type {
   ConnectivityResponse,
   Diagnostic,
@@ -8,7 +7,6 @@ import type {
   MapSummary,
   Project,
   RenderResponse,
-  TokenResponse,
   User,
   ValidateResponse,
 } from "./types";
@@ -39,18 +37,9 @@ export function apiUrl(path: string): string {
   return `${baseUrl}${path}`;
 }
 
-export function getToken(): string | null {
-  return tokenSource();
-}
-
-export function setToken(token: string | null): void {
-  if (token === null) localStorage.removeItem(TOKEN_KEY);
-  else localStorage.setItem(TOKEN_KEY, token);
-}
-
 /** Authorization header for the current token (empty if none). */
 function authHeaders(): Record<string, string> {
-  const tok = getToken();
+  const tok = tokenSource();
   return tok ? { Authorization: `Bearer ${tok}` } : {};
 }
 
@@ -98,16 +87,10 @@ async function request<T>(
 
 // ----- auth -----
 
+// Password-based register/login/logout were removed in Plan 1 (OIDC replaces
+// them). Only /api/auth/me remains — used by AuthProvider to fetch the display
+// name after the OIDC token is obtained.
 export const auth = {
-  register: (email: string, password: string) =>
-    request<TokenResponse>("POST", "/api/auth/register", { email, password }, {
-      auth: false,
-    }),
-  login: (email: string, password: string) =>
-    request<TokenResponse>("POST", "/api/auth/login", { email, password }, {
-      auth: false,
-    }),
-  logout: () => request<void>("POST", "/api/auth/logout"),
   me: () => request<User>("GET", "/api/auth/me"),
 };
 
