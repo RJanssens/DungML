@@ -222,6 +222,7 @@ dependencies = [
     { name = "dungml" },
     { name = "fastapi" },
     { name = "pydantic", extra = ["email"] },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -231,6 +232,7 @@ requires-dist = [
     { name = "dungml", editable = "packages/dsl" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.7" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
