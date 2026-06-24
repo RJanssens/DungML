@@ -1,40 +1,58 @@
-import { useState, type FormEvent } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthProvider";
-import { ApiError } from "../lib/api";
 import { Button, Card, Field, Input } from "../components/Primitives";
 import { AppHeader, PageBody, PageShell } from "../components/Layout";
 import styles from "./Auth.module.css";
 
 export function LoginPage() {
-  const { user, login } = useAuth();
+  const { token, mode, login, register, setDevToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [devTokenInput, setDevTokenInput] = useState("dev-user");
 
-  if (user) return <Navigate to="/" replace />;
+  const dest = (location.state as { from?: string } | null)?.from ?? "/";
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      await login(email, password);
-      const dest =
-        (location.state as { from?: string } | null)?.from ?? "/";
-      navigate(dest, { replace: true });
-    } catch (e) {
-      setError(
-        e instanceof ApiError ? e.message : "Could not sign in. Try again.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
+  if (token) return <Navigate to={dest} replace />;
+
+  if (mode === "dev") {
+    return (
+      <PageShell>
+        <AppHeader />
+        <PageBody>
+          <div className={styles.centered}>
+            <Card className={styles.card}>
+              <h1>Dev sign-in</h1>
+              <p className={styles.subtitle}>
+                Enter a dev token to use as your identity.
+              </p>
+              <div className={styles.form}>
+                <Field label="Dev token">
+                  <Input
+                    type="text"
+                    value={devTokenInput}
+                    onChange={(e) => setDevTokenInput(e.target.value)}
+                    autoComplete="off"
+                  />
+                </Field>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setDevToken(devTokenInput || "dev-user");
+                    navigate(dest, { replace: true });
+                  }}
+                >
+                  Enter app
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </PageBody>
+      </PageShell>
+    );
   }
 
+  // keycloak mode
   return (
     <PageShell>
       <AppHeader />
@@ -42,37 +60,19 @@ export function LoginPage() {
         <div className={styles.centered}>
           <Card className={styles.card}>
             <h1>Sign in</h1>
-            <p className={styles.subtitle}>
-              Open and edit your maps.
-            </p>
-            <form onSubmit={onSubmit} className={styles.form}>
-              <Field label="Email">
-                <Input
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </Field>
-              <Field label="Password">
-                <Input
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </Field>
-              {error ? <div className={styles.formError}>{error}</div> : null}
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Signing in…" : "Sign in"}
+            <p className={styles.subtitle}>Open and edit your maps.</p>
+            <div className={styles.form}>
+              <Button type="button" onClick={() => login()}>
+                Sign in with Keycloak
               </Button>
-            </form>
-            <p className={styles.alt}>
-              No account? <Link to="/register">Create one.</Link>
-            </p>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => register()}
+              >
+                Create account
+              </Button>
+            </div>
           </Card>
         </div>
       </PageBody>

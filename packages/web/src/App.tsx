@@ -4,7 +4,6 @@ import {
   Route,
 } from "react-router-dom";
 import { LoginPage } from "./routes/LoginPage";
-import { RegisterPage } from "./routes/RegisterPage";
 import { ProjectsPage } from "./routes/ProjectsPage";
 import { ProjectPage } from "./routes/ProjectPage";
 import { MapEditorPage } from "./routes/MapEditorPage";
@@ -20,7 +19,6 @@ export const router = createBrowserRouter(
   createRoutesFromElements(
     <>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
       <Route path="/docs" element={<DocsPage />} />
       <Route path="/docs/:docId" element={<DocsPage />} />
       <Route

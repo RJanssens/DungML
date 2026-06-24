@@ -25,9 +25,8 @@ interface AuthState {
   login: () => void;
   register: () => void;
   logout: () => void;
-  // Kept for future Task-4 consumers; no-op until Task 4 wires the dev-token
-  // form (LoginPage/RegisterPage will be rewritten to call login() / register()
-  // without arguments).
+  setDevToken: (t: string) => void;
+  // `loading` mirrors `!ready` for legacy consumers.
   loading: boolean;
 }
 
@@ -72,11 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: oidc.login,
       register: oidc.register,
       logout: oidc.logout,
-      // `loading` mirrors `!ready` so legacy consumers (ProtectedRoute etc.)
-      // keep compiling until Task 4 migrates them to `ready`.
+      setDevToken: oidc.setDevToken,
+      // `loading` mirrors `!ready` so legacy consumers keep compiling.
       loading: !oidc.ready,
     }),
-    [oidc.token, oidc.ready, oidc.mode, oidc.login, oidc.register, oidc.logout, user],
+    [oidc.token, oidc.ready, oidc.mode, oidc.login, oidc.register, oidc.logout, oidc.setDevToken, user],
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
