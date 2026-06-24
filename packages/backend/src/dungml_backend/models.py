@@ -61,6 +61,9 @@ class Map(Base):
         String(36), ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(200))
+    external_id: Mapped[str | None] = mapped_column(
+        String(255), unique=True, index=True, default=None
+    )
     source: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(

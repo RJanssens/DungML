@@ -26,6 +26,8 @@ class Settings:
     service_client_id: str
     dev_token: str
     dev_service_token: str
+    render_secret: str
+    render_ttl_seconds: int
 
 
 def _load() -> Settings:
@@ -42,6 +44,9 @@ def _load() -> Settings:
         service_client_id=os.environ.get("DUNGML_SERVICE_CLIENT_ID", "dungeon-daemon-service"),
         dev_token=os.environ.get("DUNGML_DEV_TOKEN", "dev-user"),
         dev_service_token=os.environ.get("DUNGML_DEV_SERVICE_TOKEN", "dev-service"),
+        render_secret=os.environ.get("DUNGML_RENDER_SECRET", "")
+        or "dev-insecure-render-secret",
+        render_ttl_seconds=int(os.environ.get("DUNGML_RENDER_TTL", 12 * 3600)),
     )
 
 
