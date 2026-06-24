@@ -52,3 +52,12 @@ def current_user(
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
 CurrentUser = Annotated[models.User, Depends(current_user)]
+
+
+def require_service(principal: CurrentPrincipal) -> Principal:
+    if not principal.is_service:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "service principal required")
+    return principal
+
+
+CurrentService = Annotated[Principal, Depends(require_service)]
