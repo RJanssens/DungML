@@ -6,16 +6,21 @@ are best-effort and degrade gracefully (the caller treats failures as no-ops);
 the render token is a per-map HMAC grant minted here and verified by /render."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
-from dungml import build_graph, parse, visible_doors
+from dungml import build_graph, parse, render_fogged, visible_doors
 from dungml.errors import DmapParseError
 
 from .. import contract, render_token
 from ..deps import CurrentService, DbDep
 
 router = APIRouter(tags=["contract"])
+
+_PLACEHOLDER_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60">'
+    '<text x="10" y="35" font-size="12">map not ready</text></svg>'
+)
 
 
 class FragmentIn(BaseModel):
@@ -68,3 +73,26 @@ def mint_token(external_id: str, body: TokenIn, _svc: CurrentService, db: DbDep)
     except render_token.TokenError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     return {"token": token}
+
+
+@router.get("/maps/{external_id}/render")
+def render(external_id: str, token: str, db: DbDep) -> Response:
+    # Token authorizes this endpoint (no CurrentService dep) — a plain <img src> works.
+    try:
+        scope = render_token.verify(token, external_id)
+    except render_token.TokenError as e:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(e))
+    m = contract.get_or_create_map(db, external_id)
+    s = contract.session_for(db, m)
+    try:
+        dmap = parse(m.source)
+    except DmapParseError:
+        return Response(_PLACEHOLDER_SVG, media_type="image/svg+xml")
+    svg = render_fogged(
+        dmap,
+        set(s.discovered_nodes or []),
+        set(s.discovered_doors or []),
+        party_location=s.party_location,
+        full=(scope == "gm"),
+    )
+    return Response(svg, media_type="image/svg+xml")
