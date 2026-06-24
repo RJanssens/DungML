@@ -264,18 +264,12 @@ def test_feature_names_uses_project_core_override(auth_client, stored_map):
 
 
 def test_render_stored_map_404_for_other_user(client, cottage_source):
-    a = client.post(
-        "/api/auth/register", json={"email": "a@x.com", "password": "longenough"}
-    ).json()
-    ha = {"Authorization": f"Bearer {a['token']}"}
+    ha = {"Authorization": "Bearer dev-user"}
     pid = client.post("/api/projects", json={"name": "P"}, headers=ha).json()["id"]
     mid = client.post(
         f"/api/projects/{pid}/maps",
         json={"name": "m", "source": cottage_source},
         headers=ha,
     ).json()["id"]
-    b = client.post(
-        "/api/auth/register", json={"email": "b@x.com", "password": "longenough"}
-    ).json()
-    hb = {"Authorization": f"Bearer {b['token']}"}
+    hb = {"Authorization": "Bearer dev-service"}
     assert client.get(f"/api/maps/{mid}/render", headers=hb).status_code == 404

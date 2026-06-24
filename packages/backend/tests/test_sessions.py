@@ -92,12 +92,9 @@ def test_ownership_enforced(client, auth_client, map_id):
     sid = auth_client.post(
         f"/api/maps/{map_id}/sessions", json={"name": "r"}
     ).json()["id"]
-    # A different user must not see another's session.
-    other = client.post(
-        "/api/auth/register", json={"email": "other@x.com", "password": "longenough"}
-    ).json()
+    # A different user (dev-service) must not see another's session.
     r = client.get(
         f"/api/sessions/{sid}",
-        headers={"Authorization": f"Bearer {other['token']}"},
+        headers={"Authorization": "Bearer dev-service"},
     )
     assert r.status_code == 404

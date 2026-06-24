@@ -46,26 +46,19 @@ def test_validation_rejects_empty_name(auth_client):
 
 def test_other_user_cannot_see_or_touch(client):
     """User A creates a project; user B sees 404, not 403, on all routes."""
-    a = client.post(
-        "/api/auth/register", json={"email": "a@x.com", "password": "longenough"}
-    ).json()
+    ha = {"Authorization": "Bearer dev-user"}
     pid = client.post(
-        "/api/projects",
-        json={"name": "secret"},
-        headers={"Authorization": f"Bearer {a['token']}"},
+        "/api/projects", json={"name": "secret"}, headers=ha,
     ).json()["id"]
 
-    b = client.post(
-        "/api/auth/register", json={"email": "b@x.com", "password": "longenough"}
-    ).json()
-    h = {"Authorization": f"Bearer {b['token']}"}
-    assert client.get(f"/api/projects/{pid}", headers=h).status_code == 404
+    hb = {"Authorization": "Bearer dev-service"}
+    assert client.get(f"/api/projects/{pid}", headers=hb).status_code == 404
     assert client.patch(
-        f"/api/projects/{pid}", json={"name": "stolen"}, headers=h,
+        f"/api/projects/{pid}", json={"name": "stolen"}, headers=hb,
     ).status_code == 404
-    assert client.delete(f"/api/projects/{pid}", headers=h).status_code == 404
+    assert client.delete(f"/api/projects/{pid}", headers=hb).status_code == 404
     # B's own list is still empty.
-    assert client.get("/api/projects", headers=h).json() == []
+    assert client.get("/api/projects", headers=hb).json() == []
 
 
 def test_get_nonexistent_returns_404(auth_client):
@@ -237,17 +230,11 @@ def test_import_library_conflict_409(auth_client):
 
 
 def test_library_catalog_requires_ownership(client):
-    a = client.post(
-        "/api/auth/register", json={"email": "a@x.com", "password": "longenough"}
-    ).json()
+    ha = {"Authorization": "Bearer dev-user"}
     pid = client.post(
-        "/api/projects", json={"name": "P"},
-        headers={"Authorization": f"Bearer {a['token']}"},
+        "/api/projects", json={"name": "P"}, headers=ha,
     ).json()["id"]
-    b = client.post(
-        "/api/auth/register", json={"email": "b@x.com", "password": "longenough"}
-    ).json()
-    hb = {"Authorization": f"Bearer {b['token']}"}
+    hb = {"Authorization": "Bearer dev-service"}
     assert client.get(
         f"/api/projects/{pid}/library-catalog", headers=hb
     ).status_code == 404

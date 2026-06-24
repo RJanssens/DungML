@@ -18,6 +18,7 @@ def db_path(tmp_path: Path) -> Path:
 def client(db_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DUNGML_DB_URL", f"sqlite:///{db_path}")
     monkeypatch.setenv("DUNGML_TOKEN_TTL", "3600")
+    monkeypatch.setenv("DUNGML_AUTH_MODE", "static")
     # Reload config and reset the engine cache so the new URL takes effect.
     from dungml_backend import config, db
     config.reload_settings()
@@ -32,14 +33,15 @@ def client(db_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture
 def auth_client(client):
-    """A TestClient with `Authorization: Bearer <token>` pre-set for a fresh user."""
-    r = client.post(
-        "/api/auth/register",
-        json={"email": "user@example.com", "password": "correct horse"},
-    )
-    assert r.status_code == 201, r.text
-    token = r.json()["token"]
-    client.headers["Authorization"] = f"Bearer {token}"
+    """A TestClient bearing a static dev human token (JIT-provisions a User)."""
+    client.headers["Authorization"] = "Bearer dev-user"
+    return client
+
+
+@pytest.fixture
+def service_client(client):
+    """A TestClient bearing the static dev SERVICE token (is_service principal)."""
+    client.headers["Authorization"] = "Bearer dev-service"
     return client
 
 

@@ -70,12 +70,9 @@ def test_import_rejects_foreign_zip(auth_client):
 
 
 def test_export_requires_ownership(client, auth_client, project_id):
-    other = client.post(
-        "/api/auth/register",
-        json={"email": "other@x.com", "password": "longenough"},
-    ).json()
+    # project_id is owned by dev-user; dev-service is a different principal.
     r = client.get(
         f"/api/projects/{project_id}/export",
-        headers={"Authorization": f"Bearer {other['token']}"},
+        headers={"Authorization": "Bearer dev-service"},
     )
     assert r.status_code == 404
