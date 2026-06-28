@@ -32,3 +32,25 @@ def test_get_or_create_map_is_idempotent(tmp_path, monkeypatch):
     assert m1.external_id == "inst-1"
     assert db.query(models.Map).filter_by(external_id="inst-1").count() == 1
     assert contract.session_for(db, m1).map_id == m1.id
+
+
+def test_info_returns_map_and_session_ids(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from dungml_backend.app import create_app
+    from dungml_backend.deps import require_service
+    from dungml_backend.identity import Principal
+
+    _db(tmp_path, monkeypatch)  # configures static auth + sqlite, inits schema
+    app = create_app()
+    app.dependency_overrides[require_service] = lambda: Principal("@svc", "", (), is_service=True)
+    try:
+        client = TestClient(app)
+        r = client.get("/maps/inst-42/info")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["map_id"] and body["session_id"]
+        # Stable across calls (idempotent get-or-create).
+        r2 = client.get("/maps/inst-42/info")
+        assert r2.json() == body
+    finally:
+        app.dependency_overrides.clear()

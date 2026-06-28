@@ -75,6 +75,15 @@ def mint_token(external_id: str, body: TokenIn, _svc: CurrentService, db: DbDep)
     return {"token": token}
 
 
+@router.get("/maps/{external_id}/info")
+def info(external_id: str, _svc: CurrentService, db: DbDep) -> dict:
+    """Internal ids for an external_id, so ttrpg3 can mount the player widget.
+    Idempotent (same get-or-create the other contract routes use)."""
+    m = contract.get_or_create_map(db, external_id)
+    s = contract.session_for(db, m)
+    return {"map_id": str(m.id), "session_id": str(s.id)}
+
+
 @router.get("/maps/{external_id}/render")
 def render(external_id: str, token: str, db: DbDep) -> Response:
     # Token authorizes this endpoint (no CurrentService dep) — a plain <img src> works.
