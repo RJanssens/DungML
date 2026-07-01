@@ -104,6 +104,12 @@ class PlaySession(Base):
     map_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("maps.id", ondelete="CASCADE"), index=True
     )
+    # Set for authored-map play (sub-project B): the ttrpg3 campaign this
+    # session's fog belongs to. NULL for legacy service-owned maps (one
+    # session per map). The get-or-create key becomes (map_id, external_id).
+    external_id: Mapped[str | None] = mapped_column(
+        String(255), index=True, default=None
+    )
     name: Mapped[str] = mapped_column(String(200))
     # Authoritative party position — a node id like "room.antechamber".
     party_location: Mapped[str | None] = mapped_column(String(255), default=None)
@@ -119,3 +125,20 @@ class PlaySession(Base):
     )
 
     map: Mapped[Map] = relationship(back_populates="play_sessions")
+
+
+class CampaignLink(Base):
+    """Links an external ttrpg3 campaign (external_id) to a GM-owned Project.
+    The GM authorizes the link with their own token; the service then operates
+    on that project's maps on the campaign's behalf (sub-project B)."""
+
+    __tablename__ = "campaign_links"
+
+    external_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
