@@ -90,3 +90,68 @@ def test_link_cannot_hijack_existing_link_from_other_user(client):
     assert r2.status_code == 200
     ids = [m["id"] for m in r2.json()]
     assert other_map.id in ids
+
+
+def _linked_map(client):
+    pid, mid = _project_with_map(client)
+    client.post("/campaigns/inst-1/link", json={"project_id": pid}, headers=HUMAN)
+    return pid, mid
+
+
+def test_token_and_render_roundtrip(client):
+    _, mid = _linked_map(client)
+    tok = client.post(f"/campaigns/inst-1/maps/{mid}/tokens",
+                      json={"scope": "fog"}, headers=SVC).json()["token"]
+    r = client.get(f"/campaigns/inst-1/maps/{mid}/render", params={"token": tok})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("image/svg")
+
+
+def test_token_is_map_scoped(client):
+    pid, mid = _linked_map(client)
+    mid2 = client.post(f"/api/projects/{pid}/maps",
+                       json={"name": "L2", "source": ROOM}, headers=HUMAN).json()["id"]
+    tok = client.post(f"/campaigns/inst-1/maps/{mid}/tokens",
+                      json={"scope": "fog"}, headers=SVC).json()["token"]
+    # A token minted for mid must not render mid2.
+    r = client.get(f"/campaigns/inst-1/maps/{mid2}/render", params={"token": tok})
+    assert r.status_code == 401
+
+
+def test_render_rejects_bad_token(client):
+    _, mid = _linked_map(client)
+    r = client.get(f"/campaigns/inst-1/maps/{mid}/render", params={"token": "garbage"})
+    assert r.status_code == 401
+
+
+def test_reveal_is_per_campaign_and_never_mutates_source(client):
+    pid, mid = _project_with_map(client)
+    for inst in ("inst-a", "inst-b"):
+        client.post(f"/campaigns/{inst}/link", json={"project_id": pid}, headers=HUMAN)
+    # Reveal a known node for inst-a only.
+    r = client.post(f"/campaigns/inst-a/maps/{mid}/reveal",
+                    json={"feature_id": "room.hall"}, headers=SVC)
+    assert r.status_code == 200 and r.json()["ok"] is True
+    # inst-a and inst-b resolve to different sessions (distinct fog).
+    ia = client.get(f"/campaigns/inst-a/maps/{mid}/info", headers=SVC).json()
+    ib = client.get(f"/campaigns/inst-b/maps/{mid}/info", headers=SVC).json()
+    assert ia["map_id"] == ib["map_id"] == mid
+    assert ia["session_id"] != ib["session_id"]
+    # Authored source is untouched by play.
+    src = client.get(f"/api/maps/{mid}", headers=HUMAN).json()["source"]
+    assert src == ROOM
+
+
+def test_reveal_noops_unknown_feature(client):
+    _, mid = _linked_map(client)
+    r = client.post(f"/campaigns/inst-1/maps/{mid}/reveal",
+                    json={"feature_id": "room.nope"}, headers=SVC)
+    assert r.status_code == 200 and r.json()["ok"] is True
+
+
+def test_play_routes_guard_unlinked_and_stray_maps(client):
+    _, mid = _linked_map(client)
+    # Unknown map under a linked campaign → 404.
+    assert client.get("/campaigns/inst-1/maps/00000000-0000-0000-0000-000000000000/info",
+                      headers=SVC).status_code == 404
+    # tokens/reveal/info require service.
+    assert client.get(f"/campaigns/inst-1/maps/{mid}/info", headers=HUMAN).status_code == 403
