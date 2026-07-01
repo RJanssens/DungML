@@ -24,6 +24,11 @@ def link(external_id: str, body: LinkIn, user: CurrentUser, db: DbDep) -> dict:
     if proj is None or proj.user_id != user.id:
         # Treat unauthorized the same as missing — don't leak existence.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
+    existing_link = db.get(models.CampaignLink, external_id)
+    if existing_link is not None and existing_link.user_id != user.id:
+        # Someone else already linked this campaign — don't leak that a link
+        # exists to a different owner; re-use the same no-leak 404.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
     contract.link_campaign(db, external_id, proj)
     return {"external_id": external_id, "project_id": proj.id}
 
