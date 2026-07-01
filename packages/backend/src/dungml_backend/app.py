@@ -18,7 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import config
 from .db import get_sessionmaker, init_schema
 from .library import backfill_core_maps
-from .routes import auth, contract, docs, dsl, maps, meta, projects, sessions
+from .routes import auth, campaigns, contract, docs, dsl, maps, meta, projects, sessions
 
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_HTML = STATIC_DIR / "index.html"
@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(api)
     app.include_router(meta.router)       # /health at root
     app.include_router(contract.router)   # /maps/{external_id}/… contract at root
+    app.include_router(campaigns.router)  # /campaigns/{external_id}/… contract at root
 
     # Single-file embeddables served from fixed paths so consumers can drop in
     # one <script> tag: the map Web Component and the play-view widget. Each
@@ -109,6 +110,7 @@ def create_app() -> FastAPI:
                 and request.method == "GET"
                 and not request.url.path.startswith("/api")
                 and not request.url.path.startswith("/health")
+                and not request.url.path.startswith("/campaigns")
                 and INDEX_HTML.exists()
             ):
                 return FileResponse(INDEX_HTML)
