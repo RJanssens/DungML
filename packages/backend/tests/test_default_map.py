@@ -103,3 +103,32 @@ def test_import_samples_has_exactly_one_default(auth_client):
     defaults_ = [m for m in maps if m.is_default]
     assert len(defaults_) == 1
     assert defaults_[0].kind == "map"
+
+
+def test_put_default_route_sets_and_reports(auth_client):
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    a = auth_client.post(
+        f"/api/projects/{pid}/maps", json={"name": "A", "source": _RENDERABLE}
+    ).json()  # auto-default
+    b = auth_client.post(
+        f"/api/projects/{pid}/maps", json={"name": "B", "source": _RENDERABLE}
+    ).json()
+    r = auth_client.put(f"/api/projects/{pid}/maps/{b['id']}/default")
+    assert r.status_code == 200
+    assert r.json()["is_default"] is True
+    # Summary list now reports b as the default, a as not.
+    items = {m["id"]: m for m in auth_client.get(f"/api/projects/{pid}/maps").json()}
+    assert items[b["id"]]["is_default"] is True
+    assert items[a["id"]]["is_default"] is False
+
+
+def test_put_default_rejects_library_and_missing(auth_client):
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    auth_client.post(
+        f"/api/projects/{pid}/maps", json={"name": "A", "source": _RENDERABLE}
+    )
+    lib = auth_client.post(
+        f"/api/projects/{pid}/maps", json={"name": "lib", "source": _LIBRARY}
+    ).json()
+    assert auth_client.put(f"/api/projects/{pid}/maps/{lib['id']}/default").status_code == 400
+    assert auth_client.put(f"/api/projects/{pid}/maps/nope/default").status_code == 404

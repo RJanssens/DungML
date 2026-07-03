@@ -92,3 +92,29 @@ def delete_map(map_id: str, user: CurrentUser, db: DbDep) -> None:
     m = _get_owned_map(db, map_id, user)
     db.delete(m)
     db.commit()
+
+
+@router.put(
+    "/projects/{project_id}/maps/{map_id}/default",
+    response_model=schemas.MapSummaryOut,
+)
+def set_default_map(
+    project_id: str, map_id: str, user: CurrentUser, db: DbDep
+) -> models.Map:
+    _get_owned_project(db, project_id, user)
+    m = db.get(models.Map, map_id)
+    if m is None or m.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="map not found"
+        )
+    if m.kind != "map":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="only a renderable map can be the default",
+        )
+    try:
+        defaults.set_default_map(db, project_id, map_id)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    db.refresh(m)
+    return m

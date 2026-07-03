@@ -63,6 +63,7 @@ class MapSummaryOut(BaseModel):
     # "map" (has a `map "..." { ... }` block, renderable) vs "library"
     # (include-only — feature_defs / shared declarations only).
     kind: Literal["map", "library"] = "map"
+    is_default: bool = False
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
