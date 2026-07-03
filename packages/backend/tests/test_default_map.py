@@ -22,3 +22,61 @@ def test_map_defaults_to_not_default(auth_client):
     ).json()["id"]
     m = db.get_sessionmaker()().get(models.Map, mid)
     assert m.is_default is False  # no auto-assign yet — added in Task 3
+
+
+from dungml_backend import defaults
+
+_RENDERABLE = 'map "X" { grid { bounds 5 x 5 } }'
+_LIBRARY = 'feature_def "w" { name "W" shape rect 1 x 1 }'
+
+
+def _mk(session, project_id, name, source):
+    m = models.Map(project_id=project_id, name=name, source=source)
+    session.add(m)
+    session.commit()
+    session.refresh(m)
+    return m
+
+
+def test_ensure_project_default_marks_first_renderable(auth_client):
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    s = db.get_sessionmaker()()
+    # Fresh project has only the seeded core.dmap library → no renderable yet.
+    m1 = _mk(s, pid, "a", _RENDERABLE)
+    m2 = _mk(s, pid, "b", _RENDERABLE)
+    got = defaults.ensure_project_default(s, pid)
+    assert got.id == m1.id
+    s.refresh(m1); s.refresh(m2)
+    assert m1.is_default is True and m2.is_default is False
+    # Idempotent: a second call keeps the same default.
+    assert defaults.ensure_project_default(s, pid).id == m1.id
+
+
+def test_ensure_project_default_ignores_libraries(auth_client):
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    s = db.get_sessionmaker()()
+    _mk(s, pid, "lib", _LIBRARY)
+    # core.dmap + this lib are both libraries → nothing to default.
+    assert defaults.ensure_project_default(s, pid) is None
+
+
+def test_set_default_map_moves_the_flag(auth_client):
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    s = db.get_sessionmaker()()
+    m1 = _mk(s, pid, "a", _RENDERABLE)
+    m2 = _mk(s, pid, "b", _RENDERABLE)
+    defaults.set_default_map(s, pid, m1.id)
+    defaults.set_default_map(s, pid, m2.id)
+    s.refresh(m1); s.refresh(m2)
+    assert m1.is_default is False and m2.is_default is True
+
+
+def test_set_default_map_rejects_library_and_foreign(auth_client):
+    import pytest
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    s = db.get_sessionmaker()()
+    lib = _mk(s, pid, "lib2", _LIBRARY)
+    with pytest.raises(ValueError):
+        defaults.set_default_map(s, pid, lib.id)
+    with pytest.raises(ValueError):
+        defaults.set_default_map(s, pid, "no-such-map")
