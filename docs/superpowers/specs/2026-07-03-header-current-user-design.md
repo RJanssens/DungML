@@ -1,7 +1,7 @@
 # DungML header: current-user display + log in / log out
 
 **Date:** 2026-07-03
-**Status:** Proposed (awaiting review)
+**Status:** Approved — inline presentation + login button confirmed by user
 
 ## Problem
 
