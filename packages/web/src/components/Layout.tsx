@@ -18,6 +18,11 @@ export function AppHeader({ right }: { right?: ReactNode }) {
       <Link to="/docs" className={styles.docsLink} title="DSL reference">
         Docs
       </Link>
+      {/* `!token` on the Log-in branch is deliberate: on a keycloak reload the
+          token is restored before /me resolves `user`, so without it a logged-in
+          user briefly flashes "Log in". When a token is held but /me fails,
+          the header intentionally renders nothing rather than mislead a valid
+          session with a "Log in" button. */}
       {token && user ? (
         <div className={styles.userBlock}>
           <span className={styles.avatar} aria-hidden>
