@@ -10,6 +10,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 
 from dungml import Area, parse, render, render_fogged
+from dungml.validate import validate
 
 
 def test_area_nested_in_room_stays_on_room_not_hoisted() -> None:
@@ -89,3 +90,31 @@ def test_nested_area_hidden_when_room_undiscovered() -> None:
     # room.b discovered → its nested area shows.
     shown = render_fogged(m, {"room.a", "room.b"}, {"10,5"}, party_location="room.a")
     assert _area_count(shown) == 1
+
+
+def test_nested_area_unknown_kind_warns() -> None:
+    src = """
+    map "M" { grid { bounds 30 x 16 } renderer "classic-bw" }
+    room "hall" {
+      rect 2,2 10 x 8
+      area "weird" kind glowmoss { rect 4,4 2 x 2 }
+    }
+    """
+    diags = validate(parse(src))
+    msgs = [d.message for d in diags]
+    assert any("weird" in m and "unknown kind" in m and "room 'hall'" in m for m in msgs)
+
+
+def test_nested_area_raises_no_overlap_warning() -> None:
+    # A pool nested inside its room legitimately overlaps the room; it must not
+    # trip the interior-overlap warning (decorative areas are never in the
+    # overlap geometry set).
+    src = """
+    map "M" { grid { bounds 30 x 16 } renderer "classic-bw" }
+    room "hall" {
+      rect 2,2 10 x 8
+      area "pool" kind water { rect 4,4 3 x 3 }
+    }
+    """
+    diags = validate(parse(src))
+    assert not any("overlap" in d.message.lower() for d in diags)

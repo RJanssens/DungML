@@ -364,6 +364,12 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
 
     for a in dmap.areas:
         check_area(a, scope="map")
+    for name, room in dmap.rooms.items():
+        for a in room.areas:
+            check_area(a, scope=f"room '{name}'")
+    for name, corr in dmap.corridors.items():
+        for a in corr.areas:
+            check_area(a, scope=f"corridor '{name}'")
 
     # ---- line features (bars / curtain / barred) ----
     def check_line_feature(lf, *, scope: str) -> None:
@@ -460,12 +466,18 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 check_line_feature(
                     lf, scope=f"layer '{layer.name}' room '{room.name}'"
                 )
+            for a in room.areas:
+                check_area(a, scope=f"layer '{layer.name}' room '{room.name}'")
         for corr in layer.corridors:
             for ex in corr.exits:
                 check_exit(ex, scope=f"layer '{layer.name}' corridor '{corr.name}'")
             for lf in corr.line_features:
                 check_line_feature(
                     lf, scope=f"layer '{layer.name}' corridor '{corr.name}'"
+                )
+            for a in corr.areas:
+                check_area(
+                    a, scope=f"layer '{layer.name}' corridor '{corr.name}'"
                 )
 
     # ---- overlapping areas (warning) ----
