@@ -36,7 +36,7 @@ export function AppHeader({ right }: { right?: ReactNode }) {
             Sign out
           </Button>
         </div>
-      ) : ready && mode === "keycloak" ? (
+      ) : ready && !token && mode === "keycloak" ? (
         <Button variant="ghost" onClick={() => login()}>
           Log in
         </Button>
