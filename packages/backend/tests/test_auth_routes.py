@@ -18,3 +18,12 @@ def test_me_returns_principal(client):
     r = client.get("/api/auth/me")
     assert r.status_code == 200
     assert r.json()["subject"]  # the dev-user subject
+
+
+def test_me_returns_display_name(client):
+    client.headers["Authorization"] = "Bearer dev-user"
+    r = client.get("/api/auth/me")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["username"] == "dev-user"
+    assert body["display"] == "Dev User"  # name wins the fallback chain

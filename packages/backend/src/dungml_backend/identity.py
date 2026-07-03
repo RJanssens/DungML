@@ -19,10 +19,32 @@ class Principal:
     email: str = ""
     roles: tuple[str, ...] = ()
     is_service: bool = False
+    username: str = ""
+    name: str = ""
 
 
 class IdentityError(Exception):
     """Token missing, malformed, expired, or unrecognised."""
+
+
+def principal_from_claims(claims: dict, service_client_id: str) -> Principal:
+    """Map OIDC/JWT claims to a Principal. Pure — no network, no token decode."""
+    subject = claims.get("sub")
+    if not subject:
+        raise IdentityError("token has no subject")
+    return Principal(
+        subject=subject,
+        email=claims.get("email", ""),
+        roles=tuple(claims.get("realm_access", {}).get("roles", [])),
+        is_service=claims.get("azp") == service_client_id,
+        username=claims.get("preferred_username", ""),
+        name=claims.get("name", ""),
+    )
+
+
+def display_name(p: Principal) -> str:
+    """Best human-readable label for a principal, with graceful fallbacks."""
+    return p.name or p.username or p.email or p.subject
 
 
 @runtime_checkable
@@ -36,7 +58,8 @@ class StaticIdentityProvider:
     def __init__(self, tokens: dict[str, Principal] | None = None) -> None:
         self._tokens = tokens or {
             config.settings.dev_token: Principal(
-                "dev-user", "dev-user@dungml.local", ("dm",), False
+                "dev-user", "dev-user@dungml.local", ("dm",), False,
+                username="dev-user", name="Dev User",
             ),
             config.settings.dev_service_token: Principal(
                 "@dungeon-daemon-service", "service@dungml.local", (), True
@@ -74,16 +97,7 @@ class KeycloakJWTIdentityProvider:
             )
         except Exception as exc:
             raise IdentityError(str(exc)) from exc
-        subject = claims.get("sub")
-        if not subject:
-            raise IdentityError("token has no subject")
-        is_service = claims.get("azp") == self._service_client_id
-        return Principal(
-            subject=subject,
-            email=claims.get("email", ""),
-            roles=tuple(claims.get("realm_access", {}).get("roles", [])),
-            is_service=is_service,
-        )
+        return principal_from_claims(claims, self._service_client_id)
 
 
 def get_identity_provider() -> IdentityProvider:
