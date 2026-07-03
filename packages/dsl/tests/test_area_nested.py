@@ -7,7 +7,9 @@ together).
 """
 from __future__ import annotations
 
-from dungml import Area, parse
+import xml.etree.ElementTree as ET
+
+from dungml import Area, parse, render, render_fogged
 
 
 def test_area_nested_in_room_stays_on_room_not_hoisted() -> None:
@@ -53,3 +55,37 @@ def test_top_level_area_still_lands_on_map() -> None:
     m = parse(src)
     assert len(m.areas) == 1
     assert len(m.rooms["hall"].areas) == 0
+
+
+def _area_count(svg: str) -> int:
+    root = ET.fromstring(svg)
+    return sum(1 for e in root.iter() if e.get("class") == "area")
+
+
+def test_nested_area_renders() -> None:
+    src = """
+    map "M" { grid { bounds 30 x 16 } renderer "classic-bw" }
+    room "hall" {
+      rect 2,2 10 x 8
+      area "pool" kind water { rect 4,4 3 x 3 }
+    }
+    """
+    assert _area_count(render(parse(src))) == 1
+
+
+def test_nested_area_hidden_when_room_undiscovered() -> None:
+    src = """
+    map "M" { grid { bounds 30 x 16 } renderer "classic-bw" }
+    room "a" { rect 2,2 8 x 8 }
+    room "b" { rect 18,2 8 x 8
+      area "pit" kind pit { rect 20,4 3 x 3 }
+    }
+    door at 10,5 { connects room.a, room.b }
+    """
+    m = parse(src)
+    # room.b not discovered → its nested area is absent from the players' view.
+    hidden = render_fogged(m, {"room.a"}, set(), party_location="room.a")
+    assert _area_count(hidden) == 0
+    # room.b discovered → its nested area shows.
+    shown = render_fogged(m, {"room.a", "room.b"}, {"10,5"}, party_location="room.a")
+    assert _area_count(shown) == 1

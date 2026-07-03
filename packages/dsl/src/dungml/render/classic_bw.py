@@ -611,12 +611,17 @@ class _RenderContext:
         return out
 
     def _all_areas(self) -> list[Area]:
-        """Top-level areas plus those in visible layers."""
+        """Top-level areas, those in visible layers, and areas nested inside
+        rooms/corridors (which ride with their parent through fog)."""
         areas: list[Area] = list(self.dmap.areas)
         for layer in self.dmap.layers:
             if layer.hidden:
                 continue
             areas.extend(layer.areas)
+        for r in self.dmap.rooms.values():
+            areas.extend(r.areas)
+        for c in self.dmap.corridors.values():
+            areas.extend(c.areas)
         return areas
 
     def _style_block(self) -> str:
