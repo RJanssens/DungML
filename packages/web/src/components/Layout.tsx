@@ -2,10 +2,11 @@ import { Link, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuth } from "../lib/AuthProvider";
 import { Button } from "./Primitives";
+import { initials } from "../lib/avatar";
 import styles from "./Layout.module.css";
 
 export function AppHeader({ right }: { right?: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, token, ready, mode, login, logout } = useAuth();
   const navigate = useNavigate();
   return (
     <header className={styles.header}>
@@ -17,9 +18,14 @@ export function AppHeader({ right }: { right?: ReactNode }) {
       <Link to="/docs" className={styles.docsLink} title="DSL reference">
         Docs
       </Link>
-      {user ? (
+      {token && user ? (
         <div className={styles.userBlock}>
-          <span className={styles.userEmail}>{user.email}</span>
+          <span className={styles.avatar} aria-hidden>
+            {initials(user.display)}
+          </span>
+          <span className={styles.userName} title={user.email || user.display}>
+            {user.display}
+          </span>
           <Button
             variant="ghost"
             onClick={async () => {
@@ -30,6 +36,10 @@ export function AppHeader({ right }: { right?: ReactNode }) {
             Sign out
           </Button>
         </div>
+      ) : ready && mode === "keycloak" ? (
+        <Button variant="ghost" onClick={() => login()}>
+          Log in
+        </Button>
       ) : null}
     </header>
   );

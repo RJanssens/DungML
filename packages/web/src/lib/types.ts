@@ -1,8 +1,13 @@
 // Shared types mirroring the backend's Pydantic schemas.
 
 export interface User {
-  id: string;
+  subject: string;
   email: string;
+  username: string;
+  name: string;
+  display: string;
+  roles: string[];
+  is_service: boolean;
 }
 
 export interface TokenResponse {
