@@ -14,14 +14,14 @@ def test_ensure_columns_adds_is_default_idempotently(client):
     assert "is_default" in cols
 
 
-def test_map_defaults_to_not_default(auth_client):
+def test_first_map_is_default(auth_client):
     pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
     mid = auth_client.post(
         f"/api/projects/{pid}/maps",
         json={"name": "M", "source": 'map "M" { grid { bounds 5 x 5 } }'},
     ).json()["id"]
     m = db.get_sessionmaker()().get(models.Map, mid)
-    assert m.is_default is False  # no auto-assign yet — added in Task 3
+    assert m.is_default is True
 
 
 from dungml_backend import defaults
@@ -80,3 +80,26 @@ def test_set_default_map_rejects_library_and_foreign(auth_client):
         defaults.set_default_map(s, pid, lib.id)
     with pytest.raises(ValueError):
         defaults.set_default_map(s, pid, "no-such-map")
+
+
+def test_first_created_map_is_auto_default(auth_client):
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    m1 = auth_client.post(
+        f"/api/projects/{pid}/maps", json={"name": "A", "source": _RENDERABLE}
+    ).json()
+    m2 = auth_client.post(
+        f"/api/projects/{pid}/maps", json={"name": "B", "source": _RENDERABLE}
+    ).json()
+    s = db.get_sessionmaker()()
+    assert s.get(models.Map, m1["id"]).is_default is True
+    assert s.get(models.Map, m2["id"]).is_default is False
+
+
+def test_import_samples_has_exactly_one_default(auth_client):
+    pid = auth_client.post("/api/projects/import-samples").json()["id"]
+    s = db.get_sessionmaker()()
+    from sqlalchemy import select
+    maps = s.scalars(select(models.Map).where(models.Map.project_id == pid)).all()
+    defaults_ = [m for m in maps if m.is_default]
+    assert len(defaults_) == 1
+    assert defaults_[0].kind == "map"

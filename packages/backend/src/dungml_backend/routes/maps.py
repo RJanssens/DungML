@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from .. import models, schemas
+from .. import defaults, models, schemas
 from ..deps import CurrentUser, DbDep
 
 router = APIRouter(tags=["maps"])
@@ -59,6 +59,8 @@ def create_map(
     m = models.Map(project_id=proj.id, name=body.name, source=body.source)
     db.add(m)
     db.commit()
+    db.refresh(m)
+    defaults.ensure_project_default(db, proj.id)
     db.refresh(m)
     return m
 

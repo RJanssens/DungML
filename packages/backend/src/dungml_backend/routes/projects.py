@@ -10,7 +10,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import select
 
-from .. import models, schemas
+from .. import defaults, models, schemas
 from ..deps import CurrentUser, DbDep
 from ..library import (
     LibraryAlreadyImported,
@@ -179,6 +179,7 @@ def import_project(
             continue  # skip a missing/corrupt entry rather than fail wholesale
         db.add(models.Map(project_id=proj.id, name=mname, source=source))
     db.commit()
+    defaults.ensure_project_default(db, proj.id)
     db.refresh(proj)
     return proj
 
@@ -202,6 +203,7 @@ def import_samples(user: CurrentUser, db: DbDep) -> models.Project:
             )
         )
     db.commit()
+    defaults.ensure_project_default(db, proj.id)
     db.refresh(proj)
     return proj
 
