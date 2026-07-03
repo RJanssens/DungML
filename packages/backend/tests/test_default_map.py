@@ -132,3 +132,13 @@ def test_put_default_rejects_library_and_missing(auth_client):
     ).json()
     assert auth_client.put(f"/api/projects/{pid}/maps/{lib['id']}/default").status_code == 400
     assert auth_client.put(f"/api/projects/{pid}/maps/nope/default").status_code == 404
+
+
+def test_put_default_rejects_foreign_project_map(auth_client):
+    pid_a = auth_client.post("/api/projects", json={"name": "A"}).json()["id"]
+    pid_b = auth_client.post("/api/projects", json={"name": "B"}).json()["id"]
+    map_a = auth_client.post(
+        f"/api/projects/{pid_a}/maps", json={"name": "MapA", "source": _RENDERABLE}
+    ).json()
+    r = auth_client.put(f"/api/projects/{pid_b}/maps/{map_a['id']}/default")
+    assert r.status_code == 404
