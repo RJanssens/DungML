@@ -24,6 +24,7 @@ export interface MapSummary {
   project_id: string;
   name: string;
   kind: MapKind;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -177,6 +177,11 @@ export const maps = {
   update: (id: string, patch: { name?: string; source?: string }) =>
     request<MapDetail>("PUT", `/api/maps/${id}`, patch),
   remove: (id: string) => request<void>("DELETE", `/api/maps/${id}`),
+  setDefault: (projectId: string, mapId: string) =>
+    request<MapSummary>(
+      "PUT",
+      `/api/projects/${projectId}/maps/${mapId}/default`,
+    ),
   // Project-aware preview: includes (e.g. `include "core.dmap"`) resolve
   // against the project's own maps. `source` is the live editor buffer.
   render: (id: string, source: string, renderer?: string) =>
