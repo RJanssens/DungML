@@ -781,6 +781,7 @@ class _Tx(Transformer):
         exits: list[Exit] = []
         texts: list[TextAnnotation] = []
         line_features: list[LineFeature] = []
+        areas: list[Area] = []
         grid: float | None = None
         grid_color: str | None = None
         background = None
@@ -798,6 +799,8 @@ class _Tx(Transformer):
                 texts.append(item)
             elif isinstance(item, LineFeature):
                 line_features.append(item)
+            elif isinstance(item, Area):
+                areas.append(item)
             elif isinstance(item, tuple):
                 key, val = item
                 if key == "label":
@@ -826,6 +829,7 @@ class _Tx(Transformer):
             exits=exits,
             texts=texts,
             line_features=line_features,
+            areas=areas,
             grid=grid,
             grid_color=grid_color,
             background=background,
@@ -899,6 +903,7 @@ class _Tx(Transformer):
         exits: list[Exit] = []
         texts: list[TextAnnotation] = []
         line_features: list[LineFeature] = []
+        areas: list[Area] = []
         for item in items[rest_start:]:
             if isinstance(item, (LineSegment, ArcSegment)):
                 segments.append(item)
@@ -910,6 +915,8 @@ class _Tx(Transformer):
                 texts.append(item)
             elif isinstance(item, LineFeature):
                 line_features.append(item)
+            elif isinstance(item, Area):
+                areas.append(item)
             elif isinstance(item, tuple):
                 key, val = item
                 if key == "width":
@@ -950,6 +957,7 @@ class _Tx(Transformer):
             exits=exits,
             texts=texts,
             line_features=line_features,
+            areas=areas,
         )
 
     # ----- slice -----

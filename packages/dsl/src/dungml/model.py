@@ -243,6 +243,10 @@ class Room(BaseModel):
     # Line-feature decorations authored inside this room's block (absolute
     # coords). Not hoisted — render only when the room is visible, like texts.
     line_features: list[LineFeature] = Field(default_factory=list)
+    # Decorative areas (pools, pits, lava, …) authored inside this room's block
+    # (absolute world coords). NOT hoisted — render only when the room is
+    # visible, like texts/line_features; fog prunes them with the room.
+    areas: list[Area] = Field(default_factory=list)
     grid: Optional[float] = None  # spacing (world units) for an in-room grid overlay
     grid_color: Optional[str] = None  # optional CSS color for the grid lines
     # Floor background. CSS color or built-in texture id; overrides the
@@ -316,6 +320,9 @@ class Corridor(BaseModel):
     # Line-feature decorations authored inside this corridor's block. NOT
     # hoisted — render only when the corridor is visible. See Room.line_features.
     line_features: list[LineFeature] = Field(default_factory=list)
+    # Decorative areas authored inside this corridor's block (absolute coords).
+    # NOT hoisted — render only when the corridor is visible. See Room.areas.
+    areas: list[Area] = Field(default_factory=list)
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
