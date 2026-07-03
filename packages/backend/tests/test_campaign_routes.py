@@ -155,3 +155,17 @@ def test_play_routes_guard_unlinked_and_stray_maps(client):
                       headers=SVC).status_code == 404
     # tokens/reveal/info require service.
     assert client.get(f"/campaigns/inst-1/maps/{mid}/info", headers=HUMAN).status_code == 403
+
+
+def test_campaign_maps_report_is_default(client):
+    # A project with one renderable map: it is the auto-default.
+    pid = client.post("/api/projects", json={"name": "P"}, headers=HUMAN).json()["id"]
+    mid = client.post(
+        f"/api/projects/{pid}/maps",
+        json={"name": "A", "source": 'map "A" { grid { bounds 5 x 5 } }'},
+        headers=HUMAN,
+    ).json()["id"]
+    client.post("/campaigns/inst-9/link", json={"project_id": pid}, headers=HUMAN)
+    entries = client.get("/campaigns/inst-9/maps", headers=SVC).json()
+    entry = next(e for e in entries if e["id"] == mid)
+    assert entry["is_default"] is True

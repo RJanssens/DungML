@@ -73,7 +73,10 @@ def list_maps(external_id: str, _svc: CurrentService, db: DbDep) -> list[dict]:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "campaign not linked")
     renderable = [m for m in proj.maps if m.kind == "map"]
     renderable.sort(key=lambda m: m.updated_at, reverse=True)
-    return [{"id": m.id, "name": m.name} for m in renderable]
+    return [
+        {"id": m.id, "name": m.name, "is_default": m.is_default}
+        for m in renderable
+    ]
 
 
 @router.post("/campaigns/{external_id}/maps/{map_id}/tokens")
