@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import config
-from .db import get_sessionmaker, init_schema
+from .db import ensure_columns, get_sessionmaker, init_schema
 from .library import backfill_core_maps
 from .routes import auth, campaigns, contract, docs, dsl, maps, meta, projects, sessions
 
@@ -27,6 +27,7 @@ INDEX_HTML = STATIC_DIR / "index.html"
 @asynccontextmanager
 async def _lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     init_schema()
+    ensure_columns()
     # Give every pre-existing project its editable core.dmap.
     session = get_sessionmaker()()
     try:

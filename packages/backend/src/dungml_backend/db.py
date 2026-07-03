@@ -68,3 +68,24 @@ def init_schema() -> None:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=get_engine())
+
+
+def ensure_columns() -> None:
+    """ALTER-add columns that create_all won't add to pre-existing tables.
+
+    dungml has no Alembic; create_all creates missing tables but never
+    alters existing ones. Idempotent — safe to call every startup.
+    """
+    from sqlalchemy import inspect, text
+
+    engine = get_engine()
+    cols = {c["name"] for c in inspect(engine).get_columns("maps")}
+    if "is_default" not in cols:
+        lit = "0" if engine.dialect.name == "sqlite" else "false"
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"ALTER TABLE maps ADD COLUMN is_default "
+                    f"BOOLEAN NOT NULL DEFAULT {lit}"
+                )
+            )
