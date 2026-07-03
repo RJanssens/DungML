@@ -351,6 +351,10 @@ function MapRow({ map, projectId }: { map: MapSummary; projectId: string }) {
     mutationFn: () => api.maps.remove(map.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["maps", projectId] }),
   });
+  const setDefault = useMutation({
+    mutationFn: () => api.maps.setDefault(projectId, map.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["maps", projectId] }),
+  });
 
   return (
     <li className={styles.listItem}>
@@ -383,6 +387,30 @@ function MapRow({ map, projectId }: { map: MapSummary; projectId: string }) {
         </Link>
       )}
       <div className={styles.itemActions}>
+        {!isLibrary ? (
+          map.is_default ? (
+            <span
+              title="Project default map"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                color: "#d4a017",
+                padding: "0 0.4rem",
+              }}
+            >
+              <Icon name="star" size={15} fill />
+            </span>
+          ) : (
+            <Button
+              variant="ghost"
+              title="Set as default map"
+              disabled={setDefault.isPending}
+              onClick={() => setDefault.mutate()}
+            >
+              <Icon name="star" size={15} />
+            </Button>
+          )
+        ) : null}
         {isLibrary ? (
           <Button
             variant="ghost"

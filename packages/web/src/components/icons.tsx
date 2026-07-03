@@ -13,6 +13,7 @@ import {
   Sparkles,
   Spline,
   Square,
+  Star,
   Type,
   Waves,
   Waypoints,
@@ -34,10 +35,21 @@ const ICONS: Record<string, LucideIcon> = {
   exit: LogOut,
   sort: ArrowDownAZ,
   eye: Eye,
+  star: Star,
 };
 
-export function Icon({ name, size = 18 }: { name: string; size?: number }) {
+export function Icon({
+  name,
+  size = 18,
+  fill = false,
+}: {
+  name: string;
+  size?: number;
+  fill?: boolean;
+}) {
   const Cmp = ICONS[name];
   if (!Cmp) return null;
-  return <Cmp size={size} strokeWidth={2} aria-hidden />;
+  return (
+    <Cmp size={size} strokeWidth={2} fill={fill ? "currentColor" : "none"} aria-hidden />
+  );
 }
