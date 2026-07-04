@@ -290,6 +290,36 @@ def test_session_lifecycle_list_and_delete(session_map):
     assert s.list_sessions(map_id=mid) == []
 
 
+_PARTY_START_MAP = """
+map "Dungeon" { grid { bounds 60 x 40 } party_start "antechamber" }
+room "antechamber" { rect 2,4 12 x 10 label "Ante" }
+room "sanctum"     { rect 18,4 10 x 10 label "Sanctum" }
+corridor "passage" { width 2 segment line from 14,9 to 18,9 }
+door at 14,9 { connects room.antechamber, corridor.passage }
+"""
+
+
+@pytest.fixture
+def party_start_map(fresh_db):
+    s = fresh_db
+    p = s.create_project(name="PS")
+    m = s.create_map(project_id=p["id"], name="Dungeon", source=_PARTY_START_MAP)
+    return s, m["id"]
+
+
+def test_create_session_defaults_to_party_start(party_start_map):
+    s, mid = party_start_map
+    sess = s.create_session(map_id=mid, name="Party")
+    assert sess["party_location"] == "room.antechamber"
+    assert "room.antechamber" in sess["discovered_nodes"]
+
+
+def test_create_session_explicit_start_overrides_party_start(party_start_map):
+    s, mid = party_start_map
+    sess = s.create_session(map_id=mid, name="Party", start_location="room.sanctum")
+    assert sess["party_location"] == "room.sanctum"
+
+
 # ----- structured authoring tools -----
 
 _SEED_MAP = 'map "Built" { grid { bounds 20 x 20 } }\nroom "start" { rect 4,4 8 x 8 label "Start" }\n'

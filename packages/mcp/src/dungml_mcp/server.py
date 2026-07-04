@@ -33,7 +33,7 @@ discovery, fog-of-war, door state, and discovery-aware pathfinding; the
 authored `.dmap` source never mutates, the connectivity graph is derived
 on demand from it — see `dungml.graph`):
 
-- `create_session(map_id, name, start_location?)`     → new session state
+- `create_session(map_id, name, start_location?)`     → new session (start defaults to map party_start)
 - `list_sessions(map_id)` / `get_session(session_id)` / `delete_session(session_id)`
 - `set_party_location(session_id, location)`          → move party (reveals node)
 - `mark_discovered(session_id, node, reveal_doors?)`  → reveal a room/corridor
@@ -76,6 +76,7 @@ from dungml import (
     is_blocked,
     list_renderers,
     parse,
+    party_start_node,
     validate as dsl_validate,
 )
 from dungml.geometry import corridor_polygons, room_polygon
@@ -929,7 +930,8 @@ def create_session(
         Field(
             default=None,
             description="Optional starting node ('room.NAME' or 'corridor.NAME'); "
-            "marked discovered and set as the party location.",
+            "marked discovered and set as the party location. Defaults to the "
+            "map's party_start room when omitted.",
         ),
     ] = None,
 ) -> dict:
@@ -940,15 +942,17 @@ def create_session(
         nodes: set[str] = set()
         doors: set[str] = set()
         party = None
-        if start_location is not None:
-            try:
-                g = build_graph(parse(m.source or ""))
-            except DmapParseError as e:
-                raise ValueError(f"map source has a parse error: {e}") from e
-            if not g.has_node(start_location):
-                raise ValueError(f"unknown node {start_location!r} in map")
-            _reveal_node(g, start_location, nodes, doors)
-            party = start_location
+        try:
+            dmap = parse(m.source or "")
+        except DmapParseError as e:
+            raise ValueError(f"map source has a parse error: {e}") from e
+        start = start_location if start_location is not None else party_start_node(dmap)
+        if start is not None:
+            g = build_graph(dmap)
+            if not g.has_node(start):
+                raise ValueError(f"unknown node {start!r} in map")
+            _reveal_node(g, start, nodes, doors)
+            party = start
         s = models.PlaySession(
             map_id=m.id,
             name=name,
