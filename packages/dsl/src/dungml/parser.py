@@ -45,6 +45,7 @@ from .model import (
     MapConfig,
     Outline,
     Overlay,
+    PartyStart,
     PolygonRoom,
     PolygonShape,
     RectRoom,
@@ -277,7 +278,12 @@ class _Tx(Transformer):
         return cfg
 
     def party_start_decl(self, items: list[Any]) -> tuple[str, Any]:
-        return ("party_start", (_num(items[0]), _num(items[1])))
+        first = items[0]
+        if isinstance(first, Token) and first.type == "STRING":
+            name = _strip_string(first)
+            at = (_num(items[1]), _num(items[2])) if len(items) == 3 else None
+            return ("party_start", PartyStart(ref=name, at=at))
+        return ("party_start", PartyStart(at=(_num(items[0]), _num(items[1]))))
 
     def room_numbers_decl(self, items: list[Any]) -> tuple[str, Any]:
         return ("room_numbers", str(items[0]).lower() in ("on", "true", "yes"))

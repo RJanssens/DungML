@@ -504,6 +504,15 @@ class GridConfig(BaseModel):
     origin: str = "top-left"  # "top-left" | "bottom-left"
 
 
+class PartyStart(BaseModel):
+    """Where the PCs begin when the map loads. `ref` names a room/corridor
+    (resolved to its centroid); `at` is an explicit marker point (absolute
+    world coords) that overrides the centroid. Bare `party_start X,Y` parses
+    to `PartyStart(at=(X, Y))` with `ref=None` (no graph-node linkage)."""
+    ref: Optional[str] = None
+    at: Optional[Vec2] = None
+
+
 class MapConfig(BaseModel):
     name: str
     grid: GridConfig = Field(default_factory=GridConfig)
@@ -528,7 +537,7 @@ class MapConfig(BaseModel):
     # Optional party / character starting position (world coords) — where the
     # PCs begin when the map loads. Drawn as a start marker; play-sessions can
     # use it as the default party location.
-    party_start: Optional[Vec2] = None
+    party_start: Optional[PartyStart] = None
     # Prefix on-map room labels with their sequential number ("1. Hall").
     # `room_numbers off` in the map block turns this off (labels show bare).
     room_numbers: bool = True

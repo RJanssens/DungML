@@ -520,3 +520,28 @@ def node_centroid(dmap: DungeonMap, node_id: str) -> Optional[Vec2]:
         corr = _find_corridor(dmap, name)
         return _corridor_centroid(corr) if corr is not None else None
     return None
+
+
+def party_start_node(dmap: DungeonMap) -> Optional[str]:
+    """The graph node id a room-referencing `party_start` points at, or None
+    (no ref, or ref matches nothing). Room takes precedence over corridor."""
+    ps = dmap.map.party_start
+    if ps is None or ps.ref is None:
+        return None
+    if _find_room(dmap, ps.ref) is not None:
+        return f"room.{ps.ref}"
+    if _find_corridor(dmap, ps.ref) is not None:
+        return f"corridor.{ps.ref}"
+    return None
+
+
+def party_start_point(dmap: DungeonMap) -> Optional[Vec2]:
+    """Where the start marker draws: explicit `at`, else the ref's centroid,
+    else None (nothing to draw)."""
+    ps = dmap.map.party_start
+    if ps is None:
+        return None
+    if ps.at is not None:
+        return ps.at
+    node = party_start_node(dmap)
+    return node_centroid(dmap, node) if node else None

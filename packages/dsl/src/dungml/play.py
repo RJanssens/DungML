@@ -11,7 +11,7 @@ from typing import Iterable, Optional
 
 from .geometry import node_centroid
 from .graph import Graph, fog_of_war
-from .model import DungeonMap
+from .model import DungeonMap, PartyStart
 from .render import get_renderer
 
 
@@ -53,6 +53,6 @@ def render_fogged(
     if party_location:
         pos = node_centroid(view, party_location)
         if pos is not None:
-            view.map.party_start = pos
+            view.map.party_start = PartyStart(at=pos)
     name = renderer or view.map.renderer
     return get_renderer(name)().render(view)

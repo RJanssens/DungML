@@ -626,3 +626,29 @@ def test_perpendicular_corridor_end_emits_no_mouth():
     """
     root = _parse_svg(render(parse(src)))
     assert _findall_class(root, "corridor-mouth") == []
+
+
+def test_party_start_ref_renders_marker_at_centroid():
+    from dungml import parse, render
+    svg = render(parse(
+        'map "M" { grid { bounds 20 x 20 } party_start "vault" }\n'
+        'room "vault" { rect 0,0 4 x 4 }'
+    ))
+    # room centre is (2,2) in world units; the marker group is emitted.
+    assert 'class="party-start"' in svg
+
+
+def test_party_start_at_overrides_centroid():
+    from dungml import parse, render
+    svg = render(parse(
+        'map "M" { grid { bounds 20 x 20 } party_start "vault" at 6,7 }\n'
+        'room "vault" { rect 0,0 4 x 4 }'
+    ))
+    assert 'class="party-start"' in svg
+    assert 'cx="6"' in svg  # marker forced to the `at` x, not the centroid (2)
+
+
+def test_party_start_absent_when_unset():
+    from dungml import parse, render
+    svg = render(parse('map "M" { grid { bounds 20 x 20 } }'))
+    assert 'class="party-start"' not in svg

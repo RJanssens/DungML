@@ -54,7 +54,7 @@ renderer_prop: "renderer" STRING
 // Map-wide default corner style for corridors ("round" | "straight").
 // A per-corridor `corners` overrides this; if neither is set, "round".
 map_corners_decl: "corners" CNAME
-party_start_decl: "party_start" NUMBER "," NUMBER
+party_start_decl: "party_start" (NUMBER "," NUMBER | STRING ("at" NUMBER "," NUMBER)?)
 room_numbers_decl: "room_numbers" CNAME
 map_title_decl: "title" STRING label_modifier*
 // `cell_grid` alone → spacing 1; `cell_grid 0.5` → custom spacing;

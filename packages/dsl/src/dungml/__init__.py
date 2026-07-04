@@ -16,6 +16,7 @@ from .graph import (
     is_blocked,
 )
 from .play import node_centroid, render_fogged, visible_doors
+from .geometry import party_start_node
 from .model import (
     ArcEdge,
     ArcSegment,
@@ -85,6 +86,7 @@ __all__ = [
     "build_graph",
     "render_fogged",
     "node_centroid",
+    "party_start_node",
     "visible_doors",
     "door_key",
     "feature_def_origins",

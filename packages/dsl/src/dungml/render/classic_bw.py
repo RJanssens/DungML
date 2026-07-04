@@ -17,6 +17,7 @@ from ..geometry import (
     Wall,
     corridor_polygons,
     cut_wall,
+    party_start_point,
     project_onto_wall,
     room_walls,
     wall_length,
@@ -483,8 +484,9 @@ class _RenderContext:
             parts.append("</g>")
 
         # Party start marker (where the PCs begin when the map loads).
-        if self.dmap.map.party_start is not None:
-            parts.append(self._party_start(self.dmap.map.party_start))
+        pt = party_start_point(self.dmap)
+        if pt is not None:
+            parts.append(self._party_start(pt))
 
         # Labels last so they sit on top.
         parts.append('<g class="labels">')
