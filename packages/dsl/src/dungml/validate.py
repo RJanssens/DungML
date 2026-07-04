@@ -69,6 +69,17 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     known_rooms = set(dmap.rooms.keys())
     known_corridors = set(dmap.corridors.keys())
 
+    ps = dmap.map.party_start
+    if ps is not None and ps.ref is not None:
+        if ps.ref not in known_rooms and ps.ref not in known_corridors:
+            diags.append(
+                _diag(
+                    "error",
+                    f"party_start references unknown room/corridor '{ps.ref}'",
+                    dmap.map.span,
+                )
+            )
+
     def check_feature_inst(fi: FeatureInstance, *, scope: str) -> None:
         if fi.ref not in known_features:
             hint = ""
