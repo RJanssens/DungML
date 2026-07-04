@@ -199,3 +199,42 @@ def test_map_rooms_unknown_map_404(client):
 def test_map_rooms_requires_service(client, crypt_source):
     _, mid = _project_with_source(client, crypt_source)
     assert client.get(f"/maps/{mid}/rooms", headers=HUMAN).status_code == 403
+
+
+def test_party_sets_location_and_reveals(client, crypt_source):
+    pid, mid = _project_with_source(client, crypt_source)
+    client.post("/campaigns/inst-1/link", json={"project_id": pid}, headers=HUMAN)
+    room_id = client.get(f"/maps/{mid}/rooms", headers=SVC).json()["rooms"][0]["id"]
+
+    r = client.post(f"/campaigns/inst-1/maps/{mid}/party",
+                    json={"room_id": room_id}, headers=SVC)
+    assert r.status_code == 200 and r.json() == {"ok": True}
+
+    db = get_sessionmaker()()
+    try:
+        s = db.query(models.PlaySession).filter_by(map_id=mid, external_id="inst-1").one()
+        assert s.party_location == room_id
+        assert room_id in (s.discovered_nodes or [])
+    finally:
+        db.close()
+
+
+def test_party_noops_unknown_room(client, crypt_source):
+    pid, mid = _project_with_source(client, crypt_source)
+    client.post("/campaigns/inst-1/link", json={"project_id": pid}, headers=HUMAN)
+    r = client.post(f"/campaigns/inst-1/maps/{mid}/party",
+                    json={"room_id": "room.nope"}, headers=SVC)
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    db = get_sessionmaker()()
+    try:
+        rows = db.query(models.PlaySession).filter_by(map_id=mid, external_id="inst-1").all()
+        assert all(s.party_location is None for s in rows)
+    finally:
+        db.close()
+
+
+def test_party_requires_service(client, crypt_source):
+    pid, mid = _project_with_source(client, crypt_source)
+    client.post("/campaigns/inst-1/link", json={"project_id": pid}, headers=HUMAN)
+    assert client.post(f"/campaigns/inst-1/maps/{mid}/party",
+                       json={"room_id": "room.x"}, headers=HUMAN).status_code == 403

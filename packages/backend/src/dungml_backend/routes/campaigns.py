@@ -35,6 +35,10 @@ class RevealIn(BaseModel):
     feature_id: str
 
 
+class PartyIn(BaseModel):
+    room_id: str
+
+
 class TokenIn(BaseModel):
     scope: str = "fog"
 
@@ -134,6 +138,32 @@ def reveal(external_id: str, map_id: str, body: RevealIn,
     doors = set(s.discovered_doors or [])
     nodes.add(body.feature_id)
     doors |= visible_doors(graph, body.feature_id)
+    s.discovered_nodes = sorted(nodes)
+    s.discovered_doors = sorted(doors)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/campaigns/{external_id}/maps/{map_id}/party")
+def set_party(external_id: str, map_id: str, body: PartyIn,
+              _svc: CurrentService, db: DbDep) -> dict:
+    """Move the party marker to a node and reveal it (+ its visible doors).
+    Per-session state, so campaign-scoped. Graceful no-op on unknown node."""
+    m = contract.map_in_link(db, external_id, map_id)
+    if m is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "map not found")
+    s = contract.campaign_session_for(db, m, external_id)
+    try:
+        graph = build_graph(parse(m.source))
+    except DmapParseError:
+        return {"ok": True}
+    if not graph.has_node(body.room_id):
+        return {"ok": True}
+    nodes = set(s.discovered_nodes or [])
+    doors = set(s.discovered_doors or [])
+    nodes.add(body.room_id)
+    doors |= visible_doors(graph, body.room_id)
+    s.party_location = body.room_id
     s.discovered_nodes = sorted(nodes)
     s.discovered_doors = sorted(doors)
     db.commit()
