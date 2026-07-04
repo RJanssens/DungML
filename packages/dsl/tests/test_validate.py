@@ -109,3 +109,25 @@ def test_negative_scale_is_error() -> None:
     }
     """
     assert _errors(validate(parse(src)))
+
+
+def test_party_start_unknown_ref_errors():
+    src = (
+        'map "M" { grid { bounds 10 x 10 } party_start "ghost" }\n'
+        'room "vault" { rect 0,0 4 x 4 }'
+    )
+    diags = validate(parse(src))
+    msgs = [d.message for d in diags if d.severity == "error"]
+    assert any("party_start" in m and "ghost" in m for m in msgs)
+
+
+def test_party_start_valid_refs_and_coords_ok():
+    # room ref, corridor ref, and bare coords each produce no party_start error.
+    for ps in ('party_start "vault"', 'party_start "hall"', "party_start 1,1"):
+        src = (
+            f'map "M" {{ grid {{ bounds 20 x 20 }} {ps} }}\n'
+            'room "vault" { rect 0,0 4 x 4 }\n'
+            'corridor "hall" { width 1 node n1 at 8,1 node n2 at 12,1 run n1 to n2 }'
+        )
+        diags = validate(parse(src))
+        assert not [d for d in diags if "party_start" in d.message], ps

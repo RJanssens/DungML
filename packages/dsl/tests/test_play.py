@@ -48,3 +48,13 @@ def test_render_fogged_party_marker_optional() -> None:
     d = parse(SRC)
     svg = render_fogged(d, {"room.a"}, {"6,3"})
     assert "party-start" not in svg
+
+
+def test_follow_marker_renders_at_party_location():
+    from dungml import parse, render_fogged
+    src = (
+        'map "M" { grid { bounds 20 x 20 } }\n'
+        'room "a" { rect 0,0 4 x 4 }'
+    )
+    svg = render_fogged(parse(src), ["room.a"], [], party_location="room.a")
+    assert 'class="party-start"' in svg

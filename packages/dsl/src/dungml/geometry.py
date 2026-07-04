@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Union
+from typing import Optional, Union
 
 from .model import (
     ArcEdge,
@@ -19,6 +19,7 @@ from .model import (
     BoundaryRoom,
     CircleRoom,
     Corridor,
+    DungeonMap,
     LineEdge,
     LineSegment,
     PolygonRoom,
@@ -469,3 +470,78 @@ def find_overlapping_areas(
             if hit and best >= min_area:
                 out.append((areas[i].label, areas[j].label, best))
     return out
+
+
+def _find_room(dmap: DungeonMap, name: str) -> Optional[Room]:
+    room = dmap.rooms.get(name)
+    if room is not None:
+        return room
+    for layer in dmap.layers:
+        for r in layer.rooms:
+            if r.name == name:
+                return r
+    return None
+
+
+def _find_corridor(dmap: DungeonMap, name: str) -> Optional[Corridor]:
+    corr = dmap.corridors.get(name)
+    if corr is not None:
+        return corr
+    for layer in dmap.layers:
+        for c in layer.corridors:
+            if c.name == name:
+                return c
+    return None
+
+
+def _corridor_centroid(c: Corridor) -> Optional[Vec2]:
+    pts: list[Vec2] = list(c.nodes.values())
+    if not pts:
+        for s in c.segments:
+            if isinstance(s, LineSegment):
+                pts.append(s.start)
+                pts.append(s.end)
+    if not pts:
+        return None
+    return (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+
+
+def node_centroid(dmap: DungeonMap, node_id: str) -> Optional[Vec2]:
+    """A representative interior point for a `room.X` / `corridor.Y` node,
+    used to place the party marker. None if the node can't be located."""
+    kind, _, name = node_id.partition(".")
+    if kind == "room":
+        room = _find_room(dmap, name)
+        if room is None:
+            return None
+        poly = room_polygon(room)
+        return _centroid(poly) if poly else None
+    if kind == "corridor":
+        corr = _find_corridor(dmap, name)
+        return _corridor_centroid(corr) if corr is not None else None
+    return None
+
+
+def party_start_node(dmap: DungeonMap) -> Optional[str]:
+    """The graph node id a room-referencing `party_start` points at, or None
+    (no ref, or ref matches nothing). Room takes precedence over corridor."""
+    ps = dmap.map.party_start
+    if ps is None or ps.ref is None:
+        return None
+    if _find_room(dmap, ps.ref) is not None:
+        return f"room.{ps.ref}"
+    if _find_corridor(dmap, ps.ref) is not None:
+        return f"corridor.{ps.ref}"
+    return None
+
+
+def party_start_point(dmap: DungeonMap) -> Optional[Vec2]:
+    """Where the start marker draws: explicit `at`, else the ref's centroid,
+    else None (nothing to draw)."""
+    ps = dmap.map.party_start
+    if ps is None:
+        return None
+    if ps.at is not None:
+        return ps.at
+    node = party_start_node(dmap)
+    return node_centroid(dmap, node) if node else None

@@ -370,3 +370,32 @@ def test_grammar_error_raises_with_location() -> None:
     with pytest.raises(DmapParseError) as ei:
         parse(bad)
     assert ei.value.line >= 3
+
+
+# ----- party_start -----
+
+def test_party_start_bare_coords():
+    from dungml import parse
+    from dungml.model import PartyStart
+    m = parse('map "M" { grid { bounds 10 x 10 } party_start 4,5 }')
+    assert m.map.party_start == PartyStart(ref=None, at=(4.0, 5.0))
+
+
+def test_party_start_room_ref():
+    from dungml import parse
+    from dungml.model import PartyStart
+    m = parse(
+        'map "M" { grid { bounds 10 x 10 } party_start "vault" }\n'
+        'room "vault" { rect 0,0 4 x 4 }'
+    )
+    assert m.map.party_start == PartyStart(ref="vault", at=None)
+
+
+def test_party_start_room_ref_with_at():
+    from dungml import parse
+    from dungml.model import PartyStart
+    m = parse(
+        'map "M" { grid { bounds 10 x 10 } party_start "vault" at 2,3 }\n'
+        'room "vault" { rect 0,0 4 x 4 }'
+    )
+    assert m.map.party_start == PartyStart(ref="vault", at=(2.0, 3.0))

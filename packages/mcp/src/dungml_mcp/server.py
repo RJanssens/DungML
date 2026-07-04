@@ -33,7 +33,7 @@ discovery, fog-of-war, door state, and discovery-aware pathfinding; the
 authored `.dmap` source never mutates, the connectivity graph is derived
 on demand from it — see `dungml.graph`):
 
-- `create_session(map_id, name, start_location?)`     → new session state
+- `create_session(map_id, name, start_location?)`     → new session (start defaults to map party_start)
 - `list_sessions(map_id)` / `get_session(session_id)` / `delete_session(session_id)`
 - `set_party_location(session_id, location)`          → move party (reveals node)
 - `mark_discovered(session_id, node, reveal_doors?)`  → reveal a room/corridor
@@ -49,17 +49,14 @@ Run with:
 
 Env vars:
 - DUNGML_DB_URL              same SQLite/Postgres URL the backend uses
-- DUNGML_MCP_USER_EMAIL      default "mcp@local" — owner of MCP-created data
-- DUNGML_MCP_USER_PASSWORD   set explicitly if you want to log in via the
-                             web GUI as the MCP user; auto-generated &
-                             printed to stderr on first run otherwise.
+- DUNGML_MCP_USER_EMAIL      default "mcp@local" — owner of MCP-created data;
+                             also used as the local User's OIDC-style subject,
+                             since the MCP server runs outside the OIDC flow.
 """
 from __future__ import annotations
 
 import os
 import re
-import secrets
-import sys
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
@@ -79,10 +76,11 @@ from dungml import (
     is_blocked,
     list_renderers,
     parse,
+    party_start_node,
     validate as dsl_validate,
 )
 from dungml.geometry import corridor_polygons, room_polygon
-from dungml_backend import auth, models
+from dungml_backend import models
 from dungml_backend.db import get_sessionmaker, init_schema
 
 mcp = FastMCP("dungml")
@@ -94,38 +92,21 @@ _MCP_USER_EMAIL = os.environ.get("DUNGML_MCP_USER_EMAIL", "mcp@local")
 
 
 def _get_or_create_mcp_user(db: DbSession) -> models.User:
-    """Look up the MCP-owned user (by email); create it if absent.
+    """Look up the MCP-owned user (JIT get-or-create by subject, like `deps.current_user`).
 
-    The password is taken from `DUNGML_MCP_USER_PASSWORD` if set;
-    otherwise a fresh one is generated and printed to stderr (one time,
-    on the first run that creates the row). The user can then log into
-    the web GUI with these credentials to inspect what the MCP server
-    has stored.
+    The MCP server runs outside the OIDC bearer-token flow, so there's no
+    real subject claim to key off; `DUNGML_MCP_USER_EMAIL` doubles as both
+    the subject and the display email for this service-style local user.
     """
     user = db.scalars(
-        select(models.User).where(models.User.email == _MCP_USER_EMAIL)
+        select(models.User).where(models.User.subject == _MCP_USER_EMAIL)
     ).first()
     if user is not None:
         return user
-    password = os.environ.get("DUNGML_MCP_USER_PASSWORD")
-    generated = False
-    if not password:
-        password = secrets.token_urlsafe(18)
-        generated = True
-    user = models.User(
-        email=_MCP_USER_EMAIL,
-        password_hash=auth.hash_password(password),
-    )
+    user = models.User(subject=_MCP_USER_EMAIL, email=_MCP_USER_EMAIL)
     db.add(user)
     db.commit()
     db.refresh(user)
-    if generated:
-        sys.stderr.write(
-            f"[dungml-mcp] Provisioned MCP user {_MCP_USER_EMAIL}\n"
-            f"[dungml-mcp] Web-GUI password: {password}\n"
-            f"[dungml-mcp] (Set DUNGML_MCP_USER_PASSWORD in env to override.)\n"
-        )
-        sys.stderr.flush()
     return user
 
 
@@ -949,7 +930,8 @@ def create_session(
         Field(
             default=None,
             description="Optional starting node ('room.NAME' or 'corridor.NAME'); "
-            "marked discovered and set as the party location.",
+            "marked discovered and set as the party location. Defaults to the "
+            "map's party_start room when omitted.",
         ),
     ] = None,
 ) -> dict:
@@ -960,15 +942,17 @@ def create_session(
         nodes: set[str] = set()
         doors: set[str] = set()
         party = None
-        if start_location is not None:
-            try:
-                g = build_graph(parse(m.source or ""))
-            except DmapParseError as e:
-                raise ValueError(f"map source has a parse error: {e}") from e
-            if not g.has_node(start_location):
-                raise ValueError(f"unknown node {start_location!r} in map")
-            _reveal_node(g, start_location, nodes, doors)
-            party = start_location
+        try:
+            dmap = parse(m.source or "")
+        except DmapParseError as e:
+            raise ValueError(f"map source has a parse error: {e}") from e
+        start = start_location if start_location is not None else party_start_node(dmap)
+        if start is not None:
+            g = build_graph(dmap)
+            if not g.has_node(start):
+                raise ValueError(f"unknown node {start!r} in map")
+            _reveal_node(g, start, nodes, doors)
+            party = start
         s = models.PlaySession(
             map_id=m.id,
             name=name,

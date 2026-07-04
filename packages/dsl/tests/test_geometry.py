@@ -160,3 +160,35 @@ def test_cut_wall_edge_gap_returns_one_piece():
     assert len(pieces) == 1
     assert pieces[0].a == (2, 0)
     assert pieces[0].b == (4, 0)
+
+
+def test_party_start_node_prefers_room_then_corridor():
+    from dungml import parse
+    from dungml.geometry import party_start_node, party_start_point
+    room_ref = parse(
+        'map "M" { grid { bounds 20 x 20 } party_start "vault" }\n'
+        'room "vault" { rect 0,0 4 x 4 }'
+    )
+    assert party_start_node(room_ref) == "room.vault"
+    assert party_start_point(room_ref) == (2.0, 2.0)  # rect centroid
+
+    corr_ref = parse(
+        'map "M" { grid { bounds 20 x 20 } party_start "hall" }\n'
+        'corridor "hall" { width 1 node n1 at 8,1 node n2 at 12,1 run n1 to n2 }'
+    )
+    assert party_start_node(corr_ref) == "corridor.hall"
+
+
+def test_party_start_node_none_for_coords_and_unknown():
+    from dungml import parse
+    from dungml.geometry import party_start_node, party_start_point
+    coords = parse('map "M" { grid { bounds 20 x 20 } party_start 3,4 }')
+    assert party_start_node(coords) is None
+    assert party_start_point(coords) == (3.0, 4.0)  # `at` wins
+
+    unknown = parse(
+        'map "M" { grid { bounds 20 x 20 } party_start "ghost" }\n'
+        'room "vault" { rect 0,0 4 x 4 }'
+    )
+    assert party_start_node(unknown) is None
+    assert party_start_point(unknown) is None
