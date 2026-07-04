@@ -16,15 +16,24 @@ map "The Sunken Library" {
   }
   renderer "classic-bw"
   theme    dark
-  party_start 4,4          # optional: where the PCs begin on load
+  party_start "entry_hall"   # optional: room the PCs begin in on load
 }
 ```
 
 ### `party_start`
 
-`party_start X,Y` (optional) marks the party's starting cell — where the
-characters begin when the map loads. It's drawn as a green **S** marker and
-can be used by play-sessions as the default party location.
+`party_start` (optional) marks where the characters begin when the map loads.
+It's drawn as a green **S** marker and, when it names a room/corridor, becomes
+the default party location for new play-sessions (auto-revealed on load; an
+explicit start passed to session-create overrides it).
+
+Three forms:
+
+- `party_start X,Y` — a bare marker at a world cell (no session linkage).
+- `party_start "name"` — a room (or, failing that, corridor) named `name`; the
+  marker is drawn at its centroid.
+- `party_start "name" at X,Y` — as above, but the marker is forced to the
+  absolute cell `X,Y` instead of the centroid.
 
 ### `room_numbers`
 

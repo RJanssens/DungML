@@ -111,7 +111,8 @@ display options.
 | `grid_overlay [NUMBER [STRING]]` | Graph-paper grid across the whole canvas; optional spacing + CSS colour. |
 | `cell_grid [NUMBER [STRING]]` | Per-cell grid inside rooms/corridors; optional spacing + colour. |
 | `background STRING` | Map-wide background fill (CSS colour or texture id). |
-| `party_start NUMBER,NUMBER` | Where the PCs begin when the map loads. |
+| `party_start NUMBER,NUMBER` | Marker at a world cell. |
+| `party_start STRING [at NUMBER,NUMBER]` | Party begins in room/corridor `STRING` (marker at its centroid, or the `at` cell). Becomes a new session's default start node. |
 | `room_numbers NAME` | Auto-number rooms (`on` / `off`). |
 | `title STRING` | On-map title; accepts `label` modifiers (`at`, `align`, `size`, `rotate`). |
 | `corners NAME` | Map-wide default corridor corner style (`round` or `straight`). |
