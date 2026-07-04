@@ -14,6 +14,7 @@ from dungml import (
     build_graph,
     is_blocked,
     parse,
+    party_start_node,
     render_fogged,
     visible_doors,
 )
@@ -114,10 +115,12 @@ def _serialize(s: models.PlaySession, graph) -> dict:
 @router.post("/maps/{map_id}/sessions", status_code=status.HTTP_201_CREATED)
 def create_session(map_id: str, body: SessionCreateIn, user: CurrentUser, db: DbDep):
     m = _get_owned_map(db, map_id, user)
-    _, graph = _graph_for(m)
+    dmap, graph = _graph_for(m)
     nodes: set[str] = set()
     doors: set[str] = set()
     start = body.start_location
+    if start is None:
+        start = party_start_node(dmap)
     if start:
         if not graph.has_node(start):
             raise HTTPException(

@@ -98,3 +98,47 @@ def test_ownership_enforced(client, auth_client, map_id):
         headers={"Authorization": "Bearer dev-service"},
     )
     assert r.status_code == 404
+
+
+def test_no_party_start_leaves_location_unset(auth_client, map_id):
+    r = auth_client.post(f"/api/maps/{map_id}/sessions", json={"name": "Run"})
+    assert r.status_code == 201, r.text
+    assert r.json()["party_location"] is None
+
+
+PARTY_START_MAP = """
+map "M" { grid { cell 20 px bounds 30 x 30 } renderer "classic-bw" party_start "a" }
+room "a" { rect 0,0 6 x 6 label "A" }
+room "b" { rect 12,0 6 x 6 label "B" }
+corridor "c1" { width 1 node n1 at 6,3 node n2 at 12,3 run n1 to n2 }
+door at 6,3 { connects room.a, corridor.c1 type wooden }
+door at 12,3 { connects corridor.c1, room.b type wooden }
+"""
+
+
+@pytest.fixture
+def ps_map_id(auth_client) -> str:
+    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    r = auth_client.post(
+        f"/api/projects/{pid}/maps", json={"name": "M", "source": PARTY_START_MAP}
+    )
+    return r.json()["id"]
+
+
+def test_create_session_defaults_to_party_start(auth_client, ps_map_id):
+    r = auth_client.post(
+        f"/api/maps/{ps_map_id}/sessions", json={"name": "Run"}
+    )
+    assert r.status_code == 201, r.text
+    s = r.json()
+    assert s["party_location"] == "room.a"
+    assert "room.a" in s["discovered_nodes"]
+
+
+def test_explicit_start_overrides_party_start(auth_client, ps_map_id):
+    r = auth_client.post(
+        f"/api/maps/{ps_map_id}/sessions",
+        json={"name": "Run", "start_location": "room.b"},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["party_location"] == "room.b"
