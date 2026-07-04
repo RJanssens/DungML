@@ -147,3 +147,38 @@ def info(external_id: str, map_id: str, _svc: CurrentService, db: DbDep) -> dict
         raise HTTPException(status.HTTP_404_NOT_FOUND, "map not found")
     s = contract.campaign_session_for(db, m, external_id)
     return {"map_id": str(m.id), "session_id": str(s.id)}
+
+
+@router.get("/maps/{map_id}/rooms")
+def map_rooms(map_id: str, _svc: CurrentService, db: DbDep) -> dict:
+    """The map's room/corridor graph as [{id,name,kind,exits}] — map-keyed and
+    session-independent (structure is authored truth, not per-campaign fog).
+    Backs ttrpg3's list_map_rooms tool so the Referee can reveal by node id."""
+    m = db.get(models.Map, map_id)
+    if m is None or m.kind != "map":
+        # A raised HTTPException would be caught by the app's SPA-fallback
+        # exception handler (it rewrites GET 404s outside /api, /health,
+        # /campaigns into the SPA's index.html with a 200 — this route's
+        # path is root-mounted under /maps and isn't in that exclusion
+        # list). Return the 404 Response directly so it bypasses exception
+        # handling entirely and reaches the client as a real 404.
+        return Response(
+            content='{"detail":"map not found"}',
+            status_code=status.HTTP_404_NOT_FOUND,
+            media_type="application/json",
+        )
+    try:
+        graph = build_graph(parse(m.source))
+    except DmapParseError:
+        return {"rooms": []}
+    exits: dict[str, list[str]] = {nid: [] for nid in graph.nodes}
+    for e in graph.edges:
+        exits[e.a].append(e.b)
+        if not e.one_way:
+            exits[e.b].append(e.a)
+    rooms = [
+        {"id": n.id, "name": n.name, "kind": n.kind,
+         "exits": sorted(set(exits.get(n.id, [])))}
+        for n in graph.nodes.values()
+    ]
+    return {"rooms": rooms}

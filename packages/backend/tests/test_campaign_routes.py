@@ -169,3 +169,33 @@ def test_campaign_maps_report_is_default(client):
     entries = client.get("/campaigns/inst-9/maps", headers=SVC).json()
     entry = next(e for e in entries if e["id"] == mid)
     assert entry["is_default"] is True
+
+
+def _project_with_source(client, source, name="Keep"):
+    pid = client.post("/api/projects", json={"name": name}, headers=HUMAN).json()["id"]
+    mid = client.post(f"/api/projects/{pid}/maps",
+                      json={"name": "L1", "source": source}, headers=HUMAN).json()["id"]
+    return pid, mid
+
+
+def test_map_rooms_returns_nodes_with_exits(client, crypt_source):
+    _, mid = _project_with_source(client, crypt_source)
+    r = client.get(f"/maps/{mid}/rooms", headers=SVC)
+    assert r.status_code == 200
+    rooms = r.json()["rooms"]
+    assert rooms, "expected nodes from a real multi-room map"
+    for room in rooms:
+        assert set(room) == {"id", "name", "kind", "exits"}
+        assert room["id"].startswith(("room.", "corridor."))
+        assert isinstance(room["exits"], list)
+    # connectivity is present: at least one node has an exit
+    assert any(room["exits"] for room in rooms)
+
+
+def test_map_rooms_unknown_map_404(client):
+    assert client.get("/maps/does-not-exist/rooms", headers=SVC).status_code == 404
+
+
+def test_map_rooms_requires_service(client, crypt_source):
+    _, mid = _project_with_source(client, crypt_source)
+    assert client.get(f"/maps/{mid}/rooms", headers=HUMAN).status_code == 403
