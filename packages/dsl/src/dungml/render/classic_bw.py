@@ -207,6 +207,7 @@ class ClassicBW(Renderer):
 
     def render(self, dmap: DungeonMap) -> str:
         ctx = self._context_for(dmap)
+        ctx.fade_stubs = self.fade_stubs
         return ctx.render()
 
     def _context_for(self, dmap: DungeonMap) -> "_RenderContext":
@@ -236,6 +237,7 @@ class Hatched(ClassicBW):
 class _RenderContext:
     def __init__(self, dmap: DungeonMap) -> None:
         self.dmap = dmap
+        self.fade_stubs: list = []
         self.cfg = dmap.map.grid
         self.W = self.cfg.bounds_w
         self.H = self.cfg.bounds_h
@@ -391,6 +393,9 @@ class _RenderContext:
             for c in all_corridors:
                 parts.append(self._corridor(c, connectors))
             parts.append("</g>")
+
+        if self.fade_stubs:
+            parts.append(self._fade_stubs_svg())
 
         # Global cell grid inside corridors. The clip is the corridor floor
         # band (walls sit outside it), so this sits over the floor without
@@ -1169,6 +1174,53 @@ class _RenderContext:
                     self._corridor_cap(c, pt, (dx / L, dy / L), half, filter_attr)
                 )
         return "".join(out)
+
+    def _fade_stubs_svg(self) -> str:
+        """Fog-of-war fade stubs: each is a short corridor piece past an open
+        junction, drawn like a normal two-stroke corridor but with no dead-end
+        cap and wrapped in a linear-gradient opacity mask (opaque at the
+        junction, transparent one cell out)."""
+        defs: list[str] = []
+        groups: list[str] = []
+        floor = self._corridor_floor_fill()
+        for i, stub in enumerate(self.fade_stubs):
+            corr = Corridor(
+                name=f"__fade{i}", width=stub.width, segments=list(stub.segments)
+            )
+            d = self._corridor_path(corr)
+            if not d:
+                continue
+            gid = f"dungml-fade-grad-{i}"
+            mid = f"dungml-fade-{i}"
+            x1, y1 = stub.fade_from[0], self.y(stub.fade_from[1])
+            x2, y2 = stub.fade_to[0], self.y(stub.fade_to[1])
+            defs.append(
+                f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                f'x1="{_n(x1)}" y1="{_n(y1)}" x2="{_n(x2)}" y2="{_n(y2)}">'
+                f'<stop offset="0" stop-color="#fff"/>'
+                f'<stop offset="1" stop-color="#000"/></linearGradient>'
+                f'<mask id="{mid}" maskUnits="userSpaceOnUse" x="0" y="0" '
+                f'width="{_n(self.W)}" height="{_n(self.H)}">'
+                f'<rect x="0" y="0" width="{_n(self.W)}" height="{_n(self.H)}" '
+                f'fill="url(#{gid})"/></mask>'
+            )
+            outline_w = stub.width + 2 * WALL_STROKE
+            wall = (
+                f'<path class="corridor-wall" d="{d}" '
+                f'stroke-width="{_n(outline_w)}" stroke="#111" '
+                f'stroke-linejoin="round" stroke-linecap="butt" fill="none"/>'
+            )
+            floor_p = (
+                f'<path class="corridor-floor" d="{d}" '
+                f'stroke-width="{_n(stub.width)}" stroke="{floor}" '
+                f'stroke-linejoin="round" stroke-linecap="butt" fill="none"/>'
+            )
+            groups.append(
+                f'<g class="fade-stub" mask="url(#{mid})">{wall}{floor_p}</g>'
+            )
+        if not groups:
+            return ""
+        return f'<defs>{"".join(defs)}</defs>' + "".join(groups)
 
     def _corridor_cap(
         self,
