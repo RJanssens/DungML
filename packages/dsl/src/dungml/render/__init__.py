@@ -22,6 +22,11 @@ class Renderer(ABC):
 
     name: ClassVar[str]
 
+    def __init__(self) -> None:
+        # Optional fog-of-war fade stubs, set by `render_fogged` before
+        # `render`. Renderers that don't support fading ignore them.
+        self.fade_stubs: list = []
+
     @abstractmethod
     def render(self, dmap: DungeonMap) -> str:
         """Render `dmap` and return the output as text (SVG)."""

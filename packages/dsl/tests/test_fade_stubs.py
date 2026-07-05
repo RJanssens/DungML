@@ -64,3 +64,24 @@ def test_no_stub_through_closed_door():
     dmap = parse(CLOSED)
     stubs = corridor_fade_stubs(dmap, build_graph(dmap), {"corridor.a"})
     assert stubs == []
+
+
+from dungml.graph import fog_of_war
+from dungml.render import get_renderer
+
+
+def test_hatched_renders_stub_group_with_mask():
+    dmap = parse(TWO)
+    r = get_renderer("hatched")()
+    r.fade_stubs = corridor_fade_stubs(dmap, build_graph(dmap), {"corridor.a"})
+    svg = r.render(fog_of_war(dmap, {"corridor.a"}, set()))
+    assert 'class="fade-stub"' in svg
+    assert 'mask="url(#dungml-fade-0)"' in svg
+    assert "linearGradient" in svg
+
+
+def test_no_stubs_no_fade_markup():
+    dmap = parse(TWO)
+    r = get_renderer("hatched")()  # fade_stubs defaults to []
+    svg = r.render(fog_of_war(dmap, {"corridor.a"}, set()))
+    assert "dungml-fade" not in svg
