@@ -7,12 +7,27 @@ caller (the backend's PlaySession row / the MCP session store).
 """
 from __future__ import annotations
 
+import re
 from typing import Iterable, Optional
 
 from .geometry import node_centroid
 from .graph import Graph, fog_of_war
 from .model import DungeonMap, PartyStart
 from .render import get_renderer
+
+_SVG_OPEN_RE = re.compile(r"<svg\b", re.IGNORECASE)
+
+
+def _stamp_party_node(svg: str, node_id: str) -> str:
+    """Add data-party-node to the root <svg> so a campaign-mode viewer can
+    frame the party's room via its existing focus toggle."""
+    esc = (
+        node_id.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    return _SVG_OPEN_RE.sub(f'<svg data-party-node="{esc}"', svg, count=1)
 
 
 def visible_doors(graph: Graph, node: str) -> set[str]:
@@ -50,9 +65,11 @@ def render_fogged(
         view = dmap.model_copy(deep=True)
     else:
         view = fog_of_war(dmap, discovered_nodes, discovered_doors)
-    if party_location:
-        pos = node_centroid(view, party_location)
-        if pos is not None:
-            view.map.party_start = PartyStart(at=pos)
+    pos = node_centroid(view, party_location) if party_location else None
+    if pos is not None:
+        view.map.party_start = PartyStart(at=pos)
     name = renderer or view.map.renderer
-    return get_renderer(name)().render(view)
+    svg = get_renderer(name)().render(view)
+    if pos is not None and party_location:
+        svg = _stamp_party_node(svg, party_location)
+    return svg
