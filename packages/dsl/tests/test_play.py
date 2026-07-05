@@ -58,3 +58,15 @@ def test_follow_marker_renders_at_party_location():
     )
     svg = render_fogged(parse(src), ["room.a"], [], party_location="room.a")
     assert 'class="party-start"' in svg
+
+
+def test_render_fogged_stamps_party_node() -> None:
+    dmap = parse(SRC)
+    svg = render_fogged(dmap, {"room.a"}, set(), party_location="room.a", full=True)
+    assert 'data-party-node="room.a"' in svg
+
+
+def test_render_fogged_omits_party_node_when_none() -> None:
+    dmap = parse(SRC)
+    svg = render_fogged(dmap, set(), set(), party_location=None, full=True)
+    assert "data-party-node" not in svg

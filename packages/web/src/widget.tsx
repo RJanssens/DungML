@@ -38,6 +38,15 @@ export interface MountOptions {
    * polling for updates. Hides all GM/session controls (move, reveal, GM
    * view, session list) — those belong in the dungml app. Default false. */
   playerView?: boolean;
+  /** Campaign mode: a host-provided URL (e.g. a ttrpg3 endpoint) that
+   * returns a pre-rendered fog SVG. When set, the widget bypasses all
+   * /api/maps + /api/sessions calls entirely and just polls this URL onto
+   * the pan/zoom stage — the host owns the session and decides fog-vs-full
+   * via what it puts behind the URL. `mapId` is still required by `mount`
+   * but is otherwise unused in this mode. */
+  renderUrl?: string;
+  /** Poll interval (ms) for `renderUrl` in campaign mode. Default 6000. */
+  pollMs?: number;
 }
 
 const roots = new WeakMap<Element, Root>();
@@ -62,6 +71,8 @@ export function mount(el: Element, opts: MountOptions): void {
         mapId={opts.mapId}
         sessionId={opts.sessionId}
         playerView={opts.playerView}
+        renderUrl={opts.renderUrl}
+        pollMs={opts.pollMs}
       />
     </StrictMode>,
   );
