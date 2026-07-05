@@ -21,6 +21,8 @@ export function PlayConsole({
   mapId,
   sessionId,
   playerView = false,
+  renderUrl,
+  pollMs = 6000,
 }: {
   mapId: string;
   /** Auto-open this session and skip the picker (host-pinned). */
@@ -28,6 +30,14 @@ export function PlayConsole({
   /** Read-only player view: discovered map + party location only, no GM
    * controls; polls so it tracks moves the GM makes elsewhere. */
   playerView?: boolean;
+  /** Campaign mode: the host (e.g. ttrpg3) owns the session and hands us a
+   * URL to a pre-rendered fog SVG. When set, all /api/maps + /api/sessions
+   * machinery is skipped entirely — we just poll this URL and show the
+   * result on the pan/zoom stage. Fog-vs-full is the host's call, encoded
+   * in the URL. */
+  renderUrl?: string;
+  /** Poll interval (ms) for `renderUrl` in campaign mode. Default 6000. */
+  pollMs?: number;
 }) {
   const [mapName, setMapName] = useState("");
   const [nodes, setNodes] = useState<NodeOpt[]>([]);
@@ -40,12 +50,46 @@ export function PlayConsole({
   const [newName, setNewName] = useState("Session 1");
   const [startLoc, setStartLoc] = useState("");
 
+  // Campaign mode: poll the host-provided render URL onto the same stage.
+  // Kept as unconditional hooks (declared alongside all the others) so hook
+  // order never changes between campaign-mode and legacy renders; only the
+  // early `return` below (after every hook is declared) branches on mode.
+  const [campaignSvg, setCampaignSvg] = useState<string | null>(null);
+  const [campaignErr, setCampaignErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!renderUrl) return;
+    let cancelled = false;
+    const tick = () => {
+      api
+        .fetchRenderSvg(renderUrl)
+        .then((s) => {
+          if (!cancelled) {
+            setCampaignSvg(s);
+            setCampaignErr(null);
+          }
+        })
+        .catch((e) => {
+          if (!cancelled) setCampaignErr(String(e?.message ?? e));
+        });
+    };
+    tick();
+    const handle = setInterval(tick, pollMs);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, [renderUrl, pollMs]);
+
   const refreshList = useCallback(() => {
+    if (renderUrl) return;
     if (mapId) api.sessions.list(mapId).then(setList).catch(() => {});
-  }, [mapId]);
+  }, [mapId, renderUrl]);
 
   // Map name + node list (for start-location / reveal pickers) + sessions.
+  // Skipped in campaign mode: the host owns the session, and this component
+  // never touches /api/maps or /api/sessions in that mode.
   useEffect(() => {
+    if (renderUrl) return;
     if (!mapId) return;
     api.maps
       .get(mapId)
@@ -62,7 +106,7 @@ export function PlayConsole({
       })
       .catch((e) => setErr(String(e?.message ?? e)));
     refreshList();
-  }, [mapId, refreshList]);
+  }, [mapId, renderUrl, refreshList]);
 
   const loadRender = useCallback((id: string, v: "discovered" | "full") => {
     setLoading(true);
@@ -86,12 +130,16 @@ export function PlayConsole({
 
   // Re-render when the GM/player view toggle changes.
   useEffect(() => {
+    if (renderUrl) return;
     if (session) loadRender(session.id, view);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  // Host-pinned session: auto-open it and skip the picker entirely.
+  // Host-pinned session: auto-open it and skip the picker entirely. Skipped
+  // in campaign mode — the host owns the session, and campaign mode never
+  // calls into /api/sessions.
   useEffect(() => {
+    if (renderUrl) return;
     if (!sessionId) return;
     api.sessions
       .get(sessionId)
@@ -101,11 +149,13 @@ export function PlayConsole({
       })
       .catch((e) => setErr(String(e?.message ?? e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, renderUrl]);
 
   // Player view: poll so the map tracks moves/reveals the GM makes in the
-  // dungml app. Quiet refresh — no loading flicker on each tick.
+  // dungml app. Quiet refresh — no loading flicker on each tick. Skipped in
+  // campaign mode, which has its own poll effect above.
   useEffect(() => {
+    if (renderUrl) return;
     if (!playerView || !session) return;
     const id = session.id;
     const tick = () => {
@@ -117,7 +167,7 @@ export function PlayConsole({
     };
     const handle = setInterval(tick, 6000);
     return () => clearInterval(handle);
-  }, [playerView, session?.id]);
+  }, [playerView, session?.id, renderUrl]);
 
   const create = async () => {
     try {
@@ -155,6 +205,21 @@ export function PlayConsole({
     }
     refreshList();
   };
+
+  // Campaign mode: render only the pan/zoom stage, fed by the poll effect
+  // above. Takes precedence over `playerView` — the host decides fog by
+  // what it puts in the URL, so there's no separate GM/player split here.
+  if (renderUrl) {
+    return (
+      <SvgPreview
+        svg={campaignSvg}
+        loading={campaignSvg === null && !campaignErr}
+        error={campaignErr}
+        notice={null}
+        focusTarget={null}
+      />
+    );
+  }
 
   // Read-only player view: just the discovered map + party location. No GM
   // chrome — moving/revealing/GM-view live in the dungml app.

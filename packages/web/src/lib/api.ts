@@ -244,6 +244,21 @@ export const sessions = {
     ),
 };
 
+/** Fetch a pre-rendered fog SVG from an arbitrary (host-provided) URL, using
+ * the configured bearer. Accepts raw image/svg+xml or a {svg} JSON envelope.
+ * Used by the widget's "campaign mode", where the host (e.g. ttrpg3) owns the
+ * session/fog state and just hands us a URL to poll. */
+export async function fetchRenderSvg(renderUrl: string): Promise<string> {
+  const res = await fetch(apiUrl(renderUrl), { headers: authHeaders() });
+  if (!res.ok) throw new Error(`render ${res.status}`);
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    const j = await res.json();
+    return j.svg ?? "";
+  }
+  return res.text();
+}
+
 // ----- docs -----
 
 export interface DocSummary {
