@@ -5,7 +5,7 @@
 // It is deliberately router-free and chrome-free: it takes a `mapId` prop and
 // fills its parent container. The SPA wraps it in PlayPage (header + back
 // link); the embeddable widget mounts it directly into a host element.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import type { SessionState } from "../lib/api";
 import { Button, Input } from "./Primitives";
@@ -15,6 +15,17 @@ interface NodeOpt {
   id: string;
   name: string;
   kind: string;
+}
+
+// Campaign-mode SVGs carry a `data-party-node` attribute on the root <svg>
+// (stamped server-side in render_fogged), so campaign mode can feed the
+// party's current node into SvgPreview's own "Focus on party" toggle.
+const PARTY_NODE_RE = /<svg\b[^>]*\bdata-party-node="([^"]*)"/i;
+
+function partyNodeFrom(svg: string | null): string | null {
+  if (!svg) return null;
+  const m = svg.match(PARTY_NODE_RE);
+  return m ? m[1] : null;
 }
 
 export function PlayConsole({
@@ -56,6 +67,7 @@ export function PlayConsole({
   // early `return` below (after every hook is declared) branches on mode.
   const [campaignSvg, setCampaignSvg] = useState<string | null>(null);
   const [campaignErr, setCampaignErr] = useState<string | null>(null);
+  const campaignFocus = useMemo(() => partyNodeFrom(campaignSvg), [campaignSvg]);
   useEffect(() => {
     if (!renderUrl) return;
     let cancelled = false;
@@ -216,7 +228,7 @@ export function PlayConsole({
         loading={campaignSvg === null && !campaignErr}
         error={campaignErr}
         notice={null}
-        focusTarget={null}
+        focusTarget={campaignFocus}
       />
     );
   }
