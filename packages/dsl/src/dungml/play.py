@@ -103,6 +103,10 @@ def corridor_fade_stubs(
     discovered subset. Computed from the *full* map (before fog pruning).
     Deterministic order (sorted) so mask ids are stable across renders."""
     discovered = set(discovered_nodes)
+    # Keyed by the bare `door_key` (position). This intentionally does not
+    # replicate build_graph's `#N` suffix for two doors stacked at the exact
+    # same point: on that (pathological) collision the lookup below misses and
+    # the stub is silently skipped — a safe fall back to the plain hard edge.
     pos_by_key: dict[str, Vec2] = {door_key(d): d.position for d in dmap.doors}
     corr_by_id: dict[str, Corridor] = {
         f"corridor.{name}": c for name, c in dmap.corridors.items()
