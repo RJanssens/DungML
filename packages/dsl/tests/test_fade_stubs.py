@@ -85,3 +85,21 @@ def test_no_stubs_no_fade_markup():
     r = get_renderer("hatched")()  # fade_stubs defaults to []
     svg = r.render(fog_of_war(dmap, {"corridor.a"}, set()))
     assert "dungml-fade" not in svg
+
+
+from dungml.play import render_fogged
+
+
+def test_render_fogged_emits_fade_stub():
+    dmap = parse(TWO)
+    dk = door_key(dmap.doors[0])
+    svg = render_fogged(dmap, {"corridor.a"}, {dk}, full=False)
+    assert 'class="fade-stub"' in svg
+    assert "dungml-fade-0" in svg
+
+
+def test_render_fogged_full_has_no_fade_stub():
+    dmap = parse(TWO)
+    dk = door_key(dmap.doors[0])
+    svg = render_fogged(dmap, {"corridor.a"}, {dk}, full=True)
+    assert "dungml-fade" not in svg

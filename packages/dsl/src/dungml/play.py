@@ -184,4 +184,7 @@ def render_fogged(
         if pos is not None:
             view.map.party_start = PartyStart(at=pos)
     name = renderer or view.map.renderer
-    return get_renderer(name)().render(view)
+    r = get_renderer(name)()
+    if not full:
+        r.fade_stubs = corridor_fade_stubs(dmap, build_graph(dmap), discovered_nodes)
+    return r.render(view)
