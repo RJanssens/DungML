@@ -50,6 +50,16 @@ test("passes the SVG's data-party-node as focusTarget in campaign mode", async (
   await waitFor(() => expect(seen.focusTarget).toBe("room.foyer"));
 });
 
+test("unescapes the SVG's data-party-node so it matches the decoded DOM attribute", async () => {
+  vi.spyOn(api, "fetchRenderSvg").mockResolvedValue(
+    '<svg data-party-node="room.Kitchen &amp; Larder" viewBox="0 0 10 10"></svg>',
+  );
+
+  render(<PlayConsole mapId="m1" renderUrl="/x/render?view=player" />);
+
+  await waitFor(() => expect(seen.focusTarget).toBe("room.Kitchen & Larder"));
+});
+
 test("passes null focusTarget when the campaign SVG has no party node", async () => {
   const fetchSvg = vi
     .spyOn(api, "fetchRenderSvg")

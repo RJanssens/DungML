@@ -22,10 +22,23 @@ interface NodeOpt {
 // party's current node into SvgPreview's own "Focus on party" toggle.
 const PARTY_NODE_RE = /<svg\b[^>]*\bdata-party-node="([^"]*)"/i;
 
+// The DSL HTML-escapes the attribute value it stamps (so the SVG stays valid
+// markup), but SvgPreview's focusOnTarget matches against the *parsed* DOM,
+// where the browser has already decoded entities. Reverse exactly the four
+// entities the producer emits, ampersand last so a literal "&amp;" doesn't
+// get re-interpreted as the start of another entity.
+function unescapeAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, ">")
+    .replace(/&lt;/g, "<")
+    .replace(/&amp;/g, "&");
+}
+
 function partyNodeFrom(svg: string | null): string | null {
   if (!svg) return null;
   const m = svg.match(PARTY_NODE_RE);
-  return m ? m[1] : null;
+  return m ? unescapeAttr(m[1]) : null;
 }
 
 export function PlayConsole({
