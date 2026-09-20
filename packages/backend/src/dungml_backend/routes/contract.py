@@ -32,6 +32,14 @@ class RevealIn(BaseModel):
     feature_id: str
 
 
+class PartyIn(BaseModel):
+    room_id: str
+
+
+class SourceIn(BaseModel):
+    dungml: str
+
+
 class TokenIn(BaseModel):
     scope: str = "fog"
 
@@ -40,6 +48,25 @@ class TokenIn(BaseModel):
 def add_fragment(external_id: str, body: FragmentIn, _svc: CurrentService, db: DbDep) -> dict:
     m = contract.get_or_create_map(db, external_id)
     m.source = (m.source + "\n" + body.dungml) if m.source else body.dungml
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/maps/{external_id}/source")
+def replace_source(external_id: str, body: SourceIn, _svc: CurrentService, db: DbDep) -> dict:
+    """Replace the whole map source, rather than appending to it.
+
+    /fragments is append-only, which suits a caller that discovers its map a
+    piece at a time. A caller that *owns* the map and re-emits it whole on
+    every change (ttrpg2 rewrites its combatant marker block per token move)
+    needs replace instead — appending would stack duplicate geometry.
+
+    Discovery is deliberately left alone: the fog overlay lives on the
+    PlaySession and node ids are stable across re-emissions, so a redraw of
+    the same rooms keeps whatever the party had already explored.
+    """
+    m = contract.get_or_create_map(db, external_id)
+    m.source = body.dungml
     db.commit()
     return {"ok": True}
 
@@ -58,6 +85,35 @@ def reveal(external_id: str, body: RevealIn, _svc: CurrentService, db: DbDep) ->
     doors = set(s.discovered_doors or [])
     nodes.add(body.feature_id)
     doors |= visible_doors(graph, body.feature_id)
+    s.discovered_nodes = sorted(nodes)
+    s.discovered_doors = sorted(doors)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/maps/{external_id}/party")
+def set_party(external_id: str, body: PartyIn, _svc: CurrentService, db: DbDep) -> dict:
+    """Move the party marker to a node and reveal it (+ its visible doors).
+
+    The campaigns contract has had this since authored-map play; the legacy
+    /maps contract only had /reveal, so a caller that owned its own DSL could
+    light up rooms but never say where the party was standing — and
+    render_fogged draws the party marker from `party_location`.
+    Graceful no-op on an unparseable source or unknown node, like /reveal.
+    """
+    m = contract.get_or_create_map(db, external_id)
+    s = contract.session_for(db, m)
+    try:
+        graph = build_graph(parse(m.source))
+    except DmapParseError:
+        return {"ok": True}
+    if not graph.has_node(body.room_id):
+        return {"ok": True}
+    nodes = set(s.discovered_nodes or [])
+    doors = set(s.discovered_doors or [])
+    nodes.add(body.room_id)
+    doors |= visible_doors(graph, body.room_id)
+    s.party_location = body.room_id
     s.discovered_nodes = sorted(nodes)
     s.discovered_doors = sorted(doors)
     db.commit()

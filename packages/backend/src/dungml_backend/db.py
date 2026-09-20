@@ -79,8 +79,13 @@ def ensure_columns() -> None:
     from sqlalchemy import inspect, text
 
     engine = get_engine()
-    cols = {c["name"] for c in inspect(engine).get_columns("maps")}
-    if "is_default" not in cols:
+    insp = inspect(engine)
+    existing = set(insp.get_table_names())
+
+    def cols(table: str) -> set[str]:
+        return {c["name"] for c in insp.get_columns(table)}
+
+    if "maps" in existing and "is_default" not in cols("maps"):
         lit = "0" if engine.dialect.name == "sqlite" else "false"
         with engine.begin() as conn:
             conn.execute(
@@ -89,3 +94,28 @@ def ensure_columns() -> None:
                     f"BOOLEAN NOT NULL DEFAULT {lit}"
                 )
             )
+
+    # The map contract keys a Map (and a per-campaign PlaySession) by the
+    # caller's external id. Both arrived after the original tables, so a DB
+    # created before the contract lands here missing them and every
+    # /maps/{external_id} and /campaigns/… route 500s on first query.
+    # Nullable, so a plain ADD COLUMN is enough; the unique index on
+    # maps.external_id is created separately (create_all only indexes
+    # tables it creates itself).
+    for table, column in (("maps", "external_id"), ("play_sessions", "external_id")):
+        if table in existing and column not in cols(table):
+            with engine.begin() as conn:
+                conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN {column} VARCHAR(255)")
+                )
+
+    if "maps" in existing:
+        idx = {i["name"] for i in insp.get_indexes("maps")}
+        if "ix_maps_external_id" not in idx:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_maps_external_id "
+                        "ON maps (external_id)"
+                    )
+                )
