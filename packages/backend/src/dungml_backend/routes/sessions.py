@@ -11,8 +11,9 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from dungml import (
+    SessionView,
     build_graph,
-    is_blocked,
+    node_exits,
     parse,
     party_start_node,
     render_fogged,
@@ -77,22 +78,15 @@ def _exits(graph, node: str | None, discovered: set[str]) -> list[dict]:
     whether the neighbour has been explored yet (the move targets)."""
     if node is None or not graph.has_node(node):
         return []
-    out: list[dict] = []
-    for neighbor, edge in graph.neighbors(node):
-        if edge.hidden:
-            continue  # secret door — not an offered exit until revealed
-        out.append(
-            {
-                "to": neighbor,
-                "name": neighbor.split(".", 1)[-1],
-                "door": edge.key,
-                "type": edge.type,
-                "state": edge.state,
-                "blocked": is_blocked(edge.state),
-                "discovered": neighbor in discovered,
-            }
-        )
-    return out
+    view = SessionView(discovered_nodes=frozenset(discovered))
+    perceived, _secret = node_exits(graph, node, view, labels={})
+    return [
+        {"to": e["to"], "name": e["to"].split(".", 1)[-1], "door": e["door"],
+         "type": e["type"], "state": e["state"], "blocked": e["blocked"],
+         "discovered": e["far_side_explored"]}
+        for e in perceived
+        if e["to"] is not None and not (e.get("one_way") and e["blocked"])
+    ]
 
 
 def _serialize(s: models.PlaySession, graph) -> dict:

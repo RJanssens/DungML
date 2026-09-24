@@ -69,12 +69,15 @@ from dungml import (
     Diagnostic,
     DungeonMap,
     Graph,
+    SessionView,
     build_graph,
     door_key,
     fog_of_war,
     get_renderer,
     is_blocked,
+    known_map,
     list_renderers,
+    node_exits,
     parse,
     party_start_node,
     validate as dsl_validate,
@@ -1142,42 +1145,25 @@ def get_exits(
         _dmap, g = _graph_for_session(s, db)
         if not g.has_node(node):
             raise ValueError(f"unknown node {node!r} in map")
-        discovered_doors = set(s.discovered_doors or [])
-        discovered_nodes = set(s.discovered_nodes or [])
-        exits: list[dict] = []
-        for edge in g.incident_edges(node):
-            found = edge.key in discovered_doors
-            if mode == "discovered" and not found:
+        view = SessionView(
+            discovered_nodes=frozenset(s.discovered_nodes or []),
+            discovered_doors=frozenset(s.discovered_doors or []),
+            door_states=dict(s.door_states or {}),
+            party_location=s.party_location,
+        )
+        perceived, secret = node_exits(g, node, view, labels={})
+        exits = []
+        for e in perceived + secret:
+            if e.get("one_way") and e["blocked"]:
                 continue
-            state = _effective_state(s, edge.key, edge.state)
-            other = edge.other(node)
-            exits.append(
-                {
-                    "door": edge.key,
-                    "to": other,
-                    "type": edge.type,
-                    "state": state,
-                    "discovered": found,
-                    "passable_now": found and not is_blocked(state),
-                    "far_side_explored": other in discovered_nodes,
-                }
-            )
-        for b in g.boundary_exits(node):
-            found = b.key in discovered_doors
-            if mode == "discovered" and not found:
+            if mode == "discovered" and not e["discovered"]:
                 continue
-            state = _effective_state(s, b.key, b.state)
-            exits.append(
-                {
-                    "door": b.key,
-                    "to": None,  # leads outside the mapped area
-                    "type": b.type,
-                    "state": state,
-                    "discovered": found,
-                    "passable_now": found and not is_blocked(state),
-                    "far_side_explored": False,
-                }
-            )
+            exits.append({
+                "door": e["door"], "to": e["to"], "type": e["type"], "state": e["state"],
+                "discovered": e["discovered"],
+                "passable_now": e["discovered"] and not e["blocked"],
+                "far_side_explored": e["far_side_explored"],
+            })
         return {"node": node, "mode": mode, "exits": exits}
 
 
@@ -1248,51 +1234,19 @@ def get_known_map(
         user = _get_or_create_mcp_user(db)
         s = _owned_session(db, session_id, user.id)
         _dmap, g = _graph_for_session(s, db)
-        discovered_nodes = set(s.discovered_nodes or [])
-        discovered_doors = set(s.discovered_doors or [])
-
-        nodes = [
-            {"id": nid, "kind": g.nodes[nid].kind, "name": g.nodes[nid].name}
-            for nid in sorted(discovered_nodes)
-            if nid in g.nodes
-        ]
-        connections: list[dict] = []
-        frontier: list[dict] = []
-        seen_edges: set[str] = set()
-        for nid in discovered_nodes:
-            for edge in g.incident_edges(nid):
-                if edge.key not in discovered_doors or edge.key in seen_edges:
-                    continue
-                seen_edges.add(edge.key)
-                state = _effective_state(s, edge.key, edge.state)
-                a_seen = edge.a in discovered_nodes
-                b_seen = edge.b in discovered_nodes
-                if a_seen and b_seen:
-                    connections.append(
-                        {
-                            "door": edge.key,
-                            "between": [edge.a, edge.b],
-                            "type": edge.type,
-                            "state": state,
-                        }
-                    )
-                else:
-                    known, unknown = (edge.a, edge.b) if a_seen else (edge.b, edge.a)
-                    frontier.append(
-                        {
-                            "door": edge.key,
-                            "from": known,
-                            "leads_to": unknown,
-                            "type": edge.type,
-                            "state": state,
-                        }
-                    )
-        return {
-            "party_location": s.party_location,
-            "nodes": nodes,
-            "connections": connections,
-            "frontier": frontier,
-        }
+        view = SessionView(
+            discovered_nodes=frozenset(s.discovered_nodes or []),
+            discovered_doors=frozenset(s.discovered_doors or []),
+            door_states=dict(s.door_states or {}),
+            party_location=s.party_location,
+        )
+        km = known_map(_dmap, g, view)
+        for n in km["nodes"]:
+            n["name"] = n["id"].split(".", 1)[-1]
+            n.pop("label", None)
+        for f in km["frontier"]:
+            f.pop("leads_to_label", None)
+        return km
 
 
 @mcp.tool()
