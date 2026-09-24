@@ -204,3 +204,34 @@ def campaign_links_for_project(db: DbSession, project_id: str) -> list[models.Ca
             .order_by(models.CampaignLink.created_at.asc())
         ).all()
     )
+
+
+def load_graph(m: models.Map):
+    """(DungeonMap, Graph) for a map. Raises DmapParseError mid-edit."""
+    from dungml import build_graph, parse
+    dmap = parse(m.source)
+    return dmap, build_graph(dmap)
+
+
+def session_view(s: models.PlaySession):
+    from dungml import SessionView
+    return SessionView(
+        discovered_nodes=frozenset(s.discovered_nodes or []),
+        discovered_doors=frozenset(s.discovered_doors or []),
+        door_states=dict(s.door_states or {}),
+        party_location=s.party_location,
+    )
+
+
+def clear_party_elsewhere(db: DbSession, m: models.Map, external_id: str) -> None:
+    """A party is on one map at a time: clear this campaign's marker on every
+    other map before placing it on `m`."""
+    others = (
+        db.query(models.PlaySession)
+        .filter(models.PlaySession.external_id == external_id,
+                models.PlaySession.map_id != m.id,
+                models.PlaySession.party_location.isnot(None))
+        .all()
+    )
+    for s in others:
+        s.party_location = None

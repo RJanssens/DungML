@@ -8,7 +8,17 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
-from dungml import build_graph, parse, render_fogged, visible_doors
+from dungml import (
+    build_graph,
+    candidates,
+    known_map,
+    node_label,
+    parse,
+    render_fogged,
+    resolve_node,
+    room_context,
+    visible_doors,
+)
 from dungml.errors import DmapParseError
 
 from .. import access, contract, models, render_token
@@ -147,53 +157,150 @@ def render(external_id: str, map_id: str, token: str, db: DbDep) -> Response:
     return Response(svg, media_type="image/svg+xml")
 
 
+def _json_error(code: int, detail) -> Response:
+    # Returned rather than raised: see map_rooms' note on the SPA fallback.
+    import json as _json
+    return Response(_json.dumps({"detail": detail}), status_code=code,
+                    media_type="application/json")
+
+
+def _resolve(m: models.Map, query: str):
+    """(dmap, graph, node_id) or an error Response."""
+    try:
+        dmap, graph = contract.load_graph(m)
+    except DmapParseError:
+        return _json_error(409, "map does not parse — it may be mid-edit in the editor")
+    node = resolve_node(dmap, graph, query)
+    if node is None:
+        return _json_error(404, {"error": "unknown room", "query": query,
+                                 "candidates": candidates(dmap, graph, query)[:20]})
+    return dmap, graph, node
+
+
+def _discover(s: models.PlaySession, graph, node: str) -> None:
+    nodes = set(s.discovered_nodes or [])
+    doors = set(s.discovered_doors or [])
+    nodes.add(node)
+    doors |= visible_doors(graph, node)
+    s.discovered_nodes = sorted(nodes)
+    s.discovered_doors = sorted(doors)
+
+
+@router.get("/campaigns/{external_id}/maps/{map_id}/rooms/{query}")
+def room(external_id: str, map_id: str, query: str, _svc: CurrentService, db: DbDep,
+         scope: str = "gm"):
+    m = contract.map_in_link(db, external_id, map_id)
+    if m is None:
+        return _json_error(404, "map not found")
+    got = _resolve(m, query)
+    if isinstance(got, Response):
+        return got
+    dmap, graph, node = got
+    s = contract.campaign_session_for(db, m, external_id)
+    ctx = room_context(dmap, graph, node, contract.session_view(s))
+    if scope == "fog":
+        ctx.pop("dm_only", None)
+    return ctx
+
+
+@router.get("/campaigns/{external_id}/maps/{map_id}/known")
+def known(external_id: str, map_id: str, _svc: CurrentService, db: DbDep):
+    m = contract.map_in_link(db, external_id, map_id)
+    if m is None:
+        return _json_error(404, "map not found")
+    try:
+        dmap, graph = contract.load_graph(m)
+    except DmapParseError:
+        return _json_error(409, "map does not parse — it may be mid-edit in the editor")
+    s = contract.campaign_session_for(db, m, external_id)
+    return known_map(dmap, graph, contract.session_view(s))
+
+
 @router.post("/campaigns/{external_id}/maps/{map_id}/reveal")
 def reveal(external_id: str, map_id: str, body: RevealIn,
-           _svc: CurrentService, db: DbDep) -> dict:
+           _svc: CurrentService, db: DbDep):
     m = contract.map_in_link(db, external_id, map_id)
     if m is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "map not found")
+    got = _resolve(m, body.feature_id)
+    if isinstance(got, Response):
+        return got
+    dmap, graph, node = got
     s = contract.campaign_session_for(db, m, external_id)
-    try:
-        graph = build_graph(parse(m.source))
-    except DmapParseError:
-        return {"ok": True}  # source not yet a full map — nothing to reveal
-    if not graph.has_node(body.feature_id):
-        return {"ok": True}  # unknown node — graceful no-op
-    nodes = set(s.discovered_nodes or [])
-    doors = set(s.discovered_doors or [])
-    nodes.add(body.feature_id)
-    doors |= visible_doors(graph, body.feature_id)
-    s.discovered_nodes = sorted(nodes)
-    s.discovered_doors = sorted(doors)
+    _discover(s, graph, node)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "revealed": node,
+            "room": room_context(dmap, graph, node, contract.session_view(s))}
 
 
 @router.post("/campaigns/{external_id}/maps/{map_id}/party")
 def set_party(external_id: str, map_id: str, body: PartyIn,
-              _svc: CurrentService, db: DbDep) -> dict:
-    """Move the party marker to a node and reveal it (+ its visible doors).
-    Per-session state, so campaign-scoped. Graceful no-op on unknown node."""
+              _svc: CurrentService, db: DbDep):
+    """Move the party marker to a node (id, bare name or label) and reveal it
+    and its visible doors. The party is on one map at a time: this clears the
+    campaign's marker elsewhere and records this map as the active one."""
     m = contract.map_in_link(db, external_id, map_id)
     if m is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "map not found")
+    got = _resolve(m, body.room_id)
+    if isinstance(got, Response):
+        return got
+    dmap, graph, node = got
     s = contract.campaign_session_for(db, m, external_id)
-    try:
-        graph = build_graph(parse(m.source))
-    except DmapParseError:
-        return {"ok": True}
-    if not graph.has_node(body.room_id):
-        return {"ok": True}
-    nodes = set(s.discovered_nodes or [])
-    doors = set(s.discovered_doors or [])
-    nodes.add(body.room_id)
-    doors |= visible_doors(graph, body.room_id)
-    s.party_location = body.room_id
-    s.discovered_nodes = sorted(nodes)
-    s.discovered_doors = sorted(doors)
+    contract.clear_party_elsewhere(db, m, external_id)
+    _discover(s, graph, node)
+    s.party_location = node
+    contract.set_active_map(db, external_id, m)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "party_location": node,
+            "room": room_context(dmap, graph, node, contract.session_view(s))}
+
+
+class DoorIn(BaseModel):
+    door: str | None = None
+    between: list[str] | None = None
+    discovered: bool = True
+    state: str | None = None
+
+
+@router.post("/campaigns/{external_id}/maps/{map_id}/doors")
+def door(external_id: str, map_id: str, body: DoorIn, _svc: CurrentService, db: DbDep):
+    """Record a found secret door and/or a runtime state (opened, forced,
+    locked). The authored map never changes; this lives on the session."""
+    m = contract.map_in_link(db, external_id, map_id)
+    if m is None:
+        return _json_error(404, "map not found")
+    try:
+        dmap, graph = contract.load_graph(m)
+    except DmapParseError:
+        return _json_error(409, "map does not parse — it may be mid-edit in the editor")
+    key = body.door
+    authored = None
+    if key is None and body.between and len(body.between) == 2:
+        a = resolve_node(dmap, graph, body.between[0])
+        b = resolve_node(dmap, graph, body.between[1])
+        hit = [e for e in graph.edges if {e.a, e.b} == {a, b}] if a and b else []
+        key = hit[0].key if len(hit) == 1 else None
+    for e in graph.edges:
+        if e.key == key:
+            authored = e.state
+    for bx in graph.boundary:
+        if bx.key == key:
+            authored = bx.state
+    if key is None or authored is None:
+        return _json_error(404, {"error": "unknown door", "door": body.door,
+                                 "between": body.between})
+    s = contract.campaign_session_for(db, m, external_id)
+    if body.discovered:
+        s.discovered_doors = sorted(set(s.discovered_doors or []) | {key})
+    if body.state:
+        states = dict(s.door_states or {})
+        states[key] = body.state
+        s.door_states = states
+    db.commit()
+    return {"ok": True, "door": key,
+            "state": (s.door_states or {}).get(key, authored),
+            "discovered": key in (s.discovered_doors or [])}
 
 
 @router.get("/campaigns/{external_id}/maps/{map_id}/info")
@@ -224,17 +331,22 @@ def map_rooms(map_id: str, _svc: CurrentService, db: DbDep) -> dict:
             media_type="application/json",
         )
     try:
-        graph = build_graph(parse(m.source))
+        dmap = parse(m.source)
+        graph = build_graph(dmap)
     except DmapParseError:
         return {"rooms": []}
     exits: dict[str, list[str]] = {nid: [] for nid in graph.nodes}
+    secret: dict[str, list[str]] = {nid: [] for nid in graph.nodes}
     for e in graph.edges:
-        exits[e.a].append(e.b)
+        bucket = secret if e.hidden else exits
+        bucket[e.a].append(e.b)
         if not e.one_way:
-            exits[e.b].append(e.a)
+            bucket[e.b].append(e.a)
     rooms = [
         {"id": n.id, "name": n.name, "kind": n.kind,
-         "exits": sorted(set(exits.get(n.id, [])))}
+         "label": node_label(dmap, n.id), "hidden": n.hidden,
+         "exits": sorted(set(exits[n.id])),
+         "secret_exits": sorted(set(secret[n.id]))}
         for n in graph.nodes.values()
     ]
     return {"rooms": rooms}
