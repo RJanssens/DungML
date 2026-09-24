@@ -32,8 +32,15 @@ owns the DSL:
 
 - `POST /fragments` — append to the source (caller discovers its map piecemeal)
 - `PUT  /source` — **replace** the source (caller re-emits it whole)
-- `POST /reveal` `{feature_id}` — discover a node + its visible doors
-- `POST /party` `{room_id}` — move the party marker, discovering that node
+- `POST /reveal` `{feature_id}` — discover a node + its visible doors. Takes
+  an id, bare name, label, or corridor display name — not just an id — and
+  returns `{ok, revealed, room}`, where `room` is the freshly-discovered
+  `room_context`, never a bare `{"ok": true}`. 404
+  `{error: "unknown room", query, candidates}` if `feature_id` names none or
+  several nodes; 409 if the map doesn't parse.
+- `POST /party` `{room_id}` — move the party marker, discovering that node.
+  Same name/label resolution, same `{ok, party_location, room}` shape, same
+  404 (with `candidates`) / 409 as `/reveal`.
 - `POST /tokens` `{scope: "fog"|"gm"}` — mint an HMAC render grant
 - `GET  /info` — `{map_id, session_id}`
 - `GET  /render?token=…` — the SVG (no identity dep, so a plain `<img>` works)
@@ -49,8 +56,54 @@ project's maps the campaign is playing on. dungml can't know this — the choice
 lives in ttrpg2's state — and without it the web app can't point the GM at the
 live session. ttrpg2 re-reports it on every probe, so it self-heals.
 
+The per-map session routes mirror `/maps/{external_id}` above (`reveal`,
+`party`), plus three the legacy contract doesn't have:
+
+- `GET  /campaigns/{external_id}/maps/{map_id}/rooms/{query}` `?scope=gm|fog`
+  — one room's context (`room_context`), resolving `query` against the
+  node's id, bare name, label, or corridor display name. `scope` is a
+  `Literal["gm", "fog"]`; anything else is a 422. `fog` drops the whole
+  `dm_only` key rather than trying to redact inside it. 404
+  `{error: "unknown room", query, candidates}` if `query` is ambiguous or
+  matches nothing; 409 if the map doesn't parse.
+- `GET  /campaigns/{external_id}/maps/{map_id}/known` — the session's whole
+  known-map view (`known_map`); 409 if the map doesn't parse.
+- `POST /campaigns/{external_id}/maps/{map_id}/reveal` `{feature_id}` /
+  `POST .../party` `{room_id}` — same name/label resolution, same
+  `{ok, revealed|party_location, room}` shape, same 404 (with `candidates`) /
+  409 as the legacy contract's `/reveal` and `/party`. `party` additionally
+  clears this campaign's party marker on every *other* linked map
+  (`clear_party_elsewhere`) and records this map as the active one
+  (`set_active_map`) — the same bookkeeping `PUT /active` does by hand.
+- `POST /campaigns/{external_id}/maps/{map_id}/doors`
+  `{door?, between?, discovered=true, state?}` — record a found secret door
+  and/or a runtime state (opened, forced, locked); the authored map itself
+  never changes, only the session. `door` is a door key; `between` is a
+  `[node, node]` pair resolved the same way as `rooms/{query}`, used to find
+  the door joining them. 404 `{error: "unknown door", door, between}` if
+  neither resolves to a real door, or `{error: "ambiguous door", candidates}`
+  if `between` matches more than one. → `{ok, door, state, discovered}`.
+
 `GET /maps/{map_id}/rooms` gives the node graph — map-keyed and
 session-independent, because structure is authored truth, not per-campaign.
+Each entry carries `id`, `name`, `kind`, `label` (falls back to the corridor's
+display name, then the bare name), `hidden` (declared inside a hidden layer),
+`exits` and `secret_exits` — the latter split out because `exits` only lists
+non-concealed doors; a concealed one belongs in `secret_exits` until a
+session actually finds it (this route is session-independent, so it can't
+know what any one campaign has discovered — it reports the door as *authored*
+secret either way).
+
+**"What is secret" lives in one place: the `dungml.room_context` module.**
+Its `room_context()` splits a room into `perceived` (boxed text, visible
+features, doors the party has found) and `dm_only` (notes, unfound secret
+doors, traps, secret features), and its `node_exits()`/`known_map()` apply
+the same discovered-vs-hidden split at the exit-list and whole-map level.
+The campaign and legacy contracts above call `room_context()`, the sessions
+routes (`routes/sessions.py`) call `node_exits()`, and the MCP server calls
+`known_map()` — all three go through this one module rather than
+re-deriving exits or secrecy themselves. If a caller needs "what can this
+room's occupant see," it belongs here, not a fresh walk of `graph.edges`.
 
 Externally-driven PlaySessions are named `ttrpg2 · {external_id}`
 (`contract.campaign_session_name`), and one still called `"party"` is renamed
@@ -115,7 +168,7 @@ See README for the full quickstart. In short:
 
 ```bash
 uv sync                                   # Python workspace (dsl + backend + mcp)
-uv run pytest packages/                   # 458 tests — run this before any commit
+uv run pytest packages/                   # 570 tests — run this before any commit
 uv run dmap-server                        # → http://127.0.0.1:8000
 uv run dmap --help                        # DSL CLI (render, validate, renderers)
 uv run dmap-mcp                           # stdio MCP server, shares the backend DB
