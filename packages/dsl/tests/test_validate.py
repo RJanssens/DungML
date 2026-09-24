@@ -131,3 +131,42 @@ def test_party_start_valid_refs_and_coords_ok():
         )
         diags = validate(parse(src))
         assert not [d for d in diags if "party_start" in d.message], ps
+
+
+_BASE = 'map "M" { grid { bounds 40 x 20 } }\n'
+
+
+def _warning_messages(src):
+    # NB: not named `_warnings` — that name is already taken above by a
+    # helper with a different signature (`_warnings(diags)`); shadowing it
+    # here would break the two call sites that use it.
+    return [d.message for d in validate(parse(_BASE + src)) if d.severity == "warning"]
+
+
+def test_disconnected_map_warns_naming_the_parts():
+    msgs = _warning_messages('''
+room "a" { rect 0,0 4 x 4 }
+room "b" { rect 10,0 4 x 4 }
+room "c" { rect 20,0 4 x 4 }
+door at 4,2 { connects room.a, room.b }
+''')
+    hit = [m for m in msgs if m.startswith("map is not connected:")]
+    assert hit and "room.c" in hit[0]
+
+
+def test_connected_map_has_no_connectivity_warning():
+    msgs = _warning_messages('''
+room "a" { rect 0,0 4 x 4 }
+room "b" { rect 4,0 4 x 4 }
+door at 4,2 { connects room.a, room.b }
+''')
+    assert not [m for m in msgs if m.startswith("map is not connected")]
+
+
+def test_dead_end_corridor_warns():
+    msgs = _warning_messages('''
+room "a" { rect 0,0 4 x 4 }
+corridor "spur" { width 1 segment line from 4,2 to 12,2 }
+door at 4,2 { connects room.a, corridor.spur }
+''')
+    assert any(m.startswith("corridor 'spur' has only one door") for m in msgs)

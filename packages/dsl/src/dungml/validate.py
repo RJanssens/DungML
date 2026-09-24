@@ -12,6 +12,7 @@ from __future__ import annotations
 from .builtins import BUILTIN_FEATURES
 from .errors import Diagnostic
 from .geometry import Area, corridor_polygons, find_overlapping_areas, room_polygon
+from .graph import build_graph
 
 # Minimum interior-overlap area (square map units) before an overlap is
 # worth reporting. Below this, an overlap is a cosmetic sliver — typically
@@ -538,5 +539,59 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     _overlap_scope(dmap.rooms, dmap.corridors, "")
     for layer in dmap.layers:
         _overlap_scope(layer.rooms, layer.corridors, f"layer '{layer.name}'")
+
+    # ---- connectivity: a map the party can't walk across is usually a
+    # missing door, not intent. Warnings, because a cave reached only by a
+    # map `exit` is legitimate. Nodes in hidden layers still count — the GM
+    # authored them and they still need to be reachable in play.
+    g = build_graph(dmap)
+    if g.nodes:
+        # Undirected adjacency, built once: a one-way door still physically
+        # connects two nodes, so connectivity ignores its direction.
+        undirected: dict[str, set[str]] = {nid: set() for nid in g.nodes}
+        for e in g.edges:
+            undirected[e.a].add(e.b)
+            undirected[e.b].add(e.a)
+
+        seen: set[str] = set()
+        parts: list[list[str]] = []
+        for start in sorted(g.nodes):
+            if start in seen:
+                continue
+            comp, stack = [], [start]
+            seen.add(start)
+            while stack:
+                cur = stack.pop()
+                comp.append(cur)
+                for nxt in undirected.get(cur, ()):
+                    if nxt not in seen:
+                        seen.add(nxt)
+                        stack.append(nxt)
+            parts.append(sorted(comp))
+        if len(parts) > 1:
+            names = "; ".join(
+                ", ".join(p[:3]) + (" …" if len(p) > 3 else "") for p in parts
+            )
+            diags.append(
+                _diag(
+                    "warning",
+                    f"map is not connected: {len(parts)} separate parts ({names})",
+                )
+            )
+
+        for nid, node in g.nodes.items():
+            if node.kind != "corridor":
+                continue
+            doors = {e.key for e in g.incident_edges(nid)} | {
+                b.key for b in g.boundary_exits(nid)
+            }
+            doors |= {e.key for e in g.edges if e.b == nid and e.one_way}
+            if len(doors) == 1:
+                diags.append(
+                    _diag(
+                        "warning",
+                        f"corridor '{node.name}' has only one door — a dead end",
+                    )
+                )
 
     return diags
