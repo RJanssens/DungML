@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
-from dungml import build_graph, parse, render_fogged, visible_doors
+from dungml import parse, render_fogged, room_context
 from dungml.errors import DmapParseError
 
 from .. import contract, render_token
@@ -72,52 +72,40 @@ def replace_source(external_id: str, body: SourceIn, _svc: CurrentService, db: D
 
 
 @router.post("/maps/{external_id}/reveal")
-def reveal(external_id: str, body: RevealIn, _svc: CurrentService, db: DbDep) -> dict:
+def reveal(external_id: str, body: RevealIn, _svc: CurrentService, db: DbDep):
     m = contract.get_or_create_map(db, external_id)
+    got = contract.resolve_or_error(m, body.feature_id)
+    if isinstance(got, Response):
+        return got
+    dmap, graph, node = got
     s = contract.session_for(db, m)
-    try:
-        graph = build_graph(parse(m.source))
-    except DmapParseError:
-        return {"ok": True}  # source not yet a full map — nothing to reveal
-    if not graph.has_node(body.feature_id):
-        return {"ok": True}  # unknown node — graceful no-op
-    nodes = set(s.discovered_nodes or [])
-    doors = set(s.discovered_doors or [])
-    nodes.add(body.feature_id)
-    doors |= visible_doors(graph, body.feature_id)
-    s.discovered_nodes = sorted(nodes)
-    s.discovered_doors = sorted(doors)
+    contract.discover(s, graph, node)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "revealed": node,
+            "room": room_context(dmap, graph, node, contract.session_view(s))}
 
 
 @router.post("/maps/{external_id}/party")
-def set_party(external_id: str, body: PartyIn, _svc: CurrentService, db: DbDep) -> dict:
+def set_party(external_id: str, body: PartyIn, _svc: CurrentService, db: DbDep):
     """Move the party marker to a node and reveal it (+ its visible doors).
 
     The campaigns contract has had this since authored-map play; the legacy
     /maps contract only had /reveal, so a caller that owned its own DSL could
     light up rooms but never say where the party was standing — and
     render_fogged draws the party marker from `party_location`.
-    Graceful no-op on an unparseable source or unknown node, like /reveal.
+    404 unknown node, 409 unparseable source, like /reveal.
     """
     m = contract.get_or_create_map(db, external_id)
+    got = contract.resolve_or_error(m, body.room_id)
+    if isinstance(got, Response):
+        return got
+    dmap, graph, node = got
     s = contract.session_for(db, m)
-    try:
-        graph = build_graph(parse(m.source))
-    except DmapParseError:
-        return {"ok": True}
-    if not graph.has_node(body.room_id):
-        return {"ok": True}
-    nodes = set(s.discovered_nodes or [])
-    doors = set(s.discovered_doors or [])
-    nodes.add(body.room_id)
-    doors |= visible_doors(graph, body.room_id)
-    s.party_location = body.room_id
-    s.discovered_nodes = sorted(nodes)
-    s.discovered_doors = sorted(doors)
+    contract.discover(s, graph, node)
+    s.party_location = node
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "party_location": node,
+            "room": room_context(dmap, graph, node, contract.session_view(s))}
 
 
 @router.post("/maps/{external_id}/tokens")

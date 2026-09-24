@@ -273,6 +273,13 @@ def test_room_on_unparseable_map_is_409(client):
     assert client.get(f"/campaigns/inst-1/maps/{mid}/rooms/a", headers=SVC).status_code == 409
 
 
+def test_room_scope_invalid_is_422(client):
+    _, mid = _keyed(client)
+    r = client.get(f"/campaigns/inst-1/maps/{mid}/rooms/39",
+                    params={"scope": "Fog"}, headers=SVC)
+    assert r.status_code == 422
+
+
 def test_party_by_label_returns_the_room(client):
     _, mid = _keyed(client)
     r = client.post(f"/campaigns/inst-1/maps/{mid}/party", json={"room_id": "37"}, headers=SVC)
@@ -342,6 +349,25 @@ def test_doors_unknown_is_404(client):
     _, mid = _keyed(client)
     assert client.post(f"/campaigns/inst-1/maps/{mid}/doors",
                        json={"door": "99,99"}, headers=SVC).status_code == 404
+
+
+DOUBLE_DOOR = '''map "K3" { grid { bounds 30 x 12 } }
+room "hall" { rect 0,0 10 x 10 }
+room "vault" { rect 12,0 4 x 4 }
+door at 12,2 { connects room.vault, room.hall type wooden }
+door at 12,3 { connects room.vault, room.hall type secret }
+'''
+
+
+def test_doors_ambiguous_between_is_404_with_candidates(client):
+    pid, mid = _project_with_source(client, DOUBLE_DOOR)
+    client.post("/campaigns/inst-1/link", json={"project_id": pid}, headers=HUMAN)
+    r = client.post(f"/campaigns/inst-1/maps/{mid}/doors",
+                    json={"between": ["room.vault", "room.hall"]}, headers=SVC)
+    assert r.status_code == 404
+    detail = r.json()["detail"]
+    assert detail["error"] == "ambiguous door"
+    assert set(detail["candidates"]) == {"12,2", "12,3"}
 
 
 def test_known_map_after_moves(client):

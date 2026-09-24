@@ -5,19 +5,19 @@ authorized; enumeration/render/reveal are service-scoped and bounded to linked
 projects. Parallel to and independent of the legacy /maps/{external_id} routes."""
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
 from dungml import (
     build_graph,
-    candidates,
     known_map,
     node_label,
     parse,
     render_fogged,
     resolve_node,
     room_context,
-    visible_doors,
 )
 from dungml.errors import DmapParseError
 
@@ -157,42 +157,13 @@ def render(external_id: str, map_id: str, token: str, db: DbDep) -> Response:
     return Response(svg, media_type="image/svg+xml")
 
 
-def _json_error(code: int, detail) -> Response:
-    # Returned rather than raised: see map_rooms' note on the SPA fallback.
-    import json as _json
-    return Response(_json.dumps({"detail": detail}), status_code=code,
-                    media_type="application/json")
-
-
-def _resolve(m: models.Map, query: str):
-    """(dmap, graph, node_id) or an error Response."""
-    try:
-        dmap, graph = contract.load_graph(m)
-    except DmapParseError:
-        return _json_error(409, "map does not parse — it may be mid-edit in the editor")
-    node = resolve_node(dmap, graph, query)
-    if node is None:
-        return _json_error(404, {"error": "unknown room", "query": query,
-                                 "candidates": candidates(dmap, graph, query)[:20]})
-    return dmap, graph, node
-
-
-def _discover(s: models.PlaySession, graph, node: str) -> None:
-    nodes = set(s.discovered_nodes or [])
-    doors = set(s.discovered_doors or [])
-    nodes.add(node)
-    doors |= visible_doors(graph, node)
-    s.discovered_nodes = sorted(nodes)
-    s.discovered_doors = sorted(doors)
-
-
 @router.get("/campaigns/{external_id}/maps/{map_id}/rooms/{query}")
 def room(external_id: str, map_id: str, query: str, _svc: CurrentService, db: DbDep,
-         scope: str = "gm"):
+         scope: Literal["gm", "fog"] = "gm"):
     m = contract.map_in_link(db, external_id, map_id)
     if m is None:
-        return _json_error(404, "map not found")
-    got = _resolve(m, query)
+        return contract.json_error(404, "map not found")
+    got = contract.resolve_or_error(m, query)
     if isinstance(got, Response):
         return got
     dmap, graph, node = got
@@ -207,11 +178,11 @@ def room(external_id: str, map_id: str, query: str, _svc: CurrentService, db: Db
 def known(external_id: str, map_id: str, _svc: CurrentService, db: DbDep):
     m = contract.map_in_link(db, external_id, map_id)
     if m is None:
-        return _json_error(404, "map not found")
+        return contract.json_error(404, "map not found")
     try:
         dmap, graph = contract.load_graph(m)
     except DmapParseError:
-        return _json_error(409, "map does not parse — it may be mid-edit in the editor")
+        return contract.json_error(409, "map does not parse — it may be mid-edit in the editor")
     s = contract.campaign_session_for(db, m, external_id)
     return known_map(dmap, graph, contract.session_view(s))
 
@@ -222,12 +193,12 @@ def reveal(external_id: str, map_id: str, body: RevealIn,
     m = contract.map_in_link(db, external_id, map_id)
     if m is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "map not found")
-    got = _resolve(m, body.feature_id)
+    got = contract.resolve_or_error(m, body.feature_id)
     if isinstance(got, Response):
         return got
     dmap, graph, node = got
     s = contract.campaign_session_for(db, m, external_id)
-    _discover(s, graph, node)
+    contract.discover(s, graph, node)
     db.commit()
     return {"ok": True, "revealed": node,
             "room": room_context(dmap, graph, node, contract.session_view(s))}
@@ -242,13 +213,13 @@ def set_party(external_id: str, map_id: str, body: PartyIn,
     m = contract.map_in_link(db, external_id, map_id)
     if m is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "map not found")
-    got = _resolve(m, body.room_id)
+    got = contract.resolve_or_error(m, body.room_id)
     if isinstance(got, Response):
         return got
     dmap, graph, node = got
     s = contract.campaign_session_for(db, m, external_id)
     contract.clear_party_elsewhere(db, m, external_id)
-    _discover(s, graph, node)
+    contract.discover(s, graph, node)
     s.party_location = node
     contract.set_active_map(db, external_id, m)
     db.commit()
@@ -269,17 +240,20 @@ def door(external_id: str, map_id: str, body: DoorIn, _svc: CurrentService, db: 
     locked). The authored map never changes; this lives on the session."""
     m = contract.map_in_link(db, external_id, map_id)
     if m is None:
-        return _json_error(404, "map not found")
+        return contract.json_error(404, "map not found")
     try:
         dmap, graph = contract.load_graph(m)
     except DmapParseError:
-        return _json_error(409, "map does not parse — it may be mid-edit in the editor")
+        return contract.json_error(409, "map does not parse — it may be mid-edit in the editor")
     key = body.door
     authored = None
     if key is None and body.between and len(body.between) == 2:
         a = resolve_node(dmap, graph, body.between[0])
         b = resolve_node(dmap, graph, body.between[1])
         hit = [e for e in graph.edges if {e.a, e.b} == {a, b}] if a and b else []
+        if len(hit) > 1:
+            return contract.json_error(404, {"error": "ambiguous door",
+                                     "candidates": [e.key for e in hit]})
         key = hit[0].key if len(hit) == 1 else None
     for e in graph.edges:
         if e.key == key:
@@ -288,7 +262,7 @@ def door(external_id: str, map_id: str, body: DoorIn, _svc: CurrentService, db: 
         if bx.key == key:
             authored = bx.state
     if key is None or authored is None:
-        return _json_error(404, {"error": "unknown door", "door": body.door,
+        return contract.json_error(404, {"error": "unknown door", "door": body.door,
                                  "between": body.between})
     s = contract.campaign_session_for(db, m, external_id)
     if body.discovered:

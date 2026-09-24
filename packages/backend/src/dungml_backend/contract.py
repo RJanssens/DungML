@@ -7,7 +7,9 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from dungml import build_graph, parse
+from fastapi import Response
+
+from dungml import build_graph, candidates, parse, resolve_node, visible_doors
 from dungml.errors import DmapParseError
 
 from . import models
@@ -235,3 +237,34 @@ def clear_party_elsewhere(db: DbSession, m: models.Map, external_id: str) -> Non
     )
     for s in others:
         s.party_location = None
+
+
+def json_error(code: int, detail) -> Response:
+    # Returned rather than raised: see routes/campaigns.map_rooms' note on the
+    # app's SPA-fallback exception handler — a raised HTTPException on a
+    # root-mounted GET would otherwise be rewritten into the SPA's index.html.
+    import json as _json
+    return Response(_json.dumps({"detail": detail}), status_code=code,
+                    media_type="application/json")
+
+
+def resolve_or_error(m: models.Map, query: str):
+    """(dmap, graph, node_id) or an error Response (409 unparseable, 404 unknown)."""
+    try:
+        dmap, graph = load_graph(m)
+    except DmapParseError:
+        return json_error(409, "map does not parse — it may be mid-edit in the editor")
+    node = resolve_node(dmap, graph, query)
+    if node is None:
+        return json_error(404, {"error": "unknown room", "query": query,
+                                 "candidates": candidates(dmap, graph, query)[:20]})
+    return dmap, graph, node
+
+
+def discover(s: models.PlaySession, graph, node: str) -> None:
+    nodes = set(s.discovered_nodes or [])
+    doors = set(s.discovered_doors or [])
+    nodes.add(node)
+    doors |= visible_doors(graph, node)
+    s.discovered_nodes = sorted(nodes)
+    s.discovered_doors = sorted(doors)

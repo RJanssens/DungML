@@ -21,10 +21,10 @@ def test_fragments_provisions_and_appends(client):
     assert client.post("/maps/i1/fragments", json={"dungml": frag}, headers=SVC).status_code == 200
 
 
-def test_reveal_noops_unknown_node(client):
+def test_reveal_unknown_node_is_404(client):
     client.post("/maps/i2/fragments", json={"dungml": ROOM}, headers=SVC)
     r = client.post("/maps/i2/reveal", json={"feature_id": "room.does-not-exist"}, headers=SVC)
-    assert r.status_code == 200 and r.json()["ok"] is True
+    assert r.status_code == 404
 
 
 def test_reveal_marks_known_node(client):
@@ -92,16 +92,16 @@ def test_party_requires_service(client):
     ).status_code == 403
 
 
-def test_party_noops_unknown_node(client):
+def test_party_unknown_node_is_404(client):
     client.put("/maps/p2/source", json={"dungml": ROOM}, headers=SVC)
     r = client.post("/maps/p2/party", json={"room_id": "room.nope"}, headers=SVC)
-    assert r.status_code == 200 and r.json()["ok"] is True
+    assert r.status_code == 404
 
 
-def test_party_noops_unparseable_source(client):
+def test_party_unparseable_source_is_409(client):
     client.post("/maps/p3/fragments", json={"dungml": "not a map"}, headers=SVC)
     r = client.post("/maps/p3/party", json={"room_id": "room.hall"}, headers=SVC)
-    assert r.status_code == 200 and r.json()["ok"] is True
+    assert r.status_code == 409
 
 
 def test_party_marker_appears_in_render(client):
@@ -116,7 +116,8 @@ def test_party_marker_appears_in_render(client):
 def test_party_reveals_the_node_it_moves_to(client):
     """Moving the party into a room discovers it — no separate /reveal needed."""
     client.put("/maps/p5/source", json={"dungml": ROOM}, headers=SVC)
-    client.post("/maps/p5/party", json={"room_id": "room.hall"}, headers=SVC)
+    r = client.post("/maps/p5/party", json={"room_id": "room.hall"}, headers=SVC)
+    assert r.json()["room"]["id"] == "room.hall"
     tok = client.post("/maps/p5/tokens", json={"scope": "fog"}, headers=SVC).json()["token"]
     svg = client.get("/maps/p5/render", params={"token": tok}).text
     assert 'data-room="hall"' in svg
