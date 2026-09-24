@@ -5,13 +5,15 @@ import io
 import json
 import re
 import zipfile
+from datetime import datetime
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import select
 
-from .. import defaults, models, schemas
+from .. import access, contract, defaults, models, schemas
 from ..deps import CurrentUser, DbDep
+from ..identity import display_name
 from ..library import (
     LibraryAlreadyImported,
     UnknownLibrary,
@@ -27,23 +29,36 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 def _get_owned(
     db, project_id: str, user: models.User
 ) -> models.Project:
-    proj = db.get(models.Project, project_id)
-    if proj is None or proj.user_id != user.id:
-        # Treat unauthorized access the same as missing — don't leak existence.
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="project not found"
-        )
-    return proj
+    """The project if the caller owns it *or* is a member; 404 otherwise.
+
+    Owner-only actions (delete, membership management) follow this with
+    `access.require_owner`.
+    """
+    return access.get_project(db, project_id, user)
+
+
+def _owner_label(proj: models.Project) -> str:
+    u = proj.user
+    return u.email or u.subject or ""
+
+
+def _project_out(
+    proj: models.Project, user: models.User
+) -> schemas.ProjectOut:
+    return schemas.ProjectOut(
+        id=proj.id,
+        name=proj.name,
+        created_at=proj.created_at,
+        updated_at=proj.updated_at,
+        shared=proj.user_id != user.id,
+        owner=_owner_label(proj),
+    )
 
 
 @router.get("", response_model=list[schemas.ProjectOut])
-def list_projects(user: CurrentUser, db: DbDep) -> list[models.Project]:
-    rows = db.scalars(
-        select(models.Project)
-        .where(models.Project.user_id == user.id)
-        .order_by(models.Project.updated_at.desc())
-    ).all()
-    return list(rows)
+def list_projects(user: CurrentUser, db: DbDep) -> list[schemas.ProjectOut]:
+    """Everything the caller owns or is a member of, most recent first."""
+    return [_project_out(p, user) for p in access.list_projects(db, user)]
 
 
 @router.post("", response_model=schemas.ProjectOut, status_code=201)
@@ -62,8 +77,8 @@ def create_project(
 @router.get("/{project_id}", response_model=schemas.ProjectOut)
 def get_project(
     project_id: str, user: CurrentUser, db: DbDep
-) -> models.Project:
-    return _get_owned(db, project_id, user)
+) -> schemas.ProjectOut:
+    return _project_out(_get_owned(db, project_id, user), user)
 
 
 @router.patch("/{project_id}", response_model=schemas.ProjectOut)
@@ -72,20 +87,157 @@ def update_project(
     body: schemas.ProjectIn,
     user: CurrentUser,
     db: DbDep,
-) -> models.Project:
+) -> schemas.ProjectOut:
     proj = _get_owned(db, project_id, user)
     proj.name = body.name
     db.commit()
     db.refresh(proj)
-    return proj
+    return _project_out(proj, user)
 
 
 @router.delete("/{project_id}", status_code=204)
 def delete_project(
     project_id: str, user: CurrentUser, db: DbDep
 ) -> None:
-    proj = _get_owned(db, project_id, user)
+    """Owner-only — a member losing everyone's maps would be a bad surprise."""
+    proj = access.require_owner(_get_owned(db, project_id, user), user)
     db.delete(proj)
+    db.commit()
+
+
+@router.get(
+    "/{project_id}/campaigns", response_model=list[schemas.CampaignStateOut]
+)
+def list_campaigns(
+    project_id: str, user: CurrentUser, db: DbDep
+) -> list[schemas.CampaignStateOut]:
+    """External campaigns linked to this project, and where each party stands.
+
+    This is the GUI's window onto a running ttrpg2 game: which map it is on,
+    the session carrying its fog, and how much of the map it has uncovered.
+    Nothing here is authored state — it's all the play session's.
+    """
+    proj = _get_owned(db, project_id, user)
+    out: list[schemas.CampaignStateOut] = []
+    for link in contract.campaign_links_for_project(db, proj.id):
+        row = schemas.CampaignStateOut(external_id=link.external_id)
+        m = db.get(models.Map, link.active_map_id) if link.active_map_id else None
+        if m is not None and m.project_id == proj.id:
+            row.active_map_id = m.id
+            row.active_map_name = m.name
+            s = contract.campaign_session_for(db, m, link.external_id)
+            row.session_id = s.id
+            row.party_location = s.party_location
+            row.discovered_nodes = len(s.discovered_nodes or [])
+            row.discovered_doors = len(s.discovered_doors or [])
+            row.total_nodes = contract.node_count(m)
+            row.updated_at = s.updated_at
+        out.append(row)
+    return out
+
+
+@router.get(
+    "/{project_id}/sessions", response_model=list[schemas.SessionSummaryOut]
+)
+def list_project_sessions(
+    project_id: str, user: CurrentUser, db: DbDep
+) -> list[schemas.SessionSummaryOut]:
+    """Every play session in the project, newest activity first.
+
+    Progress per session already existed inside a map's play view; a GM with
+    twenty maps had to open each one to find it. The node total is counted
+    once per map that actually has sessions, so a project of mostly
+    session-less maps costs nothing.
+    """
+    proj = _get_owned(db, project_id, user)
+    out: list[schemas.SessionSummaryOut] = []
+    totals: dict[str, int] = {}
+    for m in proj.maps:
+        if not m.play_sessions:
+            continue
+        totals[m.id] = contract.node_count(m)
+        for s in m.play_sessions:
+            out.append(
+                schemas.SessionSummaryOut(
+                    session_id=s.id,
+                    name=s.name,
+                    map_id=m.id,
+                    map_name=m.name,
+                    party_location=s.party_location,
+                    discovered_nodes=len(s.discovered_nodes or []),
+                    total_nodes=totals[m.id],
+                    external_id=s.external_id,
+                    updated_at=s.updated_at,
+                )
+            )
+    out.sort(key=lambda r: r.updated_at or datetime.min, reverse=True)
+    return out
+
+
+# ---- membership ----
+
+
+@router.get("/{project_id}/members", response_model=list[schemas.MemberOut])
+def list_members(
+    project_id: str, user: CurrentUser, db: DbDep
+) -> list[schemas.MemberOut]:
+    """The project's members (not its owner — that's `ProjectOut.owner`).
+
+    Visible to members as well as the owner: people working together on a
+    project can see who else is on it.
+    """
+    proj = _get_owned(db, project_id, user)
+    return [
+        schemas.MemberOut(
+            user_id=m.user_id, subject=m.user.subject or "", email=m.user.email or ""
+        )
+        for m in sorted(proj.members, key=lambda m: m.created_at)
+    ]
+
+
+@router.post(
+    "/{project_id}/members", response_model=schemas.MemberOut, status_code=201
+)
+def add_member(
+    project_id: str, body: schemas.MemberIn, user: CurrentUser, db: DbDep
+) -> schemas.MemberOut:
+    """Share the project with another user, named by subject or email.
+
+    Idempotent — re-adding an existing member is a 201 with the same row, so
+    a double-click can't 409 at the GM. 404 when nobody matches: creating an
+    account from a typo'd address would be worse than the error.
+    """
+    proj = access.require_owner(_get_owned(db, project_id, user), user)
+    target = access.find_user(db, body.identifier)
+    if target is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            f"no user matching '{body.identifier}' — they must sign in once first",
+        )
+    if target.id == proj.user_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "that user already owns this project"
+        )
+    row = db.get(models.ProjectMember, (proj.id, target.id))
+    if row is None:
+        row = models.ProjectMember(project_id=proj.id, user_id=target.id)
+        db.add(row)
+        db.commit()
+    return schemas.MemberOut(
+        user_id=target.id, subject=target.subject or "", email=target.email or ""
+    )
+
+
+@router.delete("/{project_id}/members/{user_id}", status_code=204)
+def remove_member(
+    project_id: str, user_id: str, user: CurrentUser, db: DbDep
+) -> None:
+    """Revoke a membership. Owner-only; unknown membership is a 404."""
+    proj = access.require_owner(_get_owned(db, project_id, user), user)
+    row = db.get(models.ProjectMember, (proj.id, user_id))
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not a member of this project")
+    db.delete(row)
     db.commit()
 
 

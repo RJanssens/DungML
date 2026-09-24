@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from dungml import build_graph, parse, render_fogged, visible_doors
 from dungml.errors import DmapParseError
 
-from .. import contract, models, render_token
+from .. import access, contract, models, render_token
 from ..deps import CurrentService, CurrentUser, DbDep
 
 router = APIRouter(tags=["campaigns"])
@@ -45,15 +45,18 @@ class TokenIn(BaseModel):
 
 @router.post("/campaigns/{external_id}/link")
 def link(external_id: str, body: LinkIn, user: CurrentUser, db: DbDep) -> dict:
-    proj = db.get(models.Project, body.project_id)
-    if proj is None or proj.user_id != user.id:
+    proj = access.accessible_project(db, body.project_id, user)
+    if proj is None:
         # Treat unauthorized the same as missing — don't leak existence.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
     existing_link = db.get(models.CampaignLink, external_id)
-    if existing_link is not None and existing_link.user_id != user.id:
-        # Someone else already linked this campaign — don't leak that a link
-        # exists to a different owner; re-use the same no-leak 404.
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
+    if existing_link is not None:
+        # Re-linking is fine for anyone who can reach the project the campaign
+        # currently points at — the link records who created it, which must not
+        # lock out the owner's collaborators. Anyone else gets the same no-leak
+        # 404 as an unknown project.
+        if access.accessible_project(db, existing_link.project_id, user) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
     contract.link_campaign(db, external_id, proj)
     return {"external_id": external_id, "project_id": proj.id}
 
@@ -64,10 +67,33 @@ def unlink(external_id: str, user: CurrentUser, db: DbDep) -> None:
     if link_row is None:
         return  # idempotent
     proj = db.get(models.Project, link_row.project_id)
-    if proj is not None and proj.user_id != user.id:
+    if proj is not None and not access.can_access(db, proj, user):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
+    project_id = link_row.project_id
     db.delete(link_row)
     db.commit()
+    # The daemon's access existed because of this link; it goes with it.
+    contract.revoke_service_access(db, project_id)
+
+
+class ActiveMapIn(BaseModel):
+    map_id: str
+
+
+@router.put("/campaigns/{external_id}/active")
+def set_active_map(
+    external_id: str, body: ActiveMapIn, _svc: CurrentService, db: DbDep
+) -> dict:
+    """Record the map this campaign is currently playing on.
+
+    ttrpg2 owns the choice; it reports it here so the web app can send the GM
+    straight to the live session. Bounded to the linked project, like every
+    other service-scoped route."""
+    m = contract.map_in_link(db, external_id, body.map_id)
+    if m is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "map not in linked project")
+    link = contract.set_active_map(db, external_id, m)
+    return {"external_id": external_id, "active_map_id": link.active_map_id}
 
 
 @router.get("/campaigns/{external_id}/maps")

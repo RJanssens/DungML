@@ -20,7 +20,7 @@ from dungml import (
 )
 from dungml.errors import DmapParseError
 
-from .. import models
+from .. import access, models
 from ..deps import CurrentUser, DbDep
 
 router = APIRouter(tags=["sessions"])
@@ -45,15 +45,13 @@ class RevealIn(BaseModel):
 # ---- helpers ----
 
 def _get_owned_map(db, map_id: str, user: models.User) -> models.Map:
-    m = db.get(models.Map, map_id)
-    if m is None or m.project.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "map not found")
-    return m
+    """Owner or member of the map's project — see access.py."""
+    return access.get_map(db, map_id, user)
 
 
 def _get_owned_session(db, session_id: str, user: models.User) -> models.PlaySession:
     s = db.get(models.PlaySession, session_id)
-    if s is None or s.map.project.user_id != user.id:
+    if s is None or not access.can_access(db, s.map.project, user):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
     return s
 

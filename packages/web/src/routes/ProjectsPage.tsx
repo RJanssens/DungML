@@ -193,6 +193,7 @@ function ProjectRow({ project }: { project: Project }) {
         <Link to={`/projects/${project.id}`} className={styles.itemLink}>
           <span className={styles.itemName}>{project.name}</span>
           <span className={styles.itemMeta}>
+            {project.shared ? `Shared by ${project.owner} · ` : ""}
             Updated {relativeTime(project.updated_at)}
           </span>
         </Link>
@@ -201,16 +202,18 @@ function ProjectRow({ project }: { project: Project }) {
         <Button variant="ghost" onClick={() => setEditing((v) => !v)}>
           Rename
         </Button>
-        <Button
-          variant="danger"
-          onClick={() => {
-            if (confirm(`Delete "${project.name}" and all its maps?`)) {
-              remove.mutate();
-            }
-          }}
-        >
-          Delete
-        </Button>
+        {project.shared ? null : (
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (confirm(`Delete "${project.name}" and all its maps?`)) {
+                remove.mutate();
+              }
+            }}
+          >
+            Delete
+          </Button>
+        )}
       </div>
     </li>
   );

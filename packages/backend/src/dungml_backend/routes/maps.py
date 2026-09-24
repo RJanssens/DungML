@@ -4,28 +4,19 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from .. import defaults, models, schemas
+from .. import access, defaults, models, schemas
 from ..deps import CurrentUser, DbDep
 
 router = APIRouter(tags=["maps"])
 
 
 def _get_owned_project(db, project_id: str, user: models.User) -> models.Project:
-    proj = db.get(models.Project, project_id)
-    if proj is None or proj.user_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="project not found"
-        )
-    return proj
+    """Owner or member — see access.py."""
+    return access.get_project(db, project_id, user)
 
 
 def _get_owned_map(db, map_id: str, user: models.User) -> models.Map:
-    m = db.get(models.Map, map_id)
-    if m is None or m.project.user_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="map not found"
-        )
-    return m
+    return access.get_map(db, map_id, user)
 
 
 @router.get(

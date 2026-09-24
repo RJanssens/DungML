@@ -1,11 +1,14 @@
 // Typed wrappers around the FastAPI backend. The token is supplied by the
 // OIDC AuthProvider via configureApi({ getToken }) on every request.
 import type {
+  CampaignState,
   ConnectivityResponse,
   Diagnostic,
   MapDetail,
   MapSummary,
   Project,
+  ProjectMember,
+  ProjectSession,
   RenderResponse,
   User,
   ValidateResponse,
@@ -107,6 +110,26 @@ export const projects = {
     request<void>("DELETE", `/api/projects/${id}`),
   importSamples: () =>
     request<Project>("POST", "/api/projects/import-samples"),
+  // Who else can work on this project. The owner isn't in this list — it's
+  // on the project itself, as `owner`.
+  members: {
+    list: (id: string) =>
+      request<ProjectMember[]>("GET", `/api/projects/${id}/members`),
+    // `identifier` is a subject or an email address of someone who has
+    // signed in at least once; the backend 404s on anything else.
+    add: (id: string, identifier: string) =>
+      request<ProjectMember>("POST", `/api/projects/${id}/members`, {
+        identifier,
+      }),
+    remove: (id: string, userId: string) =>
+      request<void>("DELETE", `/api/projects/${id}/members/${userId}`),
+  },
+  // External campaigns (ttrpg2) driving a play session on this project.
+  campaigns: (id: string) =>
+    request<CampaignState[]>("GET", `/api/projects/${id}/campaigns`),
+  // Every play session across the project's maps, newest activity first.
+  sessions: (id: string) =>
+    request<ProjectSession[]>("GET", `/api/projects/${id}/sessions`),
   // Download the whole project as a compressed `.dmapproj` archive. Uses a
   // direct fetch (not `request`) because the body is binary, and carries the
   // bearer token so the protected route authorises.

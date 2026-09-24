@@ -14,7 +14,7 @@ from dungml import (
     validate,
 )
 
-from .. import models, schemas
+from .. import access, models, schemas
 from ..deps import CurrentUser, DbDep
 from ..library import project_include_sources
 
@@ -160,12 +160,8 @@ def connectivity_source(body: schemas.SourceIn) -> schemas.ConnectivityOut:
 # ----- by-stored-map convenience routes -----
 
 def _get_owned_map(db, map_id: str, user) -> models.Map:
-    m = db.get(models.Map, map_id)
-    if m is None or m.project.user_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="map not found"
-        )
-    return m
+    """Owner or member of the map's project — see access.py."""
+    return access.get_map(db, map_id, user)
 
 
 def _validate_in_project(source: str, db, m: models.Map) -> schemas.ValidateOut:

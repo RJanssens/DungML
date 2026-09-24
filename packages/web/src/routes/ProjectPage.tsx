@@ -7,6 +7,9 @@ import { Button, Card, EmptyState, Input } from "../components/Primitives";
 import { AppHeader, PageBody, PageShell } from "../components/Layout";
 import { Icon } from "../components/icons";
 import { SvgPreview } from "../components/SvgPreview";
+import { LiveCampaigns } from "../components/LiveCampaigns";
+import { ProjectMembers } from "../components/ProjectMembers";
+import { ProjectSessions } from "../components/ProjectSessions";
 import { relativeTime } from "./ProjectsPage";
 import styles from "./Lists.module.css";
 
@@ -233,6 +236,10 @@ export function ProjectPage() {
             </Card>
           ) : null}
 
+          <LiveCampaigns projectId={projectId} />
+
+          <ProjectSessions projectId={projectId} />
+
           {showCatalog ? (
             <Card className={styles.createCard}>
               <p className={styles.muted}>
@@ -303,6 +310,12 @@ export function ProjectPage() {
               ) : null}
             </>
           )}
+
+          <ProjectMembers
+            projectId={projectId}
+            isOwner={project ? !project.shared : false}
+            owner={project?.owner ?? ""}
+          />
         </div>
       </PageBody>
     </PageShell>

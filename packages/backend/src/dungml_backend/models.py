@@ -25,7 +25,14 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    subject: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    # The IdP's `sub` claim — how a bearer token resolves to this row.
+    # Nullable because rows created before the OIDC migration have no
+    # subject: they exist, own projects, and can never be authenticated as.
+    # `adopt.py` is how those projects get a reachable owner. (Both SQLite
+    # and Postgres allow repeated NULLs under a unique index.)
+    subject: Mapped[str | None] = mapped_column(
+        String(255), unique=True, index=True, default=None
+    )
     email: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
@@ -51,6 +58,32 @@ class Project(Base):
     maps: Mapped[list["Map"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    members: Mapped[list["ProjectMember"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+
+
+class ProjectMember(Base):
+    """A user other than the owner who may work on a project.
+
+    Projects started single-owner (`projects.user_id`); this adds co-access
+    without changing that column, so the owner stays unambiguous. Members get
+    everything the owner gets except deleting the project and managing its
+    membership — see `access.py`.
+    """
+
+    __tablename__ = "project_members"
+
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    project: Mapped[Project] = relationship(back_populates="members")
+    user: Mapped[User] = relationship()
 
 
 class Map(Base):
@@ -143,5 +176,13 @@ class CampaignLink(Base):
     )
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    # Which of the project's maps the campaign is playing on right now.
+    # ttrpg2 keeps the authoritative copy in its own state; it reports the
+    # choice here so the web app can point the GM at the live session
+    # instead of making them guess which map is in play. ON DELETE SET NULL:
+    # deleting a map must not take the link with it.
+    active_map_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("maps.id", ondelete="SET NULL"), default=None
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

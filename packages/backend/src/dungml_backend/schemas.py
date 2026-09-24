@@ -41,6 +41,54 @@ class ProjectOut(BaseModel):
     name: str
     created_at: datetime
     updated_at: datetime
+    # True when the caller reaches this project through a membership rather
+    # than by owning it — the GUI badges those rows.
+    shared: bool = False
+    # Display label for the owner (name/email/subject), for the same badge.
+    owner: str = ""
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MemberIn(BaseModel):
+    # A subject or an email address of someone who has signed in before.
+    identifier: str = Field(min_length=1, max_length=255)
+
+
+class CampaignStateOut(BaseModel):
+    """What an external campaign (ttrpg2) is doing on this project right now."""
+
+    external_id: str
+    active_map_id: str | None = None
+    active_map_name: str | None = None
+    session_id: str | None = None
+    party_location: str | None = None
+    discovered_nodes: int = 0
+    discovered_doors: int = 0
+    # Nodes in the active map, so `discovered_nodes` reads as progress rather
+    # than a bare count. 0 when there's no map yet, or it doesn't parse.
+    total_nodes: int = 0
+    updated_at: datetime | None = None
+
+
+class SessionSummaryOut(BaseModel):
+    """One play session anywhere in a project — the GM's "how far is it" row."""
+
+    session_id: str
+    name: str
+    map_id: str
+    map_name: str
+    party_location: str | None = None
+    discovered_nodes: int = 0
+    total_nodes: int = 0
+    # The external campaign driving this session, if any (ttrpg2's slug).
+    external_id: str | None = None
+    updated_at: datetime | None = None
+
+
+class MemberOut(BaseModel):
+    user_id: str
+    subject: str
+    email: str
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -1,0 +1,42 @@
+.panel {
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.heading {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-family: var(--serif);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.slug {
+  font-family: var(--mono, monospace);
+  font-weight: 600;
+}
+
+.detail {
+  color: var(--fg-muted);
+  flex: 1;
+}
+
+.idle {
+  color: var(--fg-faint, var(--fg-muted));
+  font-style: italic;
+}

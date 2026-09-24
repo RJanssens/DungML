@@ -84,6 +84,12 @@ uv run dmap renderers
 
 - `POST /api/auth/register | /api/auth/login | /api/auth/logout`, `GET /api/auth/me`
 - `GET|POST /api/projects`, `GET|PATCH|DELETE /api/projects/{id}`
+- `GET|POST /api/projects/{id}/members`, `DELETE /api/projects/{id}/members/{user_id}`
+  (share a project — owner-only; members get everything but delete and sharing.
+  Linking a campaign also makes the service principal a member of that project.)
+- `GET /api/projects/{id}/campaigns` (external campaigns playing on this project)
+- `GET /api/projects/{id}/sessions` (every play session in the project, with
+  explored / total areas — the same progress the play view shows per map)
 - `GET|POST /api/projects/{id}/maps`, `GET|PUT|DELETE /api/maps/{id}`
 - `POST /api/dsl/parse | /api/dsl/validate | /api/dsl/render` (stateless)
 - `GET /api/maps/{id}/render | /api/maps/{id}/validate` (stored-map convenience)

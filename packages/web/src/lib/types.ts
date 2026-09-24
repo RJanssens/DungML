@@ -20,6 +20,44 @@ export interface Project {
   name: string;
   created_at: string;
   updated_at: string;
+  /** True when this project is reached through a membership, not ownership. */
+  shared: boolean;
+  /** Display label for the project's owner. */
+  owner: string;
+}
+
+export interface ProjectMember {
+  user_id: string;
+  subject: string;
+  email: string;
+}
+
+/** An external campaign (ttrpg2) playing on one of this project's maps. */
+export interface CampaignState {
+  external_id: string;
+  active_map_id: string | null;
+  active_map_name: string | null;
+  session_id: string | null;
+  party_location: string | null;
+  discovered_nodes: number;
+  discovered_doors: number;
+  /** Nodes in the active map — the denominator for `discovered_nodes`. */
+  total_nodes: number;
+  updated_at: string | null;
+}
+
+/** One play session anywhere in a project. */
+export interface ProjectSession {
+  session_id: string;
+  name: string;
+  map_id: string;
+  map_name: string;
+  party_location: string | null;
+  discovered_nodes: number;
+  total_nodes: number;
+  /** Set when an external campaign (ttrpg2) drives this session. */
+  external_id: string | null;
+  updated_at: string | null;
 }
 
 export type MapKind = "map" | "library";

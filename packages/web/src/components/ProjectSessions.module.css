@@ -1,0 +1,59 @@
+.panel {
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.heading {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-family: var(--serif);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.where {
+  color: var(--fg-muted);
+  flex: 1;
+}
+
+.progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+
+.bar {
+  width: 70px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border, #ddd);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: var(--fg-muted, #888);
+}
+
+.live {
+  color: var(--fg-muted);
+  font-style: italic;
+}

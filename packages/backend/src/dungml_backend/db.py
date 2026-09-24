@@ -109,6 +109,16 @@ def ensure_columns() -> None:
                     text(f"ALTER TABLE {table} ADD COLUMN {column} VARCHAR(255)")
                 )
 
+    # The GUI needs to know which map an external campaign is playing on.
+    # Added after campaign_links shipped, so an existing DB needs the column.
+    # Plain nullable VARCHAR — SQLite can't add a column with a FK reference,
+    # and the app treats a dangling id as "no active map" anyway.
+    if "campaign_links" in existing and "active_map_id" not in cols("campaign_links"):
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE campaign_links ADD COLUMN active_map_id VARCHAR(36)")
+            )
+
     if "maps" in existing:
         idx = {i["name"] for i in insp.get_indexes("maps")}
         if "ix_maps_external_id" not in idx:

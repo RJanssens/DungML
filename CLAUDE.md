@@ -44,14 +44,68 @@ campaign carries its own fog on a shared map (`PlaySession` keyed by
 `(map_id, external_id)`). `link`/`unlink` are **user**-authorized; everything
 else is service-scoped and bounded to linked projects.
 
+`PUT /campaigns/{external_id}/active` `{map_id}` records which of the linked
+project's maps the campaign is playing on. dungml can't know this — the choice
+lives in ttrpg2's state — and without it the web app can't point the GM at the
+live session. ttrpg2 re-reports it on every probe, so it self-heals.
+
 `GET /maps/{map_id}/rooms` gives the node graph — map-keyed and
 session-independent, because structure is authored truth, not per-campaign.
+
+Externally-driven PlaySessions are named `ttrpg2 · {external_id}`
+(`contract.campaign_session_name`), and one still called `"party"` is renamed
+in passing — the GM's session list used to show several identical `"party"`
+rows with no way to tell which one an external campaign was driving. A name
+the GM chose is left alone.
+
+Progress figures (`discovered_nodes` vs `total_nodes`) come from
+`contract.node_count`, which parses the map and counts graph nodes. It returns
+**0 for a map that doesn't parse** — `GET /api/projects/{id}/sessions` spans a
+whole project, and one map mid-edit must not 500 the view. The count runs only
+for maps that actually have sessions.
 
 **Invariant worth protecting:** replacing a map's source must not reset
 discovery. Node ids are stable across re-emissions, and ttrpg2 re-pushes its
 whole DSL on every token move — if a replace re-fogged the map, the party
 would lose its exploration mid-fight. `test_source_preserves_discovery`
 pins this.
+
+### Projects have members, not just an owner
+
+`projects.user_id` is still the single owner, and `project_members` adds
+co-access on top. **Every route that reaches a project, its maps, its DSL or
+its play sessions authorizes through `access.py`** — `get_project`, `get_map`,
+`can_access`, `require_owner` — rather than comparing `user_id` inline.
+
+- no access at all → **404** (don't leak that a project exists)
+- access but an owner-only action → **403** (deleting a project, managing
+  membership). A member can already see it, so a 404 there would be theatre.
+
+`POST /api/projects/{id}/members` takes a subject *or* an email and 404s if
+nobody matches: a typo must not conjure an account.
+
+**Linking a campaign makes the daemon a member of that project**
+(`contract.grant_service_access`), and unlinking revokes it unless another
+campaign still links there. The service token was always a valid *login* —
+`current_user` resolves it like any other subject — it just had no
+authorization outside its own project, which is why ttrpg2 once resorted to
+writing `dungml.db` directly to add a room. It now reads and creates maps
+through `/api` like a member. Member rights only: no project delete, no
+membership management. It *can* edit the GM's authored maps; that boundary is
+policy in ttrpg2's CLAUDE.md, not mechanism. The GUI labels the row
+"campaign service" so the entry isn't mistaken for a person.
+
+**`users.subject` is nullable.** Rows from before the OIDC migration have
+none, and `deps.current_user` resolves by subject — so their projects are
+unreachable, and with membership being owner-only to manage, nobody can be
+granted access either. `adopt.py` is the way out:
+
+```bash
+uv run python -m dungml_backend.adopt dev-user   # hand orphaned projects over
+```
+
+It transfers every project whose owner has no subject, keeps the old row on
+as a member, and repoints that project's campaign links. Idempotent.
 
 ---
 
