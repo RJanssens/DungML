@@ -150,3 +150,82 @@ def test_known_map_labels_connections_and_frontier():
 def test_node_label_falls_back_to_bare_name():
     d, _ = _setup()
     assert node_label(d, "room.big") == "big"
+
+
+# ----- fix round 1: colliding door keys, hidden layers, one-way doors -----
+
+SRC_COLLIDING_DOORS = '''
+map "M" { grid { bounds 20 x 20 } }
+room "a" { rect 0,0 6 x 6 }
+room "b" { rect 10,0 6 x 6 }
+room "c" { rect 0,10 6 x 6 }
+door at 6,3 { connects room.a, room.c  type secret  state closed  trapped
+              description "Behind the tapestry, a secret passage." }
+door at 6,3 { connects room.a, room.b  type wooden  state closed }
+'''
+
+
+def test_colliding_door_keys_do_not_cross_attach_extras():
+    d = parse(SRC_COLLIDING_DOORS)
+    g = build_graph(d)
+    # Discover both doors so the leak (or its absence) shows up in one place:
+    # `perceived["exits"]`, where a leaked secret description would be most
+    # damaging (Hard Constraint #5 — DM-only text bleeding to the player).
+    keys = {e.key for e in g.incident_edges("room.a")}
+    view = SessionView(discovered_doors=frozenset(keys))
+    ctx = room_context(d, g, "room.a", view)
+    assert ctx["dm_only"]["secret_exits"] == []
+    assert len(ctx["perceived"]["exits"]) == 2
+    secret = next(e for e in ctx["perceived"]["exits"] if e["to"] == "room.c")
+    plain = next(e for e in ctx["perceived"]["exits"] if e["to"] == "room.b")
+    assert secret["door"] != plain["door"]
+    # The plain wooden door must not inherit the secret door's description.
+    assert "description" not in plain
+    assert secret["description"] == "Behind the tapestry, a secret passage."
+    # Only the secret door is actually trapped.
+    assert ctx["dm_only"]["trapped_doors"] == [secret["door"]]
+
+
+SRC_HIDDEN_LAYER = '''
+map "M" { grid { bounds 20 x 20 } }
+room "hall" { rect 0,0 10 x 10 }
+layer "gm" hidden {
+  text "PIT TRAP HERE" at 5,5
+  exit at 3,3 { to "Secret Level" at 1,1 }
+}
+'''
+
+
+def test_hidden_layer_texts_and_exits_never_reach_perceived():
+    d = parse(SRC_HIDDEN_LAYER)
+    g = build_graph(d)
+    ctx = room_context(d, g, "room.hall", SessionView())
+    assert ctx["perceived"]["annotations"] == []
+    assert ctx["perceived"]["map_exits"] == []
+    assert {"text": "PIT TRAP HERE", "hidden_layer": True} in ctx["dm_only"]["hidden_annotations"]
+    assert [x["target_map"] for x in ctx["dm_only"]["secret_map_exits"]] == ["Secret Level"]
+
+
+SRC_ONE_WAY = '''
+map "M" { grid { bounds 20 x 20 } }
+room "a" { rect 0,0 6 x 6 }
+room "b" { rect 10,0 6 x 6 }
+door at 6,3 { connects room.a, room.b  type oneway  state closed }
+'''
+
+
+def test_one_way_door_appears_on_the_far_side_as_blocked():
+    d = parse(SRC_ONE_WAY)
+    g = build_graph(d)
+    # sanity: build_graph only adds the edge to the forward side's adjacency
+    assert g.incident_edges("room.b") == []
+    ctx = room_context(d, g, "room.b", SessionView())
+    exits = ctx["perceived"]["exits"] + ctx["dm_only"]["undiscovered_exits"]
+    entry = next(e for e in exits if e["to"] == "room.a")
+    assert entry["blocked"] is True
+    assert entry["one_way"] is True
+    # The forward side still sees a normal, unblocked exit.
+    fwd_ctx = room_context(d, g, "room.a", SessionView())
+    fwd_exits = fwd_ctx["perceived"]["exits"] + fwd_ctx["dm_only"]["undiscovered_exits"]
+    fwd_entry = next(e for e in fwd_exits if e["to"] == "room.b")
+    assert fwd_entry["blocked"] is False

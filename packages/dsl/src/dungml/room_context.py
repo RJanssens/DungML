@@ -148,7 +148,9 @@ def node_exits(graph: Graph, node: str, view: SessionView, *,
             "far_side_explored": bool(to) and to in view.discovered_nodes,
         }
 
+    seen_keys: set[str] = set()
     for edge in graph.incident_edges(node):
+        seen_keys.add(edge.key)
         e = entry(edge.key, edge.other(node), edge.type, edge.state)
         if edge.hidden and edge.key not in view.discovered_doors:
             secret.append(e)
@@ -160,20 +162,50 @@ def node_exits(graph: Graph, node: str, view: SessionView, *,
             secret.append(e)
         else:
             perceived.append(e)
+    # One-way doors are only in `a`'s adjacency (build_graph never links `b`
+    # back), so the far side never sees `incident_edges` return them at all —
+    # they'd otherwise vanish from that room's exits entirely. Surface them
+    # here as an explicitly blocked, one-way-tagged entry.
+    for edge in graph.edges:
+        if edge.one_way and edge.b == node and edge.key not in seen_keys:
+            e = entry(edge.key, edge.other(node), edge.type, edge.state)
+            e["blocked"] = True
+            e["one_way"] = True
+            if edge.hidden and edge.key not in view.discovered_doors:
+                secret.append(e)
+            else:
+                perceived.append(e)
     return perceived, secret
 
 
 # ----- the room -----
 
 def _door_extras(dmap: DungeonMap) -> dict[str, object]:
-    from .graph import door_key
-    out = {}
-    doors = list(dmap.doors)
-    for layer in dmap.layers:
-        doors.extend(layer.doors)
-    for d in doors:
-        out.setdefault(door_key(d), d)
+    """Door objects keyed exactly as `build_graph` keys its edges.
+
+    Two doors at the same position collide on the bare `door_key`;
+    `build_graph` disambiguates with a `#N` suffix, assigned in the same
+    `_iter_doors` order it iterates. Mirror that here — same order, same
+    suffixing — so a colliding door's own extras (description, trapped,
+    dm_notes) never bleed onto its neighbour at the same point.
+    """
+    from .graph import _iter_doors, door_key
+    out: dict[str, object] = {}
+    seen_keys: set[str] = set()
+    for d in _iter_doors(dmap):
+        key = door_key(d)
+        if key in seen_keys:
+            n = 2
+            while f"{key}#{n}" in seen_keys:
+                n += 1
+            key = f"{key}#{n}"
+        seen_keys.add(key)
+        out[key] = d
     return out
+
+
+def _door_for(doors: Mapping[str, object], key: str):
+    return doors.get(key)
 
 
 def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -> dict:
@@ -184,16 +216,16 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
 
     exits, secret_exits = node_exits(graph, node, view, labels=labels)
     for e in exits:
-        d = doors.get(e["door"].split("#", 1)[0])
+        d = _door_for(doors, e["door"])
         if d is not None and d.description:
             e["description"] = d.description
     perceived_exits = [e for e in exits if e["discovered"]]
     undiscovered = [e for e in exits if not e["discovered"]]
     trapped = sorted(e["door"] for e in exits + secret_exits
-                     if getattr(doors.get(e["door"].split("#", 1)[0]), "trapped", False))
-    door_notes = [{"door": e["door"], "dm_notes": doors[e["door"].split("#", 1)[0]].dm_notes}
+                     if getattr(_door_for(doors, e["door"]), "trapped", False))
+    door_notes = [{"door": e["door"], "dm_notes": _door_for(doors, e["door"]).dm_notes}
                   for e in exits + secret_exits
-                  if getattr(doors.get(e["door"].split("#", 1)[0]), "dm_notes", None)]
+                  if getattr(_door_for(doors, e["door"]), "dm_notes", None)]
 
     # Features: described ones individually, plain ones counted by kind.
     features: list[dict] = []
@@ -215,9 +247,14 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
     feature_notes = [{"name": f.ref, "dm_notes": f.dm_notes} for f in obj.features
                      if f.dm_notes and not (f.secret or f.ref in secret_refs)]
 
-    # Annotations: the node's own texts plus map-level texts inside it.
-    texts = list(obj.texts) + [t for t in list(dmap.texts) + [t for l in dmap.layers for t in l.texts]
+    # Annotations: the node's own texts plus map-level texts inside it. A
+    # hidden layer is GM-only in its entirety — its texts never surface as
+    # perceived annotations, only as a DM-side hint that something is there.
+    visible_layer_texts = [t for l in dmap.layers if not l.hidden for t in l.texts]
+    hidden_layer_texts = [t for l in dmap.layers if l.hidden for t in l.texts]
+    texts = list(obj.texts) + [t for t in list(dmap.texts) + visible_layer_texts
                                if _owner(dmap, t.position) == node]
+    hidden_texts = [t for t in hidden_layer_texts if _owner(dmap, t.position) == node]
     annotations = []
     annotation_notes = []
     for t in texts:
@@ -227,17 +264,29 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
         annotations.append(a)
         if t.dm_notes:
             annotation_notes.append({"text": t.text, "dm_notes": t.dm_notes})
+    hidden_annotations = [{"text": t.text, "hidden_layer": True} for t in hidden_texts]
 
-    # Cross-map exits: the node's own plus map-level ones inside it.
-    xs = list(obj.exits) + [x for x in list(dmap.exits) + [x for l in dmap.layers for x in l.exits]
+    # Cross-map exits: the node's own plus map-level ones inside it. Exits
+    # authored inside a hidden layer are GM-only regardless of their own
+    # `secret` flag, for the same reason as the texts above.
+    visible_layer_exits = [x for l in dmap.layers if not l.hidden for x in l.exits]
+    hidden_layer_exits = [x for l in dmap.layers if l.hidden for x in l.exits]
+    xs = list(obj.exits) + [x for x in list(dmap.exits) + visible_layer_exits
                             if _owner(dmap, x.position) == node]
-    map_exits, secret_map_exits = [], []
-    for x in xs:
+    hidden_xs = [x for x in hidden_layer_exits if _owner(dmap, x.position) == node]
+
+    def _exit_item(x) -> dict:
         item = {"target_map": x.target_map,
                 "label": x.label.text if x.label is not None else None}
         if x.description:
             item["description"] = x.description
-        (secret_map_exits if x.secret else map_exits).append(item)
+        return item
+
+    map_exits, secret_map_exits = [], []
+    for x in xs:
+        (secret_map_exits if x.secret else map_exits).append(_exit_item(x))
+    for x in hidden_xs:
+        secret_map_exits.append(_exit_item(x))
 
     return {
         "id": node,
@@ -261,6 +310,7 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
             "secret_features": secret_features,
             "feature_notes": feature_notes,
             "annotation_notes": annotation_notes,
+            "hidden_annotations": hidden_annotations,
             "secret_map_exits": secret_map_exits,
         },
     }
