@@ -97,11 +97,13 @@ secret either way).
 **"What is secret" lives in one place: the `dungml.room_context` module.**
 Its `room_context()` splits a room into `perceived` (boxed text, visible
 features, doors the party has found) and `dm_only` (notes, unfound secret
-doors, traps, secret features), and its `node_exits()`/`known_map()` apply
+doors, traps, secret features, and the names of rooms beyond perceived exits
+whose far side the party hasn't entered — `perceived` gives those exits
+`to_label: null`, `dm_only.exit_labels` maps door key to name), and its `node_exits()`/`known_map()` apply
 the same discovered-vs-hidden split at the exit-list and whole-map level.
 The campaign and legacy contracts above call `room_context()`, the sessions
 routes (`routes/sessions.py`) call `node_exits()`, and the MCP server calls
-`known_map()` — all three go through this one module rather than
+both `node_exits()` and `known_map()` — all three go through this one module rather than
 re-deriving exits or secrecy themselves. If a caller needs "what can this
 room's occupant see," it belongs here, not a fresh walk of `graph.edges`.
 

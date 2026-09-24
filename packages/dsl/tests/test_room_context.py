@@ -68,10 +68,33 @@ def test_perceived_carries_boxed_text_and_visible_exits():
     assert p["description"] == "A vaulted hall."
     by_door = {e["door"]: e for e in p["exits"]}
     assert by_door["10,5"]["to"] == "corridor.c1"
-    assert by_door["10,5"]["to_label"] == "Long Walk"
+    # The corridor beyond hasn't been entered: its name is DM-side only.
+    assert by_door["10,5"]["to_label"] is None
+    assert ctx["dm_only"]["exit_labels"]["10,5"] == "Long Walk"
     assert by_door["10,5"]["state"] == "closed"
     assert by_door["0,5"]["to"] is None            # boundary opening
     assert "5,10" not in by_door                    # secret, unfound
+
+
+def test_unexplored_exit_label_is_dm_only():
+    d, g = _setup()
+    ctx = room_context(d, g, "room.hall", SessionView(discovered_doors=frozenset({"10,5", "0,5"})))
+    by_door = {e["door"]: e for e in ctx["perceived"]["exits"]}
+    assert by_door["10,5"]["far_side_explored"] is False
+    assert by_door["10,5"]["to_label"] is None
+    assert by_door["10,5"]["to"] == "corridor.c1"      # still usable to move/reveal
+    assert "Long Walk" not in str(ctx["perceived"])
+    assert ctx["dm_only"]["exit_labels"] == {"10,5": "Long Walk"}
+
+
+def test_explored_exit_keeps_its_label():
+    d, g = _setup()
+    view = SessionView(discovered_nodes=frozenset({"room.hall", "corridor.c1"}),
+                       discovered_doors=frozenset({"10,5"}))
+    ctx = room_context(d, g, "room.hall", view)
+    by_door = {e["door"]: e for e in ctx["perceived"]["exits"]}
+    assert by_door["10,5"]["to_label"] == "Long Walk"
+    assert "10,5" not in ctx["dm_only"]["exit_labels"]
 
 
 def test_dm_only_holds_notes_secrets_and_traps():

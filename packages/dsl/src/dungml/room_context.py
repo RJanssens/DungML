@@ -219,7 +219,18 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
         d = _door_for(doors, e["door"])
         if d is not None and d.description:
             e["description"] = d.description
-    perceived_exits = [e for e in exits if e["discovered"]]
+    # A way out the party has seen, into a node it has never entered: the
+    # door is perceived, what lies beyond is not. `to` stays (a node id is
+    # what callers move or reveal with, never narrated); the name goes to
+    # dm_only so the DM can still resolve it.
+    perceived_exits, exit_labels = [], {}
+    for e in exits:
+        if not e["discovered"]:
+            continue
+        if e["to"] and not e["far_side_explored"]:
+            exit_labels[e["door"]] = e["to_label"]
+            e = dict(e, to_label=None)
+        perceived_exits.append(e)
     undiscovered = [e for e in exits if not e["discovered"]]
     trapped = sorted(e["door"] for e in exits + secret_exits
                      if getattr(_door_for(doors, e["door"]), "trapped", False))
@@ -305,6 +316,7 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
             "notes": obj.dm_notes,
             "secret_exits": secret_exits,
             "undiscovered_exits": undiscovered,
+            "exit_labels": exit_labels,
             "trapped_doors": trapped,
             "door_notes": door_notes,
             "secret_features": secret_features,
