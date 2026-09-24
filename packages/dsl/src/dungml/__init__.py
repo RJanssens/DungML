@@ -17,6 +17,9 @@ from .graph import (
 )
 from .play import node_centroid, render_fogged, visible_doors
 from .geometry import party_start_node
+from .room_context import (
+    SessionView, candidates, known_map, node_exits, node_label, resolve_node, room_context,
+)
 from .model import (
     ArcEdge,
     ArcSegment,
@@ -132,5 +135,12 @@ __all__ = [
     "parse_scenario",
     "render",
     "render_scenario",
+    "SessionView",
+    "candidates",
+    "known_map",
+    "node_exits",
+    "node_label",
+    "resolve_node",
+    "room_context",
     "validate",
 ]
