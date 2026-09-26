@@ -502,7 +502,21 @@ def node_centroid(dmap: DungeonMap, node_id: str) -> Optional[Vec2]:
         if room is None:
             return None
         poly = room_polygon(room)
-        return _centroid(poly) if poly else None
+        if len(poly) < 3:
+            return None
+        # A point inside the room even when it is concave (an L's vertex
+        # average can sit outside it): the pole of inaccessibility.
+        from shapely.geometry import Polygon
+        from shapely.ops import polylabel
+
+        shape = Polygon(poly).buffer(0)
+        if shape.is_empty or shape.geom_type != "Polygon":
+            return _centroid(poly)
+        if shape.contains(shape.centroid):
+            c = shape.centroid  # rectangles and other convex rooms: as before
+            return (c.x, c.y)
+        p = polylabel(shape, tolerance=0.05)
+        return (p.x, p.y)
     if kind == "corridor":
         corr = _find_corridor(dmap, name)
         return _corridor_centroid(corr) if corr is not None else None

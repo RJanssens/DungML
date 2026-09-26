@@ -20,6 +20,7 @@ from ..geometry import (
     cut_wall,
     party_start_point,
     project_onto_wall,
+    room_polygon,
     room_walls,
     wall_length,
 )
@@ -54,7 +55,10 @@ from ..model import (
     Window,
 )
 from .. import walk
+from ..labels import LINE_H as LABEL_LINE_H, feature_footprint, place_label
 from ..walls import corridor_outlines
+from shapely.geometry import Point, Polygon
+from shapely.ops import polylabel, unary_union
 from . import Renderer, register
 from .theme import THEMES, Theme, get_theme
 
@@ -2530,8 +2534,6 @@ class _RenderContext:
             x, y, anchor_h, baseline = self._label_anchor_from_align(
                 self._room_bbox(r), label.align_v, label.align_h
             )
-        else:
-            x, y = _room_centroid(r)
         size = LABEL_BASE_SIZE * label.size
         number = self.room_numbers.get(r.name)
         prefix = (
@@ -2539,7 +2541,19 @@ class _RenderContext:
             if number is not None and self.dmap.map.room_numbers
             else ""
         )
-        text = escape(prefix + label.text)
+        lines: tuple[str, ...] = (prefix + label.text,)
+        if label.position is None and label.align_v is None and label.align_h is None:
+            # Auto: inside the room, clear of its features, wrapped/shrunk to
+            # fit (dungml.labels). A rotated label keeps the inside point only.
+            room_poly = Polygon(room_polygon(r)).buffer(0)
+            if label.rotate:
+                pole = polylabel(room_poly, tolerance=0.05)
+                x, y = pole.x, pole.y
+            else:
+                placed = place_label(room_poly, self._label_obstacles(r, room_poly),
+                                     lines[0], size)
+                x, y, size, lines = placed.x, placed.y, placed.size, placed.lines
+        text = self._label_lines(lines)
         # In flipped-y mode we counter-flip so text isn't mirrored.
         if self.flip_y:
             transform = (
@@ -2554,6 +2568,32 @@ class _RenderContext:
             f'<text class="label"{self._src(r.span)} transform="{transform}" '
             f'text-anchor="{anchor_h}" dominant-baseline="{baseline}" '
             f'font-size="{_n(size)}">{text}</text>'
+        )
+
+    def _label_obstacles(self, r: Room, room_poly):  # type: ignore[no-untyped-def]
+        """What a room's auto label must not cover: the features in it (its
+        own, and freestanding ones placed inside it)."""
+        feats = list(r.features) + [
+            fi for fi in self._visible("features")
+            if fi not in r.features and room_poly.contains(Point(fi.position))
+        ]
+        if not feats:
+            return None
+        return unary_union([
+            feature_footprint(self.dmap.feature_defs.get(fi.ref), fi) for fi in feats
+        ])
+
+    @staticmethod
+    def _label_lines(lines: tuple[str, ...]) -> str:
+        """Label text: plain for one line, stacked tspans (centred on the
+        anchor) for more."""
+        if len(lines) == 1:
+            return escape(lines[0])
+        first = -(len(lines) - 1) / 2 * LABEL_LINE_H
+        return "".join(
+            f'<tspan x="0" dy="{_n(first if i == 0 else LABEL_LINE_H)}em">'
+            f"{escape(line)}</tspan>"
+            for i, line in enumerate(lines)
         )
 
     def _label_anchor_from_align(
@@ -2898,17 +2938,6 @@ def _t_on(w: LineWall, p: Vec2) -> float:
     if L2 == 0:
         return 0.0
     return ((p[0] - ax) * dx + (p[1] - ay) * dy) / L2
-
-
-def _room_centroid(r: Room) -> Vec2:
-    pts: list[Vec2] = []
-    for w in room_walls(r):
-        pts.append(w.a)
-    if not pts:
-        return (0.0, 0.0)
-    sx = sum(p[0] for p in pts) / len(pts)
-    sy = sum(p[1] for p in pts) / len(pts)
-    return (sx, sy)
 
 
 def _point_segment_dist(p: Vec2, a: Vec2, b: Vec2) -> float:
