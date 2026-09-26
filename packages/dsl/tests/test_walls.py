@@ -1,8 +1,8 @@
 """Corridor wall geometry (`dungml.walls`).
 
-A corridor is a polygon (its centreline buffered by half its width plus half
-a wall stroke, so the wall line sits where the old stroked band's centre
-did). Its walls are that polygon's outline. Where a corridor ends at a door,
+A corridor is a polygon (its centreline buffered by half its width), and its
+walls are that polygon's outline — centred on the corridor's edge, exactly
+as a room's walls are centred on the room's. Where a corridor ends at a door,
 the end is snapped — extended or trimmed — onto the wall the door sits on,
 so the corridor's end wall and the host wall coincide and the door cuts one
 door-wide opening through both. Openings exist only at doors and exits:
@@ -45,7 +45,7 @@ door at 18,9 { connects room.b, corridor.k }
 
 def test_straight_corridor_between_doors_is_a_clean_rectangle() -> None:
     o = _outlines(STRAIGHT)["k"]
-    r = 1 + WS / 2
+    r = 1.0
     minx, miny, maxx, maxy = o.polygon.bounds
     assert (minx, maxx) == (14, 18)  # ends exactly on the room walls
     assert math.isclose(miny, 9 - r) and math.isclose(maxy, 9 + r)
@@ -90,7 +90,7 @@ def test_corridor_meeting_an_oblique_wall_reaches_it_across_its_full_width() -> 
         + "door at 12,8 { connects room.a, corridor.k }\n"
     )["k"]
     assert _beyond_diagonal(o.polygon) < 1e-6  # no overhang into the room
-    r = 1 + WS / 2
+    r = 1.0
     # The end edge lies on the wall: its length is the width / cos(angle).
     cos = abs((12 / math.hypot(4, 12)))  # wall direction vs corridor normal
     assert math.isclose(_on_diagonal(o.polygon), 2 * r / cos, rel_tol=1e-3)
@@ -123,7 +123,7 @@ def test_t_junction_door_into_another_corridors_side() -> None:
         "door at 16,9 { connects corridor.a, corridor.b width 2 type open }\n"
     )
     a, b = outs["a"], outs["b"]
-    r = 1 + WS / 2
+    r = 1.0
     # b's end snapped onto a's near side wall (y = 10 - r).
     assert math.isclose(b.polygon.bounds[3], 10 - r)
     # The open door cuts both a's side wall and b's end wall.
@@ -155,7 +155,7 @@ def test_unconnected_crossing_corridors_stay_layered() -> None:
         'corridor "v" { width 2 segment line from 10,2 to 10,18 }\n'
     )
     # No door, no opening: each keeps its walls through the crossing.
-    r = 1 + WS / 2
+    r = 1.0
     assert _wall_hits(outs["h"], (10, 10 + r))
     assert _wall_hits(outs["v"], (10 + r, 10))
 
@@ -168,14 +168,14 @@ def test_branches_of_one_corridor_merge_without_inner_walls() -> None:
     )["x"]
     assert o.polygon.geom_type == "Polygon"
     walls = _walls(o)
-    assert min(w.distance(Point(10, 10)) for w in walls) > 1 + WS / 2 - 1e-6
+    assert min(w.distance(Point(10, 10)) for w in walls) > 1 - 1e-6
 
 
 def test_straight_corners_are_mitred_and_round_corners_are_round() -> None:
     body = 'corridor "k" {{ width 2 {c} segment line from 5,5 to 15,5 segment line from 15,5 to 15,15 }}'
     sharp = _outlines(body.format(c="corners straight"))["k"].polygon
     round_ = _outlines(body.format(c="corners round"))["k"].polygon
-    r = 1 + WS / 2
+    r = 1.0
     outer = Point(15 + r, 5 - r)  # the outer corner of the bend
     assert sharp.buffer(1e-6).contains(outer)
     assert not round_.buffer(1e-6).contains(outer)
@@ -195,7 +195,7 @@ def test_door_on_a_room_corner_snaps_onto_both_walls() -> None:
         "door at 12,20 { connects room.f, corridor.k type arch }\n"
     )["k"]
     room = Polygon(room_pts)
-    r = 0.7 + WS / 2
+    r = 0.7
     assert o.polygon.intersection(room).area < 1e-6  # nothing inside the room
     touching = o.polygon.boundary.intersection(room.boundary.buffer(1e-6)).length
     assert touching >= r  # the entering half rests on the room outline
@@ -215,3 +215,22 @@ def test_door_on_a_circular_room_snaps_onto_the_curve() -> None:
     circle = Polygon(circle_points((10, 10), 5))  # the 64-gon the renderer draws
     assert o.polygon.intersection(circle).area < 1e-3
     assert o.polygon.distance(circle) < 1e-6  # no gap between floor and room
+
+
+def test_corridor_walls_lie_on_its_edge_like_room_walls() -> None:
+    # A room abutting a corridor's side (Stonehell 1B's crypts along the
+    # column-10 corridor) must share one wall line with it. The outline used
+    # to sit half a wall stroke outside the corridor edge, so the two walls
+    # ran side by side 0.09 apart and notched around every door.
+    o = corridor_outlines(parse(
+        HEAD + 'room "crypt" { rect 11,13 2 x 2 }\n'
+        'corridor "k" { width 1 segment line from 10.5,6 to 10.5,20 }\n'
+        "door at 11,14 { connects room.crypt, corridor.k }\n"
+    ), wall_stroke=WS)["k"]
+    minx, _, maxx, _ = o.polygon.bounds
+    assert (minx, maxx) == (10.0, 11.0)
+    on_edge = [
+        (a, b) for path in o.wall_paths for a, b in zip(path, path[1:])
+        if abs(a[0] - 11.0) < 1e-9 and abs(b[0] - 11.0) < 1e-9
+    ]
+    assert on_edge, "a wall run along x = 11, where the crypt's west wall is"

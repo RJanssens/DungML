@@ -116,8 +116,8 @@ def test_corridor_floor_uses_width(crypt_source):
         if e.get("class") == "corridor-floor"
     ]
     assert len(floors) >= 1
-    # A straight corridor's floor spans its width plus one wall stroke (half
-    # a stroke each side: the wall line sits on the floor's edge).
+    # A straight corridor's floor spans exactly its width; its walls are
+    # centred on that edge, as a room's are.
     src = """
     map "X" { grid { bounds 20 x 10 } }
     corridor "c" { width 2 segment line from 2,5 to 18,5 }
@@ -127,7 +127,7 @@ def test_corridor_floor_uses_width(crypt_source):
         if e.get("class") == "corridor-floor"
     )
     ys = [float(v) for v in re.findall(r"[\d.]+,([\d.]+)", floor.get("d"))]
-    assert abs((max(ys) - min(ys)) - (2 + 0.18)) < 1e-6
+    assert abs((max(ys) - min(ys)) - 2) < 1e-6
 
 
 def test_y_axis_flips_for_bottom_left_origin():
