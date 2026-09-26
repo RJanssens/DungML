@@ -198,7 +198,7 @@ starting point for your own glyphs.
 
 ### Glyph index
 
-Thirty-two built-in features (two are aliases):
+Forty-one built-in features (two are aliases):
 
 #### Obstacles & traps
 
@@ -210,6 +210,7 @@ Thirty-two built-in features (two are aliases):
 | `pit-trap` (alias `trap`) | circle with an X |
 | `dart-trap` | circle with a dart/arrow across it |
 | `fire-trap` | circle with a flame |
+| `shock-trap` | circle with a lightning bolt |
 
 #### Furniture & fittings
 
@@ -222,6 +223,9 @@ Thirty-two built-in features (two are aliases):
 | `brazier` | circle with a flame |
 | `statue` | solid disc with a white star |
 | `marker` | small solid dot |
+| `well` | ring around a solid shaft |
+| `wall-glyph` | circle with a carved six-armed sigil |
+| `direction-sign` | post with a pointing board (`city.dmap`'s coloured `signpost` is separate) |
 
 #### Stairs
 

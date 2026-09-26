@@ -1,0 +1,29 @@
+{
+ "_about": "Michael Curtis' one-page-dungeon style in Stonehell: white gridded floor, flat grey (~136) rock, black numerals, grey door symbols. Thresholds measured on page 73 (Level 1A).",
+ "rock_grey": [118, 150],
+ "gridline_grey": [140, 200],
+ "text_dark": 80,
+ "label_height": [14, 26],
+ "floor_min_frac": 0.3,
+ "full_frac": 0.95,
+ "gridline_max": 205,
+ "template_half": {"across": 12, "along": 13},
+ "template_margin": 0.38,
+ "nms_px": 25,
+ "door_hollow_min": 230,
+ "_door_sure": "a door hit this good needs no hollow check: JPEG pages differ (page 77's doors measure 212-231 hollow, page 73's 244+); the one wall it guards against scored 0.39",
+ "door_sure": 0.45,
+ "templates": {
+  "door": {"type": "wooden"},
+  "S": {"type": "secret", "orient": "v"},
+  "S_h": {"type": "secret", "orient": "h"},
+  "arch": {"type": "arch"},
+  "arch2": {"type": "arch", "width": 2},
+  "locked": {"type": "wooden", "state": "locked", "mid_only": true},
+  "portcullis": {"type": "portcullis", "mid_only": true}
+ },
+ "_mid_cell": "1C draws doors and portcullises mid-cell, in the one-cell passage into a room; those cells are scanned along their middle line too",
+ "mid_cell_margin": 0.5,
+ "room_label": "^[0-9]+[A-Za-z]?$",
+ "feature_label": "^[A-Z]$"
+}
