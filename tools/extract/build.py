@@ -406,6 +406,23 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             regions.append(dict(kind="corridor", name=f"c{len(regions)}", cells=[]))
             for c in comp:
                 region[c] = len(regions) - 1
+        # a junction is not a corridor of its own: a one-cell piece where four corridors
+        # meet draws four sets of walls in one cell (1D's c83, c87). Fold each junction
+        # into its largest branch; entering that branch shows the junction and the
+        # mouths of the others, so fog still reveals one stretch at a time
+        if junction:
+            pieces = {int(region[c]) for c in cells}
+            for jr in sorted({int(region[c]) for c in junction}):
+                jcells = [tuple(c) for c in zip(*np.nonzero(region == jr))]
+                if not jcells or any(tuple(c) not in junction for c in jcells):
+                    continue
+                nbr = {int(region[ii, jj]) for c in jcells for _, ii, jj in nbrs(*c)
+                       if int(region[ii, jj]) in pieces and int(region[ii, jj]) != jr and open_between(c, (ii, jj))
+                       and not all(tuple(x) in junction for x in zip(*np.nonzero(region == region[ii, jj])))}
+                if nbr:
+                    host = max(nbr, key=lambda k: int((region == k).sum()))
+                    for c in jcells:
+                        region[c] = host
 
     for i in range(N):
         for j in range(N):
@@ -434,9 +451,23 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             m[int(round(i * P)):int(round((i + 1) * P)), int(round(j * P)):int(round((j + 1) * P))] = True
         return m
 
+    # an unassigned, mostly-rock cell next to several caves spills floor into only one
+    # of them — the one it borders most — or both outlines claim it and overlap (1C 8/9/11)
+    spill_owner: dict = {}
+    for i in range(N):
+        for j in range(N):
+            if region[i, j] >= 0:
+                continue
+            around = [int(region[i + di, j + dj]) for di in (-1, 0, 1) for dj in (-1, 0, 1)
+                      if 0 <= i + di < N and 0 <= j + dj < N and region[i + di, j + dj] >= 0]
+            if around:
+                spill_owner[(i, j)] = max(set(around), key=around.count)
+
     def contour_poly(cells, tol):
+        rid = int(region[cells[0]])
         near = {(i + di, j + dj) for i, j in cells for di in (-1, 0, 1) for dj in (-1, 0, 1)
-                if 0 <= i + di < N and 0 <= j + dj < N and region[i + di, j + dj] < 0}
+                if 0 <= i + di < N and 0 <= j + dj < N and region[i + di, j + dj] < 0
+                and spill_owner.get((i + di, j + dj)) == rid}
         m = nd.binary_opening(~rock & cell_px_mask(set(cells) | near), np.ones((3, 3)))
         lab, n = nd.label(m)
         if n == 0:

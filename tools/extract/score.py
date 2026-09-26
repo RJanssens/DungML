@@ -95,7 +95,7 @@ def main(job: Job) -> dict:
     dmap = parse(src, path=job.dmap)
     diags = validate(dmap)
     errors = [d.message for d in diags if d.severity == "error"]
-    warnings = [d.message for d in diags if d.severity == "warning"]
+    warnings = [d.message for d in diags if d.severity == "warning"] + overlaps(dmap)
     reviewed = review_warnings(job, dmap, warnings)
     out = {"iou": round(iou, 3), "errors": errors, "warnings": reviewed}
 
@@ -123,6 +123,33 @@ def main(job: Job) -> dict:
         tag = f"expected — {w['expected']}" if w.get("expected") else "UNEXPECTED — fix it, or add to job.json expected_warnings"
         print(f"  warning: {w['message']}" + (f" [at {w['at']}]" if w.get("at") else "") + f"  ({tag})")
     out["rc"] = 1 if errors or unexpected else 0
+    return out
+
+
+def overlaps(dmap, min_area: float = 0.25) -> list[str]:
+    """Spaces drawn on top of each other. The validator doesn't check this: two
+    corridors (or a corridor and a room) covering the same floor draw two sets of
+    walls there, and fog reveals the floor twice. Reported as warnings, reviewed
+    like the validator's."""
+    from dungml.geometry import corridor_polygons, overlap_area, room_polygon
+    shapes = [(f"room.{n}", [room_polygon(r)]) for n, r in dmap.rooms.items()]
+    shapes += [(f"corridor.{n}", corridor_polygons(c)) for n, c in dmap.corridors.items()]
+
+    def box(polys):
+        xs = [p[0] for poly in polys for p in poly]
+        ys = [p[1] for poly in polys for p in poly]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    boxes = [box(p) if any(p) else None for _, p in shapes]
+    out = []
+    for i in range(len(shapes)):
+        for j in range(i + 1, len(shapes)):
+            a, b = boxes[i], boxes[j]
+            if not a or not b or a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]:
+                continue
+            area = sum(overlap_area(pa, pb) for pa in shapes[i][1] for pb in shapes[j][1])
+            if area > min_area:
+                out.append(f"{shapes[i][0]} and {shapes[j][0]} overlap by {area:.1f} cells")
     return out
 
 

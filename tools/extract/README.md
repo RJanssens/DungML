@@ -147,7 +147,12 @@ explained**. A warning is a decision: fix the map, or list it in `job.json`:
 ```
 
 Generated corridor names change between builds, so dead ends are matched by
-place (within 1.5 cells), not by name. Most warnings on these maps turned out
+place (within 1.5 cells), not by name.
+
+`score` adds one check the validator doesn't have: **overlapping spaces**
+(two rooms or corridors covering the same floor by more than a quarter of a
+cell), which draw two sets of walls there. It found neighbouring caves both
+claiming a rock cell's floor on 1C. Most warnings on these maps turned out
 to be real defects when first looked at (a cave's stray floor as a corridor, a
 secret room that was a dead-end corridor, a statue alcove cut off its room);
 the ones that remain are exits, which the validator doesn't count.
