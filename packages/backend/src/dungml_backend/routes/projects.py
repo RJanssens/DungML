@@ -5,7 +5,7 @@ import io
 import json
 import re
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
@@ -170,7 +170,7 @@ def list_project_sessions(
                     updated_at=s.updated_at,
                 )
             )
-    out.sort(key=lambda r: r.updated_at or datetime.min, reverse=True)
+    out.sort(key=lambda r: r.updated_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     return out
 
 
