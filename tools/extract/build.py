@@ -587,7 +587,12 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         if r["name"] in label_box:   # where the page prints it
             x0, y0, x1, y1 = label_box[r["name"]]
             shown = label_room_of.get(r["name"], r["name"])
-            out.append(f'  label "{shown}" at {fmt((x0 + x1) / 2 / P)},{fmt((y0 + y1) / 2 / P)}')
+            lx, ly = (x0 + x1) / 2 / P, (y0 + y1) / 2 / P
+            # the page may print a number right next to an icon; on the map a label over a
+            # feature hides it, so let the renderer find a clear spot instead
+            crowded = any(abs(f["at"][0] - lx) < 0.7 and abs(f["at"][1] - ly) < 0.7
+                          for f in feats_in.get(region[cells[0]], []))
+            out.append(f'  label "{shown}"' + ("" if crowded else f" at {fmt(lx)},{fmt(ly)}"))
         key = desc["rooms"].get(label_room_of.get(r["name"], r["name"]))
         extra = notes_in.get(region[cells[0]], {"description": [], "dm_notes": []})
         d_parts = ([key["description"]] if key else []) + extra["description"]
@@ -769,7 +774,20 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         out += ["}", ""]
         stats["door_" + c["type"]] += 1
 
-    job.dmap.write_text("\n".join(out) + "\n")
+    text = "\n".join(out) + "\n"
+    # a label the validator finds sitting on a feature (it knows each feature's
+    # footprint) loses its `at`, so the renderer places it clear of the room's features
+    try:
+        from dungml import parse
+        from dungml.validate import validate
+        flagged = {m.group(1) for d in validate(parse(text, path=job.dmap))
+                   if (m := re.match(r"room '([^']+)' label at .* sits on feature", d.message))}
+        for nm in flagged:
+            text = re.sub(rf'(?ms)^(room "{re.escape(nm)}" \{{.*?^  label "[^"]*") at [\d.]+,[\d.]+', r"\1", text, count=1)
+        stats["labels_unpinned"] = len(flagged)
+    except Exception as e:                 # validation problems surface in `score`
+        print(f"build: label check skipped ({e})")
+    job.dmap.write_text(text)
     np.save(job.work / "region.npy", region)
     save_json(job.work / "walls.json", sorted([list(map(list, e)) for e in detected_walls]))
     save_json(job.work / "seg.json", {"labels": {k: list(v) for k, v in labels.items()},
