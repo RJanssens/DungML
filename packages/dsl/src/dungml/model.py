@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 Vec2 = tuple[float, float]
 
@@ -590,3 +590,9 @@ class DungeonMap(BaseModel):
     # Set on files whose top-level construct is `scenario "..." { ... }`
     # instead of (or as well as) a `map { ... }` block.
     scenario: Optional["Scenario"] = None
+    # Same-file redefinitions the parser saw — `(kind, name, first, again)`.
+    # The dicts above keep only the last definition, so the validator can't
+    # see these any other way. Private: not part of the serialised model.
+    _redefinitions: list[tuple[str, str, SourceSpan, SourceSpan]] = PrivateAttr(
+        default_factory=list
+    )

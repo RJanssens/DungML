@@ -9,6 +9,8 @@ decide whether to treat warnings as fatal.
 """
 from __future__ import annotations
 
+import difflib
+
 from .builtins import BUILTIN_FEATURES
 from .errors import Diagnostic
 from .geometry import Area, corridor_polygons, find_overlapping_areas, room_polygon
@@ -27,10 +29,32 @@ KNOWN_AREA_KINDS = {
     "slime", "swamp",
 }
 KNOWN_LINE_FEATURE_KINDS = {"bars", "curtain", "barred", "step"}
+# Door types with their own glyph or graph meaning, plus the documented
+# materials (which draw a plain leaf). Aliases are the spellings the renderer
+# and `graph` already special-case.
+KNOWN_DOOR_TYPES = frozenset({
+    "wooden", "iron", "stone",
+    "secret", "concealed", "hidden",
+    "open", "opening", "gap",
+    "arch", "archway", "smashed", "broken",
+    "portcullis", "gate", "gates",
+    "double", "double-door", "double_door",
+    "one-way", "oneway", "one_way",
+})
+# Authored states, the blocking ones `graph.BLOCKING_STATES` understands, and
+# the runtime words play sessions record.
+KNOWN_DOOR_STATES = frozenset({
+    "closed", "open", "ajar", "unlocked", "trapped",
+    "locked", "barred", "stuck", "sealed",
+    "opened", "forced", "broken",
+})
+KNOWN_LINE_STYLES = frozenset({"solid", "organic", "ruined", "dotted", "dashed", "trail"})
+KNOWN_CORNERS = frozenset({"round", "straight"})
 from .model import (
     BoundaryRoom,
     CircleRoom,
     Corridor,
+    Door,
     DungeonMap,
     FeatureInstance,
     GlyphPolygon,
@@ -40,6 +64,7 @@ from .model import (
     RectRoom,
     Room,
     SourceSpan,
+    Window,
 )
 
 
@@ -55,6 +80,16 @@ def _diag(severity: str, message: str, span: SourceSpan | None = None) -> Diagno
     )
 
 
+def _duplicate(kind: str, name: str, first: SourceSpan, again: SourceSpan) -> Diagnostic:
+    where = f" (first defined on line {first.line})" if first.line else ""
+    return _diag(
+        "warning",
+        f"duplicate {kind} '{name}'{where}: only one definition is used, "
+        f"the other is silently dropped",
+        again,
+    )
+
+
 def _in_bounds(pos: tuple[float, float], w: float, h: float) -> bool:
     x, y = pos
     return 0 <= x <= w and 0 <= y <= h
@@ -67,8 +102,11 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     bh = dmap.map.grid.bounds_h
 
     known_features = set(dmap.feature_defs.keys())
-    known_rooms = set(dmap.rooms.keys())
-    known_corridors = set(dmap.corridors.keys())
+    known_rooms = set(dmap.rooms) | {r.name for l in dmap.layers for r in l.rooms}
+    known_corridors = set(dmap.corridors) | {
+        c.name for l in dmap.layers for c in l.corridors
+    }
+    all_doors = [*dmap.doors, *(d for l in dmap.layers for d in l.doors)]
 
     ps = dmap.map.party_start
     if ps is not None and ps.ref is not None:
@@ -132,14 +170,36 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                     )
                 )
 
+    # ---- misspelt enum values (warnings: unknown values still render) ----
+    def check_choice(
+        value: str | None, known: frozenset[str], what: str, span: SourceSpan
+    ) -> None:
+        if value is None or value.lower() in known:
+            return
+        close = difflib.get_close_matches(value.lower(), sorted(known), n=1)
+        hint = f"; did you mean '{close[0]}'?" if close else ""
+        diags.append(
+            _diag(
+                "warning",
+                f"{what} '{value}' is not recognised{hint} "
+                f"(known: {', '.join(sorted(known))})",
+                span,
+            )
+        )
+
+    def check_line_style(value: str | None, owner: str, span: SourceSpan) -> None:
+        check_choice(value, KNOWN_LINE_STYLES, f"{owner} line_style", span)
+
     # ---- rooms ----
-    for name, room in dmap.rooms.items():
+    def check_room(name: str, room: Room, *, layer: str | None) -> None:
+        where = f" in layer '{layer}'" if layer else ""
+        scope = f"layer '{layer}' room '{name}'" if layer else f"room '{name}'"
         if isinstance(room.shape, RectRoom):
             if room.shape.width <= 0 or room.shape.height <= 0:
                 diags.append(
                     _diag(
                         "error",
-                        f"room '{name}' has non-positive dimensions "
+                        f"room '{name}'{where} has non-positive dimensions "
                         f"({room.shape.width} x {room.shape.height})",
                         room.span,
                     )
@@ -149,8 +209,8 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 diags.append(
                     _diag(
                         "error",
-                        f"room '{name}' polygon has only {len(room.shape.points)} "
-                        f"point(s); need at least 3",
+                        f"room '{name}'{where} polygon has only "
+                        f"{len(room.shape.points)} point(s); need at least 3",
                         room.span,
                     )
                 )
@@ -159,8 +219,8 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 diags.append(
                     _diag(
                         "error",
-                        f"room '{name}' boundary has only {len(room.shape.edges)} "
-                        f"edge(s); need at least 2",
+                        f"room '{name}'{where} boundary has only "
+                        f"{len(room.shape.edges)} edge(s); need at least 2",
                         room.span,
                     )
                 )
@@ -169,7 +229,7 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 diags.append(
                     _diag(
                         "error",
-                        f"room '{name}' has non-positive radius "
+                        f"room '{name}'{where} has non-positive radius "
                         f"({room.shape.radius})",
                         room.span,
                     )
@@ -181,40 +241,58 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 diags.append(
                     _diag(
                         "warning",
-                        f"room '{name}' label position {room.label.position} is outside "
-                        f"the map bounds",
+                        f"room '{name}'{where} label position "
+                        f"{room.label.position} is outside the map bounds",
                         room.span,
                     )
                 )
-
+        check_line_style(room.line_style, f"room '{name}'{where}", room.span)
         for fi in room.features:
-            check_feature_inst(fi, scope=f"room '{name}'")
-
-    # ---- top-level (map-wide) features ----
-    for fi in dmap.features:
-        check_feature_inst(fi, scope="map")
+            check_feature_inst(fi, scope=scope)
+        for ex in room.exits:
+            check_exit(ex, scope=scope)
+        for lf in room.line_features:
+            check_line_feature(lf, scope=scope)
+        for a in room.areas:
+            check_area(a, scope=scope)
+        for ta in room.texts:
+            check_text(ta)
 
     # ---- corridors ----
-    for name, corr in dmap.corridors.items():
+    def check_corridor(name: str, corr: Corridor, *, layer: str | None) -> None:
+        where = f" in layer '{layer}'" if layer else ""
+        scope = f"layer '{layer}' corridor '{name}'" if layer else f"corridor '{name}'"
         # width 0 is allowed — it renders as a single centerline (a route /
         # passage line). Only a negative width is an error.
         if corr.width < 0:
             diags.append(
                 _diag(
                     "error",
-                    f"corridor '{name}' has negative width ({corr.width})",
+                    f"corridor '{name}'{where} has negative width ({corr.width})",
                     corr.span,
                 )
             )
         if not corr.segments:
             diags.append(
-                _diag("warning", f"corridor '{name}' has no segments", corr.span)
+                _diag("warning", f"corridor '{name}'{where} has no segments", corr.span)
             )
+        check_line_style(corr.line_style, f"corridor '{name}'{where}", corr.span)
+        check_choice(
+            corr.corners, KNOWN_CORNERS, f"corridor '{name}'{where} corners", corr.span
+        )
         for fi in corr.features:
-            check_feature_inst(fi, scope=f"corridor '{name}'")
+            check_feature_inst(fi, scope=scope)
+        for ex in corr.exits:
+            check_exit(ex, scope=scope)
+        for lf in corr.line_features:
+            check_line_feature(lf, scope=scope)
+        for a in corr.areas:
+            check_area(a, scope=scope)
+        for ta in corr.texts:
+            check_text(ta)
 
     # ---- doors ----
-    for door in dmap.doors:
+    def check_door(door: Door) -> None:
         if not door.connects:
             diags.append(
                 _diag(
@@ -261,35 +339,15 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                     door.span,
                 )
             )
-
-    # ---- duplicate doors (two doors joining the same pair of nodes) ----
-    seen_pairs: dict[frozenset, tuple] = {}
-    for door in dmap.doors:
-        valid = []
-        for ref in door.connects:
-            kind, _, ident = ref.partition(".")
-            if (kind == "room" and ident in known_rooms) or (
-                kind == "corridor" and ident in known_corridors
-            ):
-                valid.append(ref)
-        if len(valid) != 2:
-            continue  # boundary exits / multi-refs aren't "duplicates"
-        pair = frozenset(valid)
-        if pair in seen_pairs:
-            a, b = sorted(valid)
-            diags.append(
-                _diag(
-                    "warning",
-                    f"door at {door.position} duplicates the connection "
-                    f"{a} ↔ {b} (already joined by a door at {seen_pairs[pair]})",
-                    door.span,
-                )
-            )
-        else:
-            seen_pairs[pair] = door.position
+        check_choice(
+            door.type, KNOWN_DOOR_TYPES, f"door at {door.position}: door type", door.span
+        )
+        check_choice(
+            door.state, KNOWN_DOOR_STATES, f"door at {door.position}: door state", door.span
+        )
 
     # ---- windows ----
-    for win in dmap.windows:
+    def check_window(win: Window) -> None:
         if not win.in_ref:
             diags.append(
                 _diag("error", f"window at {win.position} is missing `in`", win.span)
@@ -329,10 +387,8 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 )
             )
 
-    # ---- text annotations (top-level + nested in rooms/corridors) ----
-    nested_texts = [ta for r in dmap.rooms.values() for ta in r.texts]
-    nested_texts += [ta for c in dmap.corridors.values() for ta in c.texts]
-    for ta in [*dmap.texts, *nested_texts]:
+    # ---- text annotations ----
+    def check_text(ta) -> None:
         if ta.size <= 0:
             diags.append(
                 _diag(
@@ -363,6 +419,7 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                     a.span,
                 )
             )
+        check_line_style(a.line_style, f"area '{a.name}'{where}", a.span)
         if a.kind not in KNOWN_AREA_KINDS:
             diags.append(
                 _diag(
@@ -373,15 +430,6 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                     a.span,
                 )
             )
-
-    for a in dmap.areas:
-        check_area(a, scope="map")
-    for name, room in dmap.rooms.items():
-        for a in room.areas:
-            check_area(a, scope=f"room '{name}'")
-    for name, corr in dmap.corridors.items():
-        for a in corr.areas:
-            check_area(a, scope=f"corridor '{name}'")
 
     # ---- line features (bars / curtain / barred) ----
     def check_line_feature(lf, *, scope: str) -> None:
@@ -416,16 +464,6 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                     )
                 )
 
-    for lf in dmap.line_features:
-        check_line_feature(lf, scope="map")
-    # Line features nested in rooms/corridors aren't hoisted — check in place.
-    for name, room in dmap.rooms.items():
-        for lf in room.line_features:
-            check_line_feature(lf, scope=f"room '{name}'")
-    for name, corr in dmap.corridors.items():
-        for lf in corr.line_features:
-            check_line_feature(lf, scope=f"corridor '{name}'")
-
     # ---- exits (cross-map transitions) ----
     # The target map lives elsewhere in the project, so we can't verify it
     # (or the landing coordinates) here — that's a whole-project concern the
@@ -451,46 +489,93 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 )
             )
 
+    # ---- walk every scope: top level, then each layer ----
+    for fi in dmap.features:
+        check_feature_inst(fi, scope="map")
+    for a in dmap.areas:
+        check_area(a, scope="map")
+    for lf in dmap.line_features:
+        check_line_feature(lf, scope="map")
     for ex in dmap.exits:
         check_exit(ex, scope="map")
-    # Exits nested in rooms/corridors aren't hoisted, so check them in place.
+    for ta in dmap.texts:
+        check_text(ta)
     for name, room in dmap.rooms.items():
-        for ex in room.exits:
-            check_exit(ex, scope=f"room '{name}'")
+        check_room(name, room, layer=None)
     for name, corr in dmap.corridors.items():
-        for ex in corr.exits:
-            check_exit(ex, scope=f"corridor '{name}'")
-
-    # ---- layers ----
+        check_corridor(name, corr, layer=None)
+    for door in dmap.doors:
+        check_door(door)
+    for win in dmap.windows:
+        check_window(win)
     for layer in dmap.layers:
+        scope = f"layer '{layer.name}'"
         for fi in layer.features:
-            check_feature_inst(fi, scope=f"layer '{layer.name}'")
+            check_feature_inst(fi, scope=scope)
         for a in layer.areas:
-            check_area(a, scope=f"layer '{layer.name}'")
+            check_area(a, scope=scope)
         for lf in layer.line_features:
-            check_line_feature(lf, scope=f"layer '{layer.name}'")
+            check_line_feature(lf, scope=scope)
         for ex in layer.exits:
-            check_exit(ex, scope=f"layer '{layer.name}'")
+            check_exit(ex, scope=scope)
+        for ta in layer.texts:
+            check_text(ta)
         for room in layer.rooms:
-            for ex in room.exits:
-                check_exit(ex, scope=f"layer '{layer.name}' room '{room.name}'")
-            for lf in room.line_features:
-                check_line_feature(
-                    lf, scope=f"layer '{layer.name}' room '{room.name}'"
-                )
-            for a in room.areas:
-                check_area(a, scope=f"layer '{layer.name}' room '{room.name}'")
+            check_room(room.name, room, layer=layer.name)
         for corr in layer.corridors:
-            for ex in corr.exits:
-                check_exit(ex, scope=f"layer '{layer.name}' corridor '{corr.name}'")
-            for lf in corr.line_features:
-                check_line_feature(
-                    lf, scope=f"layer '{layer.name}' corridor '{corr.name}'"
+            check_corridor(corr.name, corr, layer=layer.name)
+        for door in layer.doors:
+            check_door(door)
+        for win in layer.windows:
+            check_window(win)
+    check_choice(
+        dmap.map.default_corners, KNOWN_CORNERS, "map corners", dmap.map.span
+    )
+
+    # ---- duplicate doors (two doors joining the same pair of nodes) ----
+    seen_pairs: dict[frozenset, tuple] = {}
+    for door in all_doors:
+        valid = []
+        for ref in door.connects:
+            kind, _, ident = ref.partition(".")
+            if (kind == "room" and ident in known_rooms) or (
+                kind == "corridor" and ident in known_corridors
+            ):
+                valid.append(ref)
+        if len(valid) != 2:
+            continue  # boundary exits / multi-refs aren't "duplicates"
+        pair = frozenset(valid)
+        if pair in seen_pairs:
+            a, b = sorted(valid)
+            diags.append(
+                _diag(
+                    "warning",
+                    f"door at {door.position} duplicates the connection "
+                    f"{a} ↔ {b} (already joined by a door at {seen_pairs[pair]})",
+                    door.span,
                 )
-            for a in corr.areas:
-                check_area(
-                    a, scope=f"layer '{layer.name}' corridor '{corr.name}'"
-                )
+            )
+        else:
+            seen_pairs[pair] = door.position
+
+    # ---- duplicate names ----
+    # Same-file redefinitions (recorded by the parser — the model keeps only
+    # the last), then top-level vs layer and layer vs layer. The renderer and
+    # graph silently use one of each pair, so the other simply vanishes.
+    # (A main-file feature_def overriding an included one is intended and
+    # never reaches here: includes merge first-definition-wins.)
+    for kind, name, first, again in dmap._redefinitions:
+        diags.append(_duplicate(kind, name, first, again))
+    for kind, top, layered in (
+        ("room", dmap.rooms, [r for layer in dmap.layers for r in layer.rooms]),
+        ("corridor", dmap.corridors, [c for layer in dmap.layers for c in layer.corridors]),
+    ):
+        seen: dict[str, SourceSpan] = {n: e.span for n, e in top.items()}
+        for e in layered:
+            if e.name in seen:
+                diags.append(_duplicate(kind, e.name, seen[e.name], e.span))
+            else:
+                seen[e.name] = e.span
 
     # ---- overlapping areas (warning) ----
     # Compared only within a scope: top-level rooms/corridors together, and

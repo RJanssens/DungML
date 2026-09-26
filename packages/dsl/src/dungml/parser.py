@@ -1378,6 +1378,14 @@ class _Tx(Transformer):
         line_features: list[LineFeature] = []
         exits: list[Exit] = []
         layers: list[Layer] = []
+        redefinitions: list[tuple[str, str, SourceSpan, SourceSpan]] = []
+
+        def put(kind: str, table: dict[str, Any], item: Any) -> None:
+            prev = table.get(item.name)
+            if prev is not None:
+                redefinitions.append((kind, item.name, prev.span, item.span))
+            table[item.name] = item
+
         for item in items:
             if isinstance(item, MapConfig):
                 map_cfg = item
@@ -1388,13 +1396,13 @@ class _Tx(Transformer):
                     )
                 scenario_cfg = item
             elif isinstance(item, FeatureDef):
-                feature_defs[item.name] = item
+                put("feature_def", feature_defs, item)
             elif isinstance(item, Room):
-                rooms[item.name] = item
+                put("room", rooms, item)
             elif isinstance(item, Corridor):
-                corridors[item.name] = item
+                put("corridor", corridors, item)
             elif isinstance(item, Slice):
-                slices[item.name] = item
+                put("slice", slices, item)
             elif isinstance(item, FeatureInstance):
                 features.append(item)
             elif isinstance(item, Door):
@@ -1430,7 +1438,7 @@ class _Tx(Transformer):
             raise DmapParseError(
                 "included files must not contain a `map { ... }` block"
             )
-        return DungeonMap(
+        dmap = DungeonMap(
             map=map_cfg or MapConfig(name="<scenario>" if scenario_cfg else "<included>"),
             feature_defs=feature_defs,
             rooms=rooms,
@@ -1447,6 +1455,8 @@ class _Tx(Transformer):
             layers=layers,
             scenario=scenario_cfg,
         )
+        dmap._redefinitions = redefinitions
+        return dmap
 
 
 _parser: Lark | None = None
