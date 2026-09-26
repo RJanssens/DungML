@@ -136,6 +136,90 @@ feature_def "shock-trap" {
   }
 }
 
+# Arrow trap — an arrow across a circle (darts are `dart-trap`).
+feature_def "arrow-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from -0.25,0.12 to 0.22,-0.12
+    polygon fill (0.26,-0.14) (0.1,-0.14) (0.18,-0.02)
+    line stroke from -0.25,0.12 to -0.3,0.02
+    line stroke from -0.25,0.12 to -0.2,0.22
+  }
+}
+
+# Blade trap — a swinging blade (pendulum, guillotine, scything wall).
+feature_def "blade-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from 0,-0.3 to 0,0.05
+    path fill "M-0.2,0.05 Q0,0.3 0.2,0.05 Z"
+  }
+}
+
+# Crushing trap — walls or ceiling closing in: two arrows meeting on a bar.
+feature_def "crushing-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    line stroke from -0.2,0 to 0.2,0
+    polygon fill (-0.08,-0.28) (0.08,-0.28) (0,-0.08)
+    polygon fill (-0.08,0.28) (0.08,0.28) (0,0.08)
+  }
+}
+
+# Falling-block trap — a ceiling collapse or deadfall: a block over a line.
+feature_def "falling-block-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    rect fill at -0.12,-0.24 0.24 x 0.16
+    line stroke from 0,-0.02 to 0,0.1
+    line stroke from -0.22,0.18 to 0.22,0.18
+  }
+}
+
+# Tripwire — a taut line between two stakes.
+feature_def "tripwire" {
+  secret
+  glyph {
+    circle fill at -0.35,0 radius 0.06
+    circle fill at 0.35,0 radius 0.06
+    line stroke from -0.35,0 to 0.35,0
+  }
+}
+
+# Pressure plate — a square plate set in the floor.
+feature_def "pressure-plate" {
+  secret
+  glyph {
+    rect stroke at -0.3,-0.3 0.6 x 0.6
+    rect fill at -0.14,-0.14 0.28 x 0.28
+  }
+}
+
+# Glyph trap — a warding sigil that discharges when crossed (a door ward,
+# explosive runes, a chill-script).
+feature_def "glyph-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    polygon stroke (0,-0.25) (0.22,0.13) (-0.22,0.13)
+    circle fill at 0,0.02 radius 0.05
+  }
+}
+
+# Rotted floor — boards or flagstones that give way.
+feature_def "rotted-floor" {
+  secret
+  glyph {
+    rect stroke at -0.35,-0.35 0.7 x 0.7
+    polyline stroke (-0.3,-0.1) (-0.05,0.05) (0.1,-0.12) (0.3,0.1) fill-color "none"
+    polyline stroke (-0.1,0.3) (0.02,0.12) (0.2,0.28) fill-color "none"
+  }
+}
+
 # ---- furniture & fittings ----
 
 feature_def "chest" {
@@ -210,6 +294,212 @@ feature_def "direction-sign" {
   glyph {
     line stroke from 0,0.4 to 0,-0.3
     polygon fill (-0.38,-0.22) (-0.2,-0.38) (0.3,-0.38) (0.3,-0.06) (-0.2,-0.06)
+  }
+}
+
+# Gong — a disc hung in a frame.
+feature_def "gong" {
+  glyph {
+    line stroke from -0.38,-0.38 to -0.38,0.38
+    line stroke from 0.38,-0.38 to 0.38,0.38
+    line stroke from -0.38,-0.38 to 0.38,-0.38
+    circle stroke at 0,0.05 radius 0.26
+    circle fill at 0,0.05 radius 0.08
+  }
+}
+
+# Ladder — two rails and rungs (up or down: say which in its text).
+feature_def "ladder" {
+  glyph {
+    line stroke from -0.18,-0.42 to -0.18,0.42
+    line stroke from 0.18,-0.42 to 0.18,0.42
+    line stroke from -0.18,-0.25 to 0.18,-0.25
+    line stroke from -0.18,-0.05 to 0.18,-0.05
+    line stroke from -0.18,0.15 to 0.18,0.15
+    line stroke from -0.18,0.35 to 0.18,0.35
+  }
+}
+
+# Shaft — a round hole running up or down through the rock (a well is walled
+# and holds water; a pit is a trap).
+feature_def "shaft" {
+  glyph {
+    circle stroke at 0,0 radius 0.44
+    circle fill at 0,0 radius 0.34
+  }
+}
+
+# Murder hole — a slot in the ceiling for dropping things on intruders.
+feature_def "murder-hole" {
+  glyph {
+    rect stroke at -0.2,-0.2 0.4 x 0.4
+    line stroke from -0.2,-0.2 to 0.2,0.2
+    line stroke from -0.2,0.2 to 0.2,-0.2
+  }
+}
+
+# Loophole — an arrow slit in a wall; place it on the wall, rotated to face out.
+feature_def "loophole" {
+  glyph {
+    rect fill at -0.05,-0.3 0.1 x 0.6
+    line stroke from -0.2,0 to 0.2,0
+  }
+}
+
+# Pedestal — a plinth for a statue, bust or relic.
+feature_def "pedestal" {
+  glyph {
+    rect stroke at -0.3,-0.3 0.6 x 0.6
+    rect stroke at -0.18,-0.18 0.36 x 0.36
+  }
+}
+
+# Obelisk (monochrome) — common-dungeon.dmap's `obelisk` is coloured.
+feature_def "obelisk-mono" {
+  glyph {
+    polygon stroke (-0.2,0.35) (0.2,0.35) (0.12,-0.25) (0,-0.4) (-0.12,-0.25)
+    line stroke from -0.12,-0.25 to 0.12,-0.25
+  }
+}
+
+# Conjuring ring — a summoning circle inscribed in the floor (monochrome;
+# common-dungeon.dmap's `magic_circle` is coloured).
+feature_def "conjuring-ring" {
+  glyph {
+    circle stroke at 0,0 radius 0.42
+    circle stroke at 0,0 radius 0.32
+    polygon stroke (0,-0.32) (0.19,0.26) (-0.31,-0.1) (0.31,-0.1) (-0.19,0.26)
+  }
+}
+
+# Throne — a high-backed seat.
+feature_def "throne" {
+  glyph {
+    rect fill at -0.3,-0.4 0.6 x 0.18
+    rect stroke at -0.3,-0.22 0.6 x 0.5
+    line stroke from -0.3,0.28 to -0.3,0.4
+    line stroke from 0.3,0.28 to 0.3,0.4
+  }
+}
+
+# Dais — a raised platform: a square step inside a square.
+feature_def "dais" {
+  glyph {
+    rect stroke at -0.42,-0.42 0.84 x 0.84
+    rect stroke at -0.3,-0.3 0.6 x 0.6
+    line stroke from -0.42,-0.42 to -0.3,-0.3
+    line stroke from 0.42,-0.42 to 0.3,-0.3
+    line stroke from -0.42,0.42 to -0.3,0.3
+    line stroke from 0.42,0.42 to 0.3,0.3
+  }
+}
+
+# Lever — a handle in a slot.
+feature_def "lever" {
+  glyph {
+    rect stroke at -0.08,-0.05 0.16 x 0.35
+    line stroke from 0,0.05 to 0.2,-0.3
+    circle fill at 0.2,-0.3 radius 0.07
+  }
+}
+
+# Lens — a great crystal lens on a mount.
+feature_def "lens" {
+  glyph {
+    path stroke "M0,-0.35 Q0.25,0 0,0.35 Q-0.25,0 0,-0.35 Z" fill-color "none"
+    line stroke from -0.3,0.38 to 0.3,0.38
+  }
+}
+
+# Crystal — a faceted crystal or gem cluster.
+feature_def "crystal" {
+  glyph {
+    polygon stroke (0,-0.38) (0.2,-0.1) (0.12,0.3) (-0.12,0.3) (-0.2,-0.1)
+    line stroke from 0,-0.38 to 0,0.3
+    line stroke from -0.2,-0.1 to 0.2,-0.1
+  }
+}
+
+# Teleport pad — a marked disc that sends whoever stands on it elsewhere
+# (the destination is an `exit`; this is what the party sees).
+feature_def "teleport-pad" {
+  glyph {
+    circle stroke at 0,0 radius 0.38
+    circle stroke at 0,0 radius 0.22
+    circle fill at 0,0 radius 0.07
+  }
+}
+
+# Spout — a pipe mouth in the wall that pours water (or worse).
+feature_def "spout" {
+  glyph {
+    rect fill at -0.3,-0.1 0.3 x 0.2
+    path stroke "M0,0 Q0.2,0 0.25,0.3" fill-color "none"
+    path stroke "M0,0.08 Q0.12,0.1 0.15,0.3" fill-color "none"
+  }
+}
+
+# Pump — a hand pump over a cistern.
+feature_def "pump" {
+  glyph {
+    circle stroke at 0,0.1 radius 0.25
+    line stroke from 0,0.1 to 0,-0.3
+    line stroke from 0,-0.3 to 0.3,-0.2
+  }
+}
+
+# Mud mound — a heaped wallow of mud.
+feature_def "mud-mound" {
+  glyph {
+    path stroke "M-0.4,0.2 Q-0.2,-0.3 0,-0.1 Q0.2,-0.35 0.4,0.2 Z" fill-color "none"
+    path stroke "M-0.15,0.1 Q0,-0.05 0.15,0.1" fill-color "none"
+  }
+}
+
+# Totem pole — a carved post (skull post: `skull-post`).
+feature_def "totem-pole" {
+  glyph {
+    rect stroke at -0.12,-0.4 0.24 x 0.8
+    line stroke from -0.12,-0.13 to 0.12,-0.13
+    line stroke from -0.12,0.13 to 0.12,0.13
+    line stroke from -0.28,-0.3 to 0.28,-0.3
+  }
+}
+
+# Skull post — a stake topped with a skull (a warning, a ward).
+feature_def "skull-post" {
+  glyph {
+    line stroke from 0,0.4 to 0,-0.05
+    circle stroke at 0,-0.2 radius 0.16
+    circle fill at -0.06,-0.22 radius 0.035
+    circle fill at 0.06,-0.22 radius 0.035
+  }
+}
+
+# Plant bed — a planted bed or trough.
+feature_def "plant-bed" {
+  glyph {
+    rect stroke at -0.4,-0.25 0.8 x 0.5
+    path stroke "M-0.25,0.15 Q-0.25,-0.05 -0.1,-0.12" fill-color "none"
+    path stroke "M0,0.15 Q0,-0.08 0.15,-0.15" fill-color "none"
+    path stroke "M0.25,0.15 Q0.2,0 0.3,-0.1" fill-color "none"
+  }
+}
+
+# Plant — a single notable plant (a carnivorous pod, a shrieker).
+feature_def "plant" {
+  glyph {
+    line stroke from 0,0.35 to 0,-0.05
+    path fill "M0,-0.05 Q-0.3,-0.1 -0.25,-0.35 Q0,-0.25 0,-0.05 Z"
+    path fill "M0,0.08 Q0.3,0.02 0.28,-0.22 Q0.02,-0.15 0,0.08 Z"
+  }
+}
+
+# Giant mushroom — a broad cap on a stem.
+feature_def "giant-mushroom" {
+  glyph {
+    path fill "M-0.4,0 Q-0.35,-0.38 0,-0.38 Q0.35,-0.38 0.4,0 Z"
+    rect stroke at -0.08,0 0.16 x 0.35
   }
 }
 

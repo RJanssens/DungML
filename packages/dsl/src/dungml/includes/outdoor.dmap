@@ -1,6 +1,6 @@
 # outdoor.dmap — a compact symbol set for outdoor / overland maps.
 #
-# `include "outdoor.dmap"` from any map to get three terrain symbols:
+# `include "outdoor.dmap"` from any map to get its terrain symbols, among them:
 #
 #   tree      — a layered conifer (point feature)
 #   mountain  — a snow-capped peak (point feature)
@@ -80,5 +80,37 @@ feature_def "boulder" {
     # a couple of cracks for texture
     path plain "M-0.05,-0.3 L0.02,-0.05 L-0.1,0.12" fill-color "none" stroke-color "#3a3a3a" stroke-width 0.03
     path plain "M0.1,-0.02 L0.28,0.1" fill-color "none" stroke-color "#3a3a3a" stroke-width 0.03
+  }
+}
+
+feature_def "cave-entrance" {
+  name "Cave entrance"
+  description "A cave mouth in a cliff or hillside."
+  glyph {
+    # the rock arch, open at the bottom
+    path plain "M-0.42,0.32 Q-0.4,-0.36 0,-0.38 Q0.4,-0.36 0.42,0.32 Z" fill-color "#8a8a8a" stroke-color "#3a3a3a" stroke-width 0.05
+    # the dark mouth
+    path plain "M-0.22,0.32 Q-0.2,-0.14 0,-0.16 Q0.2,-0.14 0.22,0.32 Z" fill-color "#1e1e1e" stroke-color "none"
+  }
+}
+
+feature_def "waterfall" {
+  name "Waterfall"
+  description "Water falling over a ledge; rotate so it falls the way the page shows."
+  glyph {
+    rect plain at -0.4,-0.42 0.8 x 0.12 fill-color "#777777" stroke-color "#3a3a3a" stroke-width 0.03
+    path plain "M-0.25,-0.3 Q-0.28,0.05 -0.2,0.38" fill-color "none" stroke-color "#4f7c8a" stroke-width 0.06
+    path plain "M0,-0.3 Q-0.03,0.05 0.03,0.38" fill-color "none" stroke-color "#4f7c8a" stroke-width 0.06
+    path plain "M0.25,-0.3 Q0.22,0.05 0.28,0.38" fill-color "none" stroke-color "#4f7c8a" stroke-width 0.06
+    path plain "M-0.35,0.38 Q0,0.3 0.35,0.38" fill-color "none" stroke-color "#bfe0e8" stroke-width 0.04
+  }
+}
+
+feature_def "tree-stump" {
+  name "Tree stump"
+  description "A felled tree's stump."
+  glyph {
+    circle plain at 0,0 radius 0.24 fill-color "#b08a5a" stroke-color "#5a3e20" stroke-width 0.05
+    circle plain at 0,0 radius 0.13 fill-color "none" stroke-color "#5a3e20" stroke-width 0.03
   }
 }

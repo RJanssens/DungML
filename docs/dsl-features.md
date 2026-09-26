@@ -198,7 +198,7 @@ starting point for your own glyphs.
 
 ### Glyph index
 
-Forty-one built-in features (two are aliases):
+Seventy-one built-in features (two are aliases). Traps are secret by type: fog hides them from the players until the GM reveals one.
 
 #### Obstacles & traps
 
@@ -211,6 +211,14 @@ Forty-one built-in features (two are aliases):
 | `dart-trap` | circle with a dart/arrow across it |
 | `fire-trap` | circle with a flame |
 | `shock-trap` | circle with a lightning bolt |
+| `arrow-trap` | circle with an arrow across it |
+| `blade-trap` | circle with a hanging blade (pendulum, guillotine, scything wall) |
+| `crushing-trap` | circle with two arrows meeting on a bar (closing walls or ceiling) |
+| `falling-block-trap` | circle with a block over a line (ceiling collapse, deadfall) |
+| `tripwire` | taut line between two stakes |
+| `pressure-plate` | square plate set in the floor |
+| `glyph-trap` | circle with a triangle sigil (a door ward, explosive runes) |
+| `rotted-floor` | square with cracks (floor that gives way) |
 
 #### Furniture & fittings
 
@@ -226,6 +234,28 @@ Forty-one built-in features (two are aliases):
 | `well` | ring around a solid shaft |
 | `wall-glyph` | circle with a carved six-armed sigil |
 | `direction-sign` | post with a pointing board (`city.dmap`'s coloured `signpost` is separate) |
+| `gong` | disc hung in a frame |
+| `ladder` | two rails and rungs |
+| `shaft` | solid disc in a ring — a hole running up or down (not a trap, not a well) |
+| `murder-hole` | small square with an X (a ceiling slot) |
+| `loophole` | slit with a cross-bar — place on the wall, rotated to face out |
+| `pedestal` | square plinth inside a square |
+| `obelisk-mono` | tapering stone with a pyramidion (`common-dungeon.dmap`'s coloured `obelisk` is separate) |
+| `conjuring-ring` | double ring with a pentagram (`common-dungeon.dmap`'s coloured `magic_circle` is separate) |
+| `throne` | seat with a solid high back |
+| `dais` | raised square platform |
+| `lever` | handle in a slot |
+| `lens` | crystal lens on a mount |
+| `crystal` | faceted crystal |
+| `teleport-pad` | concentric rings around a dot |
+| `spout` | wall pipe pouring |
+| `pump` | hand pump over a cistern |
+| `mud-mound` | heaped wallow |
+| `totem-pole` | carved post with a cross-piece |
+| `skull-post` | stake topped with a skull |
+| `plant-bed` | planted trough |
+| `plant` | single two-leaved plant |
+| `giant-mushroom` | broad solid cap on a stem |
 
 #### Stairs
 
