@@ -46,6 +46,7 @@ const PROPERTIES = [
   "description",
   "dm_notes",
   "secret",
+  "id",
   "name",
   "label",
   "segment",
@@ -96,6 +97,8 @@ const CONNECTORS = [
   "start",
   "center",
   "hidden",
+  "between",
+  "and",
 ];
 
 // Enum-like value words. Listed separately so they can color differently

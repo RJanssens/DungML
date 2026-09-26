@@ -159,6 +159,11 @@ A walled space. Exactly one shape is required; everything else is optional.
 
 **Context:** top level, or inside a [`layer`](#layer).
 
+`room "name" at X,Y { … }` makes everything inside the room — its shape,
+label position, features, texts, areas, line features and exits — relative
+to `X,Y`, so the room moves by editing one line. (Doors placed with
+[`between`](#door) move with it.) Without `at`, coordinates are absolute.
+
 | Child | Description |
 |-------|-------------|
 | *a shape* | *Required.* One of `rect`, `polygon`, `circle`, `boundary` (below). |
@@ -269,6 +274,7 @@ share an endpoint (T / crossing).
 |---------|--------|
 | `line` | `segment line from X,Y to X,Y` |
 | `arc` | `segment arc center X,Y radius R from-angle A to-angle A [sweep cw\|ccw]` |
+| `arc` (three points) | `segment arc from X,Y to X,Y via X,Y` — through a point on the curve, the same form a room `boundary` uses. |
 
 ```dmap
 corridor "bend" {
@@ -316,6 +322,18 @@ position is projected onto the nearest wall.
 
 **Context:** top level, or inside a [`layer`](#layer).
 
+Header forms:
+
+- `door at X,Y { … }` — at a point.
+- `door between REF and REF { … }` — the position is computed: the middle
+  of two rooms' shared wall, where a corridor meets a room, or where one
+  corridor ends at another. `connects` is filled in (in the order written).
+  Spaces that don't meet are an error.
+- `door "name" at … / between …` — a named door. Play sessions record found
+  and opened doors by key; an unnamed door's key is its position, so moving
+  it makes sessions forget it, while a name survives the move. (Naming an
+  existing door changes its key once.)
+
 | Child | Description |
 |-------|-------------|
 | `connects REF[, REF]` | One or two `room.NAME` / `corridor.NAME` refs. Recommended (validation warns when absent). |
@@ -324,9 +342,12 @@ position is projected onto the nearest wall.
 | `facing NAME` | `north` / `south` / `east` / `west`; hints the leaf side and sets the `one-way` direction. |
 | `width NUMBER` | Opening width; default `1.0`. |
 | `trapped` | Flag the door as trapped (GM-only; hidden in the fogged view). |
+| `secret` | Concealed until found, whatever its `type` — `type iron secret` is a hidden iron door. (`type secret` still works.) |
 | `description` / `dm_notes` | Read-aloud / GM text. |
 
 ```dmap
+door "cellar" between room.kitchen and corridor.stair { type iron secret }
+
 door at 15,2 {
   connects room.parlor, corridor.hall
   type wooden
@@ -553,12 +574,14 @@ or nested in a `room` / `corridor`.
 
 | Element | Description |
 |---------|-------------|
-| `feature REF at X,Y` | *Required.* The feature id (bare name or quoted) and its position. |
+| `feature REF at X,Y [X,Y …]` | *Required.* The feature id (bare name or quoted) and its position — or several, one copy at each. |
 | `rotate NUMBER` | Rotation in degrees. |
 | `scale NUMBER[:NUMBER]` | Uniform scale, or independent `X:Y`. |
-| `{ … }` (optional block) | `description`, `dm_notes`, and/or `secret` for this instance. |
+| `id NAME` | A stable handle for revealing it in play (see [`secret`](#secret)). |
+| `{ … }` (optional block) | `description`, `dm_notes`, `secret` and/or `id` for this instance. |
 
 ```dmap
+feature pillar at 4,6 4,12 12,6 12,12
 feature hearth at 9,4 rotate 90
 feature "stairs-up" at 12,2 scale 1.5
 
@@ -634,10 +657,21 @@ dm_notes "The third flagstone triggers a dart trap (DC 14)."
 
 ### `secret`
 
-A bare flag marking an element GM-only: drawn in the full GM view, stripped
-from the fogged players' view until discovered. Valid on a `feature_def`, a
-`feature` instance (inside its block), and an `exit`.
+A bare flag marking an element GM-only: drawn in the full GM view, hidden
+from the fogged players' view until the DM reveals it. Valid on a
+`feature_def` (every instance of the type — core.dmap's traps), a `feature`
+instance (inside its block), a `text`, an `area`, a `line_feature`, a
+`marker`, an `exit`, and a [`door`](#door) (where "revealed" means found).
+
+A play session keeps the DM's reveal list, keyed by the element's `id` if it
+has one (`feature pit-trap at 3,3 id pit_1`), else by where it sits
+(`room.crypt/feature@3,3`). A room's context lists its secrets with their
+keys under `dm_only.secrets`; the campaign contract's
+`POST …/secrets {key, revealed}` shows or hides one. Content in a `hidden`
+layer is GM-only outright and not revealable.
 
 ```dmap
 exit at 3,4 { to "vault" at 2,2  secret }
+feature pit-trap at 7,7 id pit_1
+text "The eyes follow you" at 5,5 secret
 ```

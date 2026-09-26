@@ -163,7 +163,10 @@ g_rx:           "rx" NUMBER
 g_class:        "class" STRING
 
 // ============ ROOM ============
-room: "room" STRING "{" room_property* "}"
+// `room "x" at X,Y { … }`: everything inside is relative to X,Y — move the
+// room by editing one line. Without `at`, coordinates are absolute.
+room: "room" STRING room_origin? "{" room_property* "}"
+room_origin: "at" NUMBER "," NUMBER
 
 ?room_property: room_shape
               | label_decl
@@ -231,7 +234,9 @@ description_decl: "description" any_string
 any_string: STRING | TRIPLE_STRING
 
 // ============ FEATURE INSTANCE ============
-feature_inst: "feature" feature_ref "at" NUMBER "," NUMBER feature_modifier* feature_block?
+// Several positions place one copy at each: `feature pillar at 4,6 4,12 12,6`.
+feature_inst: "feature" feature_ref "at" feat_positions feature_modifier* feature_block?
+feat_positions: NUMBER "," NUMBER (NUMBER "," NUMBER)*
 
 feature_ref: STRING | CNAME
 
@@ -284,12 +289,15 @@ corridor_run: "run" CNAME "to" CNAME
 
 segment_decl: "segment" segment_kind
 
-?segment_kind: line_segment | arc_segment
+?segment_kind: line_segment | arc_segment | arc3_segment
 
 line_segment: "line" "from" NUMBER "," NUMBER "to" NUMBER "," NUMBER
 arc_segment: "arc" "center" NUMBER "," NUMBER "radius" NUMBER "from-angle" NUMBER "to-angle" NUMBER sweep_modifier?
 
 sweep_modifier: "sweep" SWEEP_DIR
+
+// The same three-point arc a room `boundary` uses: start, end, and a point on it.
+arc3_segment: "arc" "from" NUMBER "," NUMBER "to" NUMBER "," NUMBER "via" NUMBER "," NUMBER
 
 SWEEP_DIR: "ccw" | "cw"
 

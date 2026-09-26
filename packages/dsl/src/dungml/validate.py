@@ -562,6 +562,18 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
         else:
             seen_pairs[pair] = door.position
 
+    # ---- a single-valued property set twice: only the last one counts ----
+    for kind, obj, key, n in dmap._repeats:
+        who = (f"door at {obj.position}" if kind == "door"
+               else f"{kind} '{obj.name}'")
+        diags.append(
+            _diag(
+                "warning",
+                f"{who} sets `{key}` {n} times — only the last one is used",
+                obj.span,
+            )
+        )
+
     # ---- door names: two doors with one name share one key ----
     named: dict[str, list] = {}
     for d in all_doors:

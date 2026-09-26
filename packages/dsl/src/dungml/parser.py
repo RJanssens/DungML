@@ -11,6 +11,7 @@ resolves these via parser-state-aware tokenization.
 from __future__ import annotations
 
 import difflib
+import math
 import re
 from pathlib import Path
 from typing import Any, Mapping
@@ -125,6 +126,98 @@ def _ident(tok: Any) -> str:
     return str(tok)
 
 
+def _flatten(items: list[Any]) -> list[Any]:
+    """Expand the lists a multi-position `feature … at A B C` produces."""
+    out: list[Any] = []
+    for it in items:
+        if isinstance(it, list) and it and all(isinstance(x, FeatureInstance) for x in it):
+            out.extend(it)
+        else:
+            out.append(it)
+    return out
+
+
+def _shift(p: tuple[float, float], dx: float, dy: float) -> tuple[float, float]:
+    return (p[0] + dx, p[1] + dy)
+
+
+def _shift_shape(shape: Any, dx: float, dy: float) -> None:
+    if isinstance(shape, RectRoom):
+        shape.position = _shift(shape.position, dx, dy)
+    elif isinstance(shape, PolygonRoom):
+        shape.points = [_shift(p, dx, dy) for p in shape.points]
+    elif isinstance(shape, CircleRoom):
+        shape.center = _shift(shape.center, dx, dy)
+    elif isinstance(shape, BoundaryRoom):
+        shape.start = _shift(shape.start, dx, dy)
+        for e in shape.edges:
+            e.end = _shift(e.end, dx, dy)
+            if isinstance(e, ArcEdge):
+                e.via = _shift(e.via, dx, dy)
+
+
+def _shift_room(room: Room, dx: float, dy: float) -> None:
+    """`room "x" at DX,DY { … }`: move everything authored inside the room
+    (shape, label, features, texts, areas, line features, exits — not an
+    exit's landing point, which is on another map)."""
+    _shift_shape(room.shape, dx, dy)
+    if room.label is not None and room.label.position is not None:
+        room.label.position = _shift(room.label.position, dx, dy)
+    for f in room.features:
+        f.position = _shift(f.position, dx, dy)
+    for t in room.texts:
+        t.position = _shift(t.position, dx, dy)
+    for a in room.areas:
+        _shift_shape(a.shape, dx, dy)
+        if a.label is not None and a.label.position is not None:
+            a.label.position = _shift(a.label.position, dx, dy)
+    for lf in room.line_features:
+        lf.points = [_shift(p, dx, dy) for p in lf.points]
+    for ex in room.exits:
+        ex.position = _shift(ex.position, dx, dy)
+
+
+def _arc_through(
+    a: tuple[float, float], b: tuple[float, float], via: tuple[float, float]
+) -> ArcSegment:
+    """The arc from `a` to `b` passing through `via`, as a parametric arc."""
+    (ax, ay), (bx, by), (vx, vy) = a, b, via
+    d = 2 * (ax * (by - vy) + bx * (vy - ay) + vx * (ay - by))
+    if abs(d) < 1e-9:
+        raise DmapParseError(
+            f"arc from {a} to {b} via {via}: the three points are collinear — "
+            f"use `segment line` for a straight run"
+        )
+    a2, b2, v2 = ax * ax + ay * ay, bx * bx + by * by, vx * vx + vy * vy
+    cx = (a2 * (by - vy) + b2 * (vy - ay) + v2 * (ay - by)) / d
+    cy = (a2 * (vx - bx) + b2 * (ax - vx) + v2 * (bx - ax)) / d
+
+    def ang(p: tuple[float, float]) -> float:
+        return math.degrees(math.atan2(p[1] - cy, p[0] - cx))
+
+    a0, a1, av = ang(a), ang(b), ang(via)
+    ccw_passes_via = (av - a0) % 360 < (a1 - a0) % 360
+    return ArcSegment(
+        center=(cx, cy), radius=math.hypot(ax - cx, ay - cy),
+        from_angle=a0, to_angle=a1, sweep="ccw" if ccw_passes_via else "cw",
+    )
+
+
+# Properties an entity takes once; setting one twice silently kept the last.
+_SINGLE = {
+    "room": {"shape", "origin", "label", "description", "dm_notes", "grid",
+             "background", "line_style"},
+    "corridor": {"width", "corners", "label", "description", "dm_notes",
+                 "background", "line_style"},
+    "door": {"connects", "type", "state", "facing", "width", "description", "dm_notes"},
+    "area": {"shape", "kind", "label", "description", "dm_notes", "background",
+             "line_style"},
+    "map": {"grid", "renderer", "theme", "description", "dm_notes", "background",
+            "grid_overlay", "party_start", "room_numbers", "title", "cell_grid",
+            "default_corners"},
+}
+
+
 def _coords_close(p: tuple[float, float], q: tuple[float, float]) -> bool:
     return abs(p[0] - q[0]) <= 1e-6 and abs(p[1] - q[1]) <= 1e-6
 
@@ -205,6 +298,7 @@ class _Tx(Transformer):
         super().__init__()
         self.require_map = require_map
         self.includes: list[str] = []
+        self.repeats: list[tuple[str, Any, str, int]] = []
 
     def _call_userfunc(self, tree: Any, new_children: Any = None) -> Any:
         # Stamp the source span onto every model object a rule produces, at
@@ -213,15 +307,31 @@ class _Tx(Transformer):
         # signature.) test_spans.py pins this.
         result = super()._call_userfunc(tree, new_children)
         meta = getattr(tree, "meta", None)
-        span = getattr(result, "span", None)
-        if (
-            isinstance(span, SourceSpan)
-            and span.line == 0
-            and meta is not None
-            and not getattr(meta, "empty", True)
-        ):
-            result.span = _span(tree)
+        if meta is None or getattr(meta, "empty", True):
+            return result
+        for obj in result if isinstance(result, list) else [result]:
+            span = getattr(obj, "span", None)
+            if isinstance(span, SourceSpan) and span.line == 0:
+                obj.span = _span(tree)
         return result
+
+    def _note_repeats(self, kind: str, obj: Any, items: list[Any]) -> None:
+        """Record single-valued properties an entity sets more than once (the
+        validator warns; the last one still wins, as it always has)."""
+        counts: dict[str, int] = {}
+        for it in items:
+            if isinstance(it, tuple) and it and isinstance(it[0], str):
+                key = it[0]
+            elif isinstance(it, (RectRoom, PolygonRoom, BoundaryRoom, CircleRoom)):
+                key = "shape"
+            elif isinstance(it, GridConfig):
+                key = "grid"
+            else:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+        for key, n in counts.items():
+            if n > 1 and key in _SINGLE[kind]:
+                self.repeats.append((kind, obj, key, n))
 
     def include_decl(self, items: list[Any]) -> None:
         self.includes.append(_strip_string(items[0]))
@@ -389,7 +499,7 @@ class _Tx(Transformer):
                     cell_grid, cell_grid_color = val
                 elif key == "default_corners":
                     default_corners = val
-        return MapConfig(
+        made = MapConfig(
             name=name,
             grid=grid,
             renderer=renderer,
@@ -407,6 +517,8 @@ class _Tx(Transformer):
             cell_grid_color=cell_grid_color,
             default_corners=default_corners,
         )
+        self._note_repeats("map", made, items)
+        return made
 
     # ----- scenario -----
 
@@ -711,11 +823,15 @@ class _Tx(Transformer):
              "id": ident},
         )
 
-    def feature_inst(self, items: list[Any]) -> FeatureInstance:
-        # items: [ref, x, y, *modifiers, optional inline_block tuple]
+    def feat_positions(self, items: list[Any]) -> list[tuple[float, float]]:
+        nums = [_num(i) for i in items]
+        return list(zip(nums[::2], nums[1::2]))
+
+    def feature_inst(self, items: list[Any]) -> FeatureInstance | list[FeatureInstance]:
+        # items: [ref, positions, *modifiers, optional inline_block tuple]
         ref = items[0]
-        x = _num(items[1])
-        y = _num(items[2])
+        positions = items[1]
+        items = [ref, None, None, *items[2:]]  # keep the modifier indexing below
         rotate = 0.0
         scale = 1.0
         scale_y = None
@@ -738,17 +854,21 @@ class _Tx(Transformer):
                 dm_notes = val.get("dm_notes")
                 secret = bool(val.get("secret"))
                 ident = val.get("id") or ident
-        return FeatureInstance(
-            ref=ref,
-            position=(x, y),
-            rotate=rotate,
-            scale=scale,
-            scale_y=scale_y,
-            description=description,
-            dm_notes=dm_notes,
-            secret=secret,
-            id=ident,
-        )
+        made = [
+            FeatureInstance(
+                ref=ref,
+                position=pos,
+                rotate=rotate,
+                scale=scale,
+                scale_y=scale_y,
+                description=description,
+                dm_notes=dm_notes,
+                secret=secret,
+                id=ident,
+            )
+            for pos in positions
+        ]
+        return made[0] if len(made) == 1 else made
 
     # ----- room -----
 
@@ -807,8 +927,15 @@ class _Tx(Transformer):
     def allow_overlap_decl(self, items: list[Any]) -> tuple[str, Any]:
         return ("allow_overlap", True)
 
+    def room_origin(self, items: list[Any]) -> tuple[str, Any]:
+        return ("origin", (_num(items[0]), _num(items[1])))
+
     def room(self, items: list[Any]) -> Room:
+        items = _flatten(items)
         name = _strip_string(items[0])
+        origin = next(
+            (it[1] for it in items[1:] if isinstance(it, tuple) and it[0] == "origin"), None
+        )
         shape: RectRoom | PolygonRoom | BoundaryRoom | CircleRoom | None = None
         label = None
         description = None
@@ -855,7 +982,7 @@ class _Tx(Transformer):
                     allow_overlap = val
         if shape is None:
             raise DmapParseError(f"room '{name}' is missing a shape (rect, polygon, or boundary)")
-        return Room(
+        room = Room(
             name=name,
             shape=shape,
             label=label,
@@ -873,6 +1000,10 @@ class _Tx(Transformer):
             line_style_amount=line_style_amount,
             allow_overlap=allow_overlap,
         )
+        if origin is not None:
+            _shift_room(room, *origin)
+        self._note_repeats("room", room, items)
+        return room
 
     # ----- corridor -----
 
@@ -901,6 +1032,10 @@ class _Tx(Transformer):
             sweep=sweep,
         )
 
+    def arc3_segment(self, items: list[Any]) -> ArcSegment:
+        nums = [_num(i) for i in items]
+        return _arc_through((nums[0], nums[1]), (nums[2], nums[3]), (nums[4], nums[5]))
+
     def segment_decl(self, items: list[Any]) -> Any:
         return items[0]
 
@@ -914,6 +1049,7 @@ class _Tx(Transformer):
         return ("corners", _ident(items[0]))
 
     def corridor(self, items: list[Any]) -> Corridor:
+        items = _flatten(items)
         name = _strip_string(items[0])
         # Optional second STRING (display name) follows the slug.
         rest_start = 1
@@ -976,7 +1112,7 @@ class _Tx(Transformer):
         # Desugar `run`s into line segments, appended after any explicit
         # `segment`s. Named junctions are kept on the model for tooling.
         segments.extend(_chain_run_segments(runs, nodes, name))
-        return Corridor(
+        made = Corridor(
             name=name,
             display_name=display_name,
             width=width,
@@ -995,6 +1131,8 @@ class _Tx(Transformer):
             line_features=line_features,
             areas=areas,
         )
+        self._note_repeats("corridor", made, items)
+        return made
 
     # ----- slice -----
 
@@ -1107,7 +1245,7 @@ class _Tx(Transformer):
                 description = val
             elif key == "dm_notes":
                 dm_notes = val
-        return Door(
+        made = Door(
             position=(x, y),
             id=ident,
             between=between,
@@ -1121,6 +1259,8 @@ class _Tx(Transformer):
             description=description,
             dm_notes=dm_notes,
         )
+        self._note_repeats("door", made, items)
+        return made
 
     # ----- window -----
 
@@ -1243,7 +1383,7 @@ class _Tx(Transformer):
                     dm_notes = val
         if shape is None:
             raise DmapParseError(f"area '{name}' has no shape")
-        return Area(
+        made = Area(
             name=name,
             kind=kind,
             shape=shape,
@@ -1255,6 +1395,8 @@ class _Tx(Transformer):
             dm_notes=dm_notes,
             secret=secret,
         )
+        self._note_repeats("area", made, items)
+        return made
 
     # ----- line feature -----
 
@@ -1345,6 +1487,7 @@ class _Tx(Transformer):
         return ("hidden", True)
 
     def layer(self, items: list[Any]) -> Layer:
+        items = _flatten(items)
         name = _strip_string(items[0])
         hidden = False
         rooms: list[Room] = []
@@ -1407,6 +1550,7 @@ class _Tx(Transformer):
     # ----- start -----
 
     def start(self, items: list[Any]) -> DungeonMap:
+        items = _flatten(items)
         map_cfg: MapConfig | None = None
         scenario_cfg: Scenario | None = None
         feature_defs: dict[str, FeatureDef] = {}
@@ -1500,6 +1644,7 @@ class _Tx(Transformer):
             scenario=scenario_cfg,
         )
         dmap._redefinitions = redefinitions
+        dmap._repeats = list(self.repeats)
         return dmap
 
 

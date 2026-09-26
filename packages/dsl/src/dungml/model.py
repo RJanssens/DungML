@@ -612,3 +612,5 @@ class DungeonMap(BaseModel):
     _redefinitions: list[tuple[str, str, SourceSpan, SourceSpan]] = PrivateAttr(
         default_factory=list
     )
+    # Single-valued properties set more than once — `(kind, entity, key, n)`.
+    _repeats: list = PrivateAttr(default_factory=list)
