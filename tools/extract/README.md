@@ -96,8 +96,10 @@ one — it's the record of what the DSL, libraries or templates couldn't do.
 | `walls` | `[[[i,j],[i,j]]]` | a wall drawn between two floor cells |
 | `room_rect` | `{"27": [i0, j0, i1, j1]}` | force a room's cells |
 | `extra_rooms` | `{"27a": [[i, j]]}` | an unlabelled space that is a room (crypt niches) |
-| `label_cell` | `{"12": [i, j]}` | a label printed outside its room |
+| `label_cell` | `{"12": [i, j]}` / `{"Dom": [[i, j], …]}` | a label printed outside its room; for a `label_rooms` label, more instances prep's label boxes missed |
+| `room_poly` | `{"12": [[x, y], …]}` | the room's outline, where the page's shape isn't a cell staircase (a triangle cut by a drawn diagonal wall) |
 | `not_floor` | `[[i, j]]` | white art that isn't floor |
+| `floor` | `[[i, j]]` | a cell that is floor though under the floor threshold (a corner breach) |
 | `features` | `[{type, at, scale?, rotate?, description?, dm_notes?}]` | icons, at cell precision; `description`/`dm_notes` may be literal text or a reference `"features_key.C"` / `"traps.Pit"` / `"stalls.G"` into `descriptions.json` |
 | `exits` | `[{at, to, land?, label?, secret?, description?, dm_notes?}]` | a way to another map: `to` is a level id from `maps.json`, `land` the point on that map (default its centre). Teleports are exits too, even to the same map |
 | `region_notes` | `[{cell, description?, dm_notes?}]` | text for the space holding a cell (a lettered feature with no icon, an exit stub) |
@@ -196,6 +198,14 @@ Detected: grid, floor, caves vs straight walls, labels (positions), doors /
 secret doors / archways on grid lines, doors / locked doors / portcullises
 drawn mid-cell in a one-cell passage, drawn walls between floor cells, pillar
 dots.
+
+**Filled (locked) doors** on grid lines are found structurally, not by
+template (their grey fill correlates with any plain line): a block 7-11 px
+across with a dark fill, 12-23 px along the line, floor both sides, the line
+thin past both ends, standing in a wall. Two short blocks with a white gap are
+a locked double door; split by a crossing grid line, one door centred on a
+lattice point. Thresholds are `filled_door` in `style.json` (defaults in
+`symbols.py`).
 
 **Off-grid shapes** (`vector.py`, before the grid pass; `"vector": false` in
 `job.json` turns it off). The grid pass reads floor cell by cell, which turns
