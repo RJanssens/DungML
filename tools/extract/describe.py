@@ -37,7 +37,7 @@ GM = re.compile(r"""\(\d|\d+d\d|\bsave vs|\btrap|\bchance\b|\b\d[\d,]*\s*(gp|sp|
                     \bsee\b|\bIf\b|\bif\b|\blives here|\battack|\balert|\bsummon|\bunaware|\bstash|\bRoll\b|
                     \banswers\b|\bUnder a\b|\bstore\b|\bSecret\b|\bpotion|\bteleport|\bactivates|\breturn after|
                     \bEmpty\.|\bHD\b|\bspell|\bwill\b|\bterrified|\ben route|\bon watch|\blive in|\bDwarves \(|
-                    \btaking notes|\bSounds of work from""", re.X)
+                    \btaking notes|\bSounds of work from|\bEmpty\b""", re.X)
 
 
 def sentences(t: str) -> list[str]:
@@ -79,6 +79,13 @@ def main(job: Job) -> None:
         rooms[n] = {"title": title.strip(),
                     "description": " ".join(s for k, s in enumerate(ss) if k in keep),
                     "dm_notes": " ".join(s for k, s in enumerate(ss) if k not in keep)}
+        if n in cfg.get("desc_text", {}):
+            # a secret inside a perceivable sentence ("…; secret door behind pivoting wall"):
+            # the reader gives both halves explicitly, from the key's own words
+            o = cfg["desc_text"][n]
+            rooms[n]["description"] = o["description"]
+            rooms[n]["dm_notes"] = (o.get("dm_notes", "") + " " + rooms[n]["dm_notes"]).strip() \
+                if o.get("keep_dm", True) else o.get("dm_notes", "")
 
     ov = cfg.get("overview", {})
     ov_start = next((n for n, l in enumerate(lines) if l.startswith(ov["heading"])), None) if ov else None
@@ -92,8 +99,13 @@ def main(job: Job) -> None:
         return [l.strip() for l in ls if re.match(r"^\d+\.", l.strip())]
 
     for x in cfg.get("extras", []):
-        r = rooms[x["room"]]
-        if "list" in x:
+        # a room the numbered key doesn't have — a label room like Cpt, keyed by the legend
+        r = rooms.setdefault(x["room"], {"title": x.get("new_title", x["room"]),
+                                         "description": x.get("description", ""), "dm_notes": ""})
+        if "text" in x:                                  # a section verbatim (tables with 1-2. ranges)
+            body = " ".join(l.strip() for l in section(x["text"]))
+            r["dm_notes"] = (r["dm_notes"] + f"\n\n{x['title']}: " + body).strip()
+        elif "list" in x:
             items = numbered(section(x["list"]))[: x.get("max")]
             r["dm_notes"] += f"\n\n{x['title']}:\n" + "\n".join(items)
         elif "columns" in x:
@@ -111,25 +123,51 @@ def main(job: Job) -> None:
     if "features_key" in cfg:
         last = None
         for l in section(cfg["features_key"]):
-            m = re.match(r"^([A-Z]): (.*)$", l.strip())
+            m = re.match(r"^([A-Z](?: & [A-Z])*): (.*)$", l.strip())    # "B & F: Stone doors…" keys both
             if m:
-                last = m.group(1)
-                feats[last] = m.group(2)
+                last = m.group(1).split(" & ")
+                for k in last:
+                    feats[k] = m.group(2)
             elif last:
-                feats[last] += " " + l.strip()
+                for k in last:
+                    feats[k] += " " + l.strip()
 
-    traps = {}
+    traps, legend_keys = {}, {}
     if "legend" in cfg:
-        legend = " ".join(l.strip() for l in section(cfg["legend"]))
-        for item in legend.split("–")[1:]:
-            name, _, rest = item.strip().partition(" (")
-            traps[name.replace(" Trap", "").strip()] = rest.strip().rstrip(")").strip()
+        ls = section(cfg["legend"])
+        if ls and ls[0].lstrip().startswith("–"):
+            # "– Dart Trap (currently broken, …)" items (1A)
+            for item in " ".join(l.strip() for l in ls).split("–")[1:]:
+                name, _, rest = item.strip().partition(" (")
+                traps[name.replace(" Trap", "").strip()] = rest.strip().rstrip(")").strip()
+        else:
+            # "Cpt – Crypt (Roll twice on Table A…)" lines, wrapped (1B)
+            cur = None
+            for l in ls:
+                m = re.match(r"^(\S+) [–-] (.*)$", l.strip())
+                if m:
+                    cur = m.group(1)
+                    legend_keys[cur] = m.group(2)
+                elif cur:
+                    legend_keys[cur] += " " + l.strip()
+            for k, v in legend_keys.items():             # a legend line for a label room is its title + note
+                if k in rooms:
+                    title, _, note = v.partition(" (")
+                    rooms[k]["title"] = title.strip()
+                    rooms[k]["dm_notes"] = (note.rstrip(")").strip() + ". " + rooms[k]["dm_notes"]).strip()
 
     map_notes = ""
     if "wandering" in cfg:
         wm = section(cfg["wandering"], with_marker=True)   # its heading wraps onto a second line
-        head = " ".join(l.strip() for l in wm if not re.match(r"^\d+\.", l.strip()))
-        rolls = [l.strip().split(". ", 1)[1] for l in wm if re.match(r"^\d+\.", l.strip())]
+        head_lines, rolls = [], []
+        for l in wm:
+            if re.match(r"^\d+\.", l.strip()):
+                rolls.append(l.strip().split(". ", 1)[1])
+            elif rolls:
+                rolls[-1] += " " + l.strip()               # a wrapped entry ("… see Special / Dungeon Notes")
+            else:
+                head_lines.append(l.strip())
+        head = " ".join(head_lines)
         ranges: list[list] = []
         for k, m in enumerate(rolls, 1):
             if ranges and ranges[-1][2] == m:
@@ -142,7 +180,7 @@ def main(job: Job) -> None:
     map_desc = " ".join(p for p in (para(x) for x in ov.get("map_description", [])) if p)
 
     save_json(job.dir / "descriptions.json", {
-        "rooms": rooms, "features_key": feats, "traps": traps,
+        "rooms": rooms, "features_key": feats, "traps": traps, "legend": legend_keys,
         "map": {"description": map_desc, "dm_notes": map_notes},
         "split_overrides": {k: v[1] for k, v in over.items()},
     })

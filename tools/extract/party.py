@@ -131,17 +131,25 @@ def check_step(dmap, graph, step: Step, *, secret_refs: set[str], gm: list[tuple
                 step.problems.append(f"GM text from {where} in room_context.perceived: {frag[:60]!r}")
             if frag in svg_text:
                 step.problems.append(f"GM text from {where} in the rendered SVG: {frag[:60]!r}")
+    # labels: several rooms can share one ("Cpt" on 18 crypts), so count — a label may
+    # be drawn at most as often as discovered rooms carry it
+    shown_labels: dict[str, int] = {}
     for nid, lab in labels.items():
-        if nid in step.nodes or not lab or lab == nid.split(".", 1)[1]:
-            continue
-        if re.search(rf">\s*{re.escape(lab)}\s*<", svg):
-            step.problems.append(f"label of undiscovered {nid} ({lab!r}) drawn")
+        if lab and lab != nid.split(".", 1)[1]:
+            shown_labels.setdefault(lab, 0)
+            shown_labels[lab] += nid in step.nodes
+    for lab, allowed in shown_labels.items():
+        drawn = len(re.findall(rf">\s*{re.escape(lab)}\s*<", svg))
+        if drawn > allowed:
+            hidden = sorted(n for n, l in labels.items() if l == lab and n not in step.nodes)
+            step.problems.append(f"label {lab!r} drawn {drawn}x but only {allowed} discovered "
+                                 f"(undiscovered: {', '.join(hidden[:4])})")
 
 
 def explore(dmap, graph, start: str, reveal_secret: set[str], opened: set[str]):
     """Breadth-first party walk. Yields a Step per node entered."""
     nodes: set[str] = set()
-    doors: set[str] = set(reveal_secret)
+    doors: set[str] = set()
     q = deque([(start, None)])
     seen = {start}
     n = 0
@@ -149,6 +157,9 @@ def explore(dmap, graph, start: str, reveal_secret: set[str], opened: set[str]):
         node, via = q.popleft()
         nodes.add(node)
         doors |= visible_doors(graph, node)
+        # the GM reveals a found secret door when the party is at it, not in advance —
+        # revealing up front would draw it floating in unexplored rock
+        doors |= {e.key for e in graph.incident_edges(node) if e.key in reveal_secret}
         n += 1
         yield Step(n, node, via, set(nodes), set(doors))
         for e in graph.incident_edges(node):

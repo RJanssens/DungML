@@ -107,9 +107,10 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     doors = []
     for h in hits:
         es, pos = hit_edges(h)
-        doors.append(dict(edges=es, pos=pos, type=h["type"]))
+        doors.append(dict(edges=es, pos=pos, type=h["type"], width=h.get("width", 1)))
     for c in corr.get("extra_doors", []):
-        d = dict(edges=[ekey(tuple(a), tuple(b)) for a, b in c["edges"]], pos=tuple(c["pos"]), type=c["type"])
+        d = dict(edges=[ekey(tuple(a), tuple(b)) for a, b in c["edges"]], pos=tuple(c["pos"]), type=c["type"],
+                 width=c.get("width", 1))
         d.update({k: tuple(c[k]) if k == "from" else c[k] for k in ("from", "state") if k in c})
         doors.append(d)
     for c in corr.get("retype", []):
@@ -119,6 +120,46 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
                 d.update({k: tuple(c[k]) if k == "from" else c[k] for k in ("from", "state") if k in c})
     door_edge = {e: n for n, d in enumerate(doors) for e in d["edges"]}
     walls = {ekey(tuple(a), tuple(b)) for a, b in corr.get("walls", [])}
+    # drawn walls between two floor cells: a grid line is 0-1 px of mid grey
+    # (min ~170); a wall is 2+ px darker than 170 with a minimum under 150,
+    # floor on both sides (measured on pages 73 and 77)
+    not_walls = {ekey(tuple(a), tuple(b)) for a, b in corr.get("not_walls", [])}
+    detected_walls = set()
+    for i in range(N):
+        for j in range(N):
+            for d, ii, jj in list(nbrs(i, j))[:2]:
+                e = ekey((i, j), (ii, jj))
+                if not (F[i, j] and F[ii, jj]) or e in door_edge or e in not_walls:
+                    continue
+                prof = np.median(edge_strip(i, j, d, half=5), axis=0)
+                if prof.min() < 150 and (prof < 170).sum() >= 2 and prof[0] > 200 and prof[-1] > 200:
+                    detected_walls.add(e)
+
+    def vertex_cells(vi, vj):
+        return [(vi + a, vj + b) for a in (-1, 0) for b in (-1, 0) if 0 <= vi + a < N and 0 <= vj + b < N]
+
+    def ends(e):
+        (i, j), (ii, jj) = e
+        return [(i, j + 1), (i + 1, j + 1)] if ii == i else [(i + 1, j), (i + 1, j + 1)]   # lattice vertices
+
+    def anchored(e, cand):
+        # a drawn wall runs into rock or into another wall; an icon's outline (an
+        # altar box, stair treads, grey lettering) floats in open floor
+        for v in ends(e):
+            if any(not F[c] for c in vertex_cells(*v)):
+                return True
+            if any(f != e and v in ends(f) for f in cand):
+                return True
+        return False
+
+    changed = True
+    while changed:                         # drop floating candidates until only anchored ones remain
+        changed = False
+        for e in list(detected_walls):
+            if not anchored(e, detected_walls):
+                detected_walls.discard(e)
+                changed = True
+    walls |= detected_walls
     blocked = set(door_edge) | walls
 
     def open_between(a, b):
@@ -136,8 +177,23 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             x0, y0, x1, y1 = box
             label_box[t] = box
             labels[t] = (int(((y0 + y1) / 2) // P), int(((x0 + x1) / 2) // P))
-    for nm, cell in corr.get("label_cell", {}).items():
+    for nm, cell in corr.get("label_cell", {}).items():   # a label detection missed, or printed outside its room
         labels[nm] = tuple(cell)
+        if nm not in label_box:
+            i, j = cell
+            label_box[nm] = [j * P + P * .2, i * P + P * .2, (j + 1) * P - P * .2, (i + 1) * P - P * .2]
+    # label rooms: a label text that marks many rooms sharing one key entry
+    # (Stonehell's Cpt/UCpt crypts) — each becomes a room of its own, Cpt1, Cpt2…
+    label_room_of: dict[str, str] = {}
+    counts: dict[str, int] = defaultdict(int)
+    for box, t in zip(boxes, texts):
+        if t in cfg.get("label_rooms", []):
+            counts[t] += 1
+            nm = f"{t}{counts[t]}"
+            x0, y0, x1, y1 = box
+            label_box[nm] = box
+            labels[nm] = (int(((y0 + y1) / 2) // P), int(((x0 + x1) / 2) // P))
+            label_room_of[nm] = t
 
     region = -np.ones((N, N), int)
     regions: list[dict] = []
@@ -170,7 +226,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     for nm, (i, j) in labels.items():
         b = best_full_rect(i, j)
         org3 = organic[max(i - 1, 0):i + 2, max(j - 1, 0):j + 2].sum()
-        cave_label[nm] = bool(cave[i, j]) and not (b and partial_share(b[1]) <= 0.15 and org3 < 3)
+        cave_label[nm] = bool(cave[i, j]) and not (b and partial_share(b[1]) <= 0.15 and org3 < 3) \
+            and nm not in corr.get("not_cave", [])      # icon line-work (a spiral stair) can look organic
     for nm, (i, j) in labels.items():
         b = best_full_rect(i, j)
         if not cave_label[nm] and b and min(b[1][2] - b[1][0], b[1][3] - b[1][1]) >= 1:
@@ -178,7 +235,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             cave[i0:i1 + 1, j0:j1 + 1] = False       # a walled room next to a cave isn't cave
     q = deque()
     for nm, c in labels.items():
-        if cave[c]:
+        if cave[c] and nm not in corr.get("not_cave", []):
             regions.append(dict(kind="cave", name=nm, cells=[]))
             region[c] = len(regions) - 1
             q.append(c)
@@ -314,8 +371,12 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     keep = [r for r in regions if r["cells"] and not (r["kind"] == "corridor" and
             (all(frac[c] < FULL for c in r["cells"]) or not touches(r)))]   # arrows, compass, margin art
 
+    def safe(name: str) -> str:
+        # DSL names are identifiers: a correction's "21 secret" must not break the parse
+        return re.sub(r"\W", "_", name)
+
     def ident(r):
-        return f'corridor.{r["name"]}' if r["kind"] == "corridor" else f'room.r{r["name"]}'
+        return f'corridor.{safe(r["name"])}' if r["kind"] == "corridor" else f'room.r{safe(r["name"])}'
 
     # ------------------------------------------------------------ geometry
     def cell_px_mask(cells):
@@ -358,8 +419,22 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             + text_block("dm_notes", text_ref(f.get("dm_notes")), indent + "  ")
         return [head + " {"] + body + [indent + "}"] if body else [head]
 
+    features = list(corr.get("features", []))
+    if corr.get("dots", True) and (job.work / "dots.json").exists():   # detected pillar dots
+        drop = {tuple(p) for p in corr.get("not_dots", [])}
+        features += [{"type": st.get("dot_feature", "pillar"), "at": p}
+                     for p in load_json(job.work / "dots.json") if tuple(p) not in drop]
+    # text for a space the key describes by feature letter (E's bricked-up alcoves) or an
+    # exit stub: attached to whichever room/corridor holds the cell
+    notes_in = defaultdict(lambda: {"description": [], "dm_notes": []})
+    for rn in corr.get("region_notes", []):
+        rid = region[tuple(rn["cell"])]
+        for k in ("description", "dm_notes"):
+            if rn.get(k):
+                notes_in[rid][k].append(text_ref(rn[k]))
+
     feats_in = defaultdict(list)
-    for f in corr.get("features", []):
+    for f in features:
         x, y = f["at"]
         rid = region[min(int(y), N - 1), min(int(x), N - 1)]
         if rid < 0 or regions[rid] not in keep:   # on a wall: nearest space
@@ -376,6 +451,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     out += text_block("dm_notes", desc["map"].get("dm_notes"))
     out += ["}", ""]
     stats = defaultdict(int)
+    stats["walls_detected"] = len(detected_walls)
 
     for r in keep:
         if r["kind"] == "corridor":
@@ -384,7 +460,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         rows, cols = [c[0] for c in cells], [c[1] for c in cells]
         is_rect = len(cells) == (max(rows) - min(rows) + 1) * (max(cols) - min(cols) + 1) \
             and all(frac[c] >= FULL for c in cells)
-        out.append(f'room "r{r["name"]}" {{')
+        out.append(f'room "r{safe(r["name"])}" {{')
         if r["kind"] == "room" and is_rect:
             out.append(f"  rect {min(cols)},{min(rows)} {max(cols) - min(cols) + 1} x {max(rows) - min(rows) + 1}")
             stats["rect"] += 1
@@ -399,11 +475,16 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             stats["poly_" + r["kind"]] += 1
         if r["name"] in label_box:   # where the page prints it
             x0, y0, x1, y1 = label_box[r["name"]]
-            out.append(f'  label "{r["name"]}" at {fmt((x0 + x1) / 2 / P)},{fmt((y0 + y1) / 2 / P)}')
-        if key := desc["rooms"].get(r["name"]):
-            out += text_block("description", key["description"])
-            out += text_block("dm_notes", (key["title"] + ". " + key["dm_notes"]).strip())
-            stats["described"] += 1
+            shown = label_room_of.get(r["name"], r["name"])
+            out.append(f'  label "{shown}" at {fmt((x0 + x1) / 2 / P)},{fmt((y0 + y1) / 2 / P)}')
+        key = desc["rooms"].get(label_room_of.get(r["name"], r["name"]))
+        extra = notes_in.get(region[cells[0]], {"description": [], "dm_notes": []})
+        d_parts = ([key["description"]] if key else []) + extra["description"]
+        n_parts = ([(key["title"] + ". " + key["dm_notes"]).strip()] if key else []) + extra["dm_notes"]
+        d_txt, n_txt = " ".join(p for p in d_parts if p), " ".join(p for p in n_parts if p)
+        out += text_block("description", d_txt)
+        out += text_block("dm_notes", n_txt)
+        stats["described"] += bool(key)
         for f in feats_in.get(region[cells[0]], []):
             out += feature_lines(f)
             stats["feature"] += 1
@@ -449,7 +530,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             if ds := {door_edge[e] for e in gp if e in door_edge}:
                 for dn in ds:
                     d = doors[dn]
-                    conns.append(dict(a=a, b=b, pos=d["pos"], type=d["type"], frm=d.get("from"), state=d.get("state")))
+                    conns.append(dict(a=a, b=b, pos=d["pos"], type=d["type"], frm=d.get("from"),
+                                      state=d.get("state"), width=d.get("width", 1)))
             else:
                 xs = [edge_mid(e) for e in gp]
                 pos = (round(sum(x for x, _ in xs) / len(xs) * 2) / 2, round(sum(y for _, y in xs) / len(xs) * 2) / 2)
@@ -530,6 +612,9 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
                 if frozenset((v, w)) not in done:
                     done.add(frozenset((v, w)))
                     out.append(f"  run {name[v]} to {name[w]}")
+        if rid in notes_in:
+            out += text_block("description", " ".join(notes_in[rid]["description"]))
+            out += text_block("dm_notes", " ".join(notes_in[rid]["dm_notes"]))
         for f in feats_in.get(rid, []):
             out += feature_lines(f)
             stats["feature"] += 1
@@ -556,6 +641,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
 
     job.dmap.write_text("\n".join(out) + "\n")
     np.save(job.work / "region.npy", region)
+    save_json(job.work / "walls.json", sorted([list(map(list, e)) for e in detected_walls]))
     save_json(job.work / "seg.json", {"labels": {k: list(v) for k, v in labels.items()},
                                       "caves": sorted(k for k, v in cave_label.items() if v)})
     rooms = sorted((r["name"] for r in keep if r["kind"] != "corridor"), key=lambda n: (len(n), n))

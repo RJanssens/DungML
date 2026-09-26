@@ -32,6 +32,9 @@ def render_png(src: str, path: Path, px: int) -> np.ndarray:
     src = re.sub(r"(?m)^\s*label .*$", "", src)
     dmap = parse(src, path=path)
     dmap.map.room_numbers = False
+    # floor is told apart from rock by colour, so rock must not be white: a map
+    # without a background (most hand-made ones) would otherwise score as all floor
+    dmap.map.background = "#CCC"
     svg = get_renderer("classic-bw")().render(dmap)
     png = cairosvg.svg2png(bytestring=svg.encode(), output_width=px, output_height=px)
     import io
@@ -46,7 +49,7 @@ def room_graph(path: Path) -> dict:
     for n, body in re.findall(r'(?ms)^room "([^"]+)"\s*\{(.*?)^\}', src):
         m = re.search(r'(?m)^\s*label "([^"]+)"', body)
         if m and f"room.{n}" in g.nodes:
-            lab[f"room.{n}"] = m.group(1)
+            lab[f"room.{n}"] = m.group(1).upper()   # "Ucpt" in one map is "UCpt" in another
     for nid in g.nodes:
         if (m := re.fullmatch(r"room\.r(\d+)[a-z]", nid)) and nid not in lab:
             lab[nid] = m.group(1) + "*"

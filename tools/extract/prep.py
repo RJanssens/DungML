@@ -74,7 +74,7 @@ def main(job: Job) -> None:
     words: list[list[int]] = []
     for x0, y0, x1, y1 in comps:
         for w in words:
-            if x0 <= w[2] + 6 and x1 >= w[0] - 6 and y0 <= w[3] + 3 and y1 >= w[1] - 3:
+            if x0 <= w[2] + 10 and x1 >= w[0] - 10 and y0 <= w[3] + 3 and y1 >= w[1] - 3:   # "C pt" is 8px apart
                 w[:] = [min(w[0], x0), min(w[1], y0), max(w[2], x1), max(w[3], y1)]
                 break
         else:
@@ -84,13 +84,16 @@ def main(job: Job) -> None:
     save_json(job.work / "boxes.json", boxes)
 
     im = Image.open(job.image).convert("L")
-    per = 8
-    sheet = Image.new("L", (per * 90, ((len(boxes) + per - 1) // per) * 56), 255)
+    # cells as wide as the widest box, so a word is never clipped by its neighbour
+    cw = max((x1 - x0) * 2 + 36 for x0, _, x1, _ in boxes) if boxes else 90
+    ch = max((y1 - y0) * 2 + 20 for _, y0, _, y1 in boxes) if boxes else 56
+    per = max(1, 1100 // cw)
+    sheet = Image.new("L", (per * cw, ((len(boxes) + per - 1) // per) * ch), 255)
     d = ImageDraw.Draw(sheet)
     for k, (x0, y0, x1, y1) in enumerate(boxes):
         c = im.crop((x0 - 4, y0 - 4, x1 + 4, y1 + 4))
         c = c.resize((c.width * 2, c.height * 2))
-        X, Y = (k % per) * 90, (k // per) * 56
+        X, Y = (k % per) * cw, (k // per) * ch
         sheet.paste(c, (X + 22, Y + 4))
         d.text((X + 1, Y + 2), str(k), fill=0)
     sheet.save(job.work / "labels_sheet.png")
