@@ -1,8 +1,10 @@
 """Corridor wall geometry.
 
-A corridor is drawn as a polygon — its centreline buffered by half its width
-plus half a wall stroke, so the wall line sits exactly where the centre of
-the old stroked wall band did — and its walls are that polygon's outline.
+A corridor is drawn as a polygon — its centreline buffered by half its
+width — and its walls are that polygon's outline, centred on the corridor's
+edge exactly as a room's walls are centred on the room's. So a room built
+against a corridor's side shares one wall line with it (not two lines half
+a stroke apart, notching round every door).
 
 Openings follow the connectivity graph, not overlaps:
 
@@ -297,7 +299,7 @@ def corridor_outlines(
 
     wide = {n: c for n, c in corridors.items() if c.width > 0 and c.segments}
     chains = {n: centerline_chains(c) for n, c in wide.items()}
-    radius = {n: c.width / 2 + wall_stroke / 2 for n, c in wide.items()}
+    radius = {n: c.width / 2 for n, c in wide.items()}
     base = {
         n: _buffer_chains(chains[n], radius[n], join_of(c))
         for n, c in wide.items()

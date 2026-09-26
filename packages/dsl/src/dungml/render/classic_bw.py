@@ -1174,7 +1174,10 @@ class _RenderContext:
                 f'<rect x="0" y="0" width="{_n(self.W)}" height="{_n(self.H)}" '
                 f'fill="url(#{gid})"/></mask>'
             )
-            outline_w = stub.width + 2 * WALL_STROKE
+            # Walls centred on the corridor edge, as for drawn corridors: a
+            # band one stroke wider than the corridor, the floor one stroke
+            # narrower on top.
+            outline_w = stub.width + WALL_STROKE
             wall = (
                 f'<path class="corridor-wall" d="{d}" '
                 f'stroke-width="{_n(outline_w)}" stroke="{self.INK}" '
@@ -1182,7 +1185,7 @@ class _RenderContext:
             )
             floor_p = (
                 f'<path class="corridor-floor" d="{d}" '
-                f'stroke-width="{_n(stub.width)}" stroke="{floor}" '
+                f'stroke-width="{_n(max(stub.width - WALL_STROKE, 0.0))}" stroke="{floor}" '
                 f'stroke-linejoin="round" stroke-linecap="butt" fill="none"/>'
             )
             groups.append(
