@@ -430,3 +430,18 @@ def test_build_then_pathfind_and_discover(seed_map):
     assert path["found"] is True
     assert path["nodes"][0] == "room.start"
     assert path["nodes"][-1] == "room.vault"
+
+
+def test_node_objects_let_the_top_level_win_like_the_renderer_and_graph():
+    """A layer room reusing a top-level name must not shadow it for MCP
+    placement while the renderer, graph and room_context all use the
+    top-level one (the validator warns about the duplicate)."""
+    from dungml import parse
+    from dungml_mcp.server import _node_objects
+
+    dmap = parse(
+        'map "M" { grid { bounds 30 x 10 } }\n'
+        'room "a" { rect 1,1 4 x 4 }\n'
+        'layer "L" { room "a" { rect 20,1 4 x 4 } }\n'
+    )
+    assert _node_objects(dmap)["room.a"].shape.position == (1.0, 1.0)

@@ -52,6 +52,7 @@ from ..model import (
     Vec2,
     Window,
 )
+from .. import walk
 from . import Renderer, register
 
 # Stroke / sizing constants, all in world units.
@@ -274,14 +275,11 @@ class _RenderContext:
         self.W = self.cfg.bounds_w
         self.H = self.cfg.bounds_h
         self.flip_y = self.cfg.origin == "bottom-left"
-        # All rooms from top-level + visible layers, by name (top-level
-        # take precedence if a layer reuses the same name).
-        self.all_rooms: dict[str, Room] = dict(dmap.rooms)
-        for layer in dmap.layers:
-            if layer.hidden:
-                continue
-            for r in layer.rooms:
-                self.all_rooms.setdefault(r.name, r)
+        # What this render draws: top level + visible layers (hidden layers
+        # are GM-only), deduplicated by name — `dungml.walk` owns the rules.
+        self.all_rooms: dict[str, Room] = walk.rooms(dmap, visible=True)
+        self.corridors_by_name: dict[str, Corridor] = walk.corridors(dmap, visible=True)
+        self.all_corridors: list[Corridor] = list(self.corridors_by_name.values())
         # Sequential numbering in source order (dict preserves insertion),
         # unless a room carries an explicit number (fog_of_war sets these).
         self.room_numbers: dict[str, int] = {
@@ -300,13 +298,8 @@ class _RenderContext:
         out: list[str | None] = [self.dmap.map.background]
         for r in self.all_rooms.values():
             out.append(r.background)
-        for c in self.dmap.corridors.values():
+        for c in self.all_corridors:
             out.append(c.background)
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            for c in layer.corridors:
-                out.append(c.background)
         # Areas: both an explicit `background` and the kind's palette fill
         # (e.g. kind water → the "water" texture) need registering up front.
         for a in self._all_areas():
@@ -364,14 +357,8 @@ class _RenderContext:
         if pre:
             parts.append(pre)
 
-        # Doors + windows aggregated across map and visible layers.
-        doors = list(self.dmap.doors)
-        windows = list(self.dmap.windows)
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            doors.extend(layer.doors)
-            windows.extend(layer.windows)
+        doors: list[Door] = self._visible("doors")
+        windows: list[Window] = self._visible("windows")
 
         # Rooms (floor fills, then walls with door/window gaps cut).
         parts.append('<g class="rooms">')
@@ -413,16 +400,12 @@ class _RenderContext:
         parts.append("</g>")
 
         # Corridors.
-        all_corridors: list[Corridor] = list(self.dmap.corridors.values())
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            all_corridors.extend(layer.corridors)
+        all_corridors = self.all_corridors
         if all_corridors:
             # Positions of every connector (door / cross-map exit). A corridor
             # end with no connector here is a dead end and gets capped.
             connectors = [d.position for d in doors]
-            connectors.extend(ex.position for ex in self._all_exits())
+            connectors.extend(ex.position for ex in self._visible("exits"))
             parts.append('<g class="corridors">')
             for c in all_corridors:
                 parts.append(self._corridor(c, connectors))
@@ -443,11 +426,7 @@ class _RenderContext:
         # they overlay any corridor / room that happens to cross them, but
         # before doors/windows/features so bridges and other crossings sit
         # cleanly on top.
-        all_slices: list[Slice] = list(self.dmap.slices.values())
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            all_slices.extend(layer.slices)
+        all_slices: list[Slice] = self._visible("slices")
         if all_slices:
             parts.append('<g class="slices">')
             for s in all_slices:
@@ -455,7 +434,7 @@ class _RenderContext:
             parts.append("</g>")
 
         # Line features (bars / curtains / barred enclosures).
-        line_features = self._all_line_features()
+        line_features: list[LineFeature] = self._visible("line_features")
         if line_features:
             parts.append('<g class="line-features">')
             for lf in line_features:
@@ -476,21 +455,10 @@ class _RenderContext:
                 parts.append(self._window(w))
             parts.append("</g>")
 
-        # Features (room-attached + corridor-attached + top-level + visible layer).
+        # Features: those nested in rooms/corridors first, then freestanding.
         parts.append('<g class="features">')
-        for r in self.all_rooms.values():
-            for fi in r.features:
-                parts.append(self._feature(fi))
-        for c in all_corridors:
-            for fi in c.features:
-                parts.append(self._feature(fi))
-        for fi in self.dmap.features:
+        for fi in self._visible("features", nested_first=True):
             parts.append(self._feature(fi))
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            for fi in layer.features:
-                parts.append(self._feature(fi))
         parts.append("</g>")
 
         # Optional map-wide grid overlay (graph-paper style). Drawn after
@@ -502,11 +470,7 @@ class _RenderContext:
         # Markers (top-level + visible layer) — placed between features
         # and labels so they overlay furniture but room labels stay
         # readable on top of them.
-        all_markers: list[Marker] = list(self.dmap.markers)
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            all_markers.extend(layer.markers)
+        all_markers: list[Marker] = self._visible("markers")
         if all_markers:
             parts.append('<g class="markers">')
             for m in all_markers:
@@ -515,7 +479,7 @@ class _RenderContext:
 
         # Cross-map exits (transitions to another map in the project). Drawn
         # with markers so they overlay furniture but sit under labels.
-        all_exits = self._all_exits()
+        all_exits: list[Exit] = self._visible("exits")
         if all_exits:
             parts.append('<g class="exits">')
             for ex in all_exits:
@@ -537,19 +501,9 @@ class _RenderContext:
                 parts.append(self._slice_label(s))
         if self.dmap.map.title is not None:
             parts.append(self._map_title())
-        all_texts: list[TextAnnotation] = list(self.dmap.texts)
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            all_texts.extend(layer.texts)
-        # Text nested in a room/corridor renders only when that node is part of
-        # the view: `all_rooms`/`all_corridors` already exclude hidden layers,
-        # and fog prunes undiscovered nodes, so their text drops out with them
-        # (same as nested features).
-        for r in self.all_rooms.values():
-            all_texts.extend(r.texts)
-        for c in all_corridors:
-            all_texts.extend(c.texts)
+        # Text nested in a room/corridor rides with its node: hidden layers are
+        # excluded, and fog prunes undiscovered nodes, taking their text along.
+        all_texts: list[TextAnnotation] = self._visible("texts")
         for ta in all_texts:
             parts.append(self._text_annotation(ta))
         parts.append("</g>")
@@ -640,32 +594,25 @@ class _RenderContext:
 
         for r in self.all_rooms.values():
             add(r.line_style, r.line_style_amount)
-        for c in self.dmap.corridors.values():
+        for c in self.all_corridors:
             add(c.line_style, c.line_style_amount)
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            for c in layer.corridors:
-                add(c.line_style, c.line_style_amount)
         for a in self._all_areas():
             add(a.line_style, a.line_style_amount)
         return out
 
+    def _visible(self, kind: walk.Kind, *, nested_first: bool = False) -> list:
+        """Every `kind` member this render draws (see `dungml.walk`)."""
+        return [
+            p.item
+            for p in walk.members(
+                self.dmap, kind, visible=True, nested_first=nested_first
+            )
+        ]
+
     def _all_areas(self) -> list[Area]:
-        """Top-level areas, those in visible layers, and areas nested inside
-        rooms/corridors (which ride with their parent through fog)."""
-        areas: list[Area] = list(self.dmap.areas)
-        corridors: list[Corridor] = list(self.dmap.corridors.values())
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            areas.extend(layer.areas)
-            corridors.extend(layer.corridors)
-        for r in self.all_rooms.values():
-            areas.extend(r.areas)
-        for c in corridors:
-            areas.extend(c.areas)
-        return areas
+        """Freestanding areas, then areas nested in rooms/corridors (which
+        ride with their parent through fog)."""
+        return self._visible("areas")
 
     def _style_block(self) -> str:
         # Corridor-wall / corridor-floor strokes are configured per-path
@@ -1453,28 +1400,6 @@ class _RenderContext:
             f"</g>"
         )
 
-    def _all_exits(self) -> list[Exit]:
-        """Freestanding exits (top-level + visible layers) plus exits nested in
-        visible rooms/corridors.
-
-        Nested exits ride along with their node's visibility: `all_rooms` and
-        the corridor set below already exclude hidden layers, and fog prunes
-        undiscovered nodes, so a nested exit drops out with its parent (like a
-        nested feature)."""
-        out: list[Exit] = list(self.dmap.exits)
-        for layer in self.dmap.layers:
-            if not layer.hidden:
-                out.extend(layer.exits)
-        for r in self.all_rooms.values():
-            out.extend(r.exits)
-        corrs: list[Corridor] = list(self.dmap.corridors.values())
-        for layer in self.dmap.layers:
-            if not layer.hidden:
-                corrs.extend(layer.corridors)
-        for c in corrs:
-            out.extend(c.exits)
-        return out
-
     def _exit(self, ex: Exit) -> str:
         """A cross-map transition: a rounded "portal" pad with an up-and-out
         arrow. Carries the target map + landing coords as data attributes so
@@ -1739,12 +1664,7 @@ class _RenderContext:
     def _door_corridor_edge(self, d: Door) -> tuple[Vec2, Vec2] | None:
         """If `d` sits on a connected corridor's side edge, return that
         corridor segment's endpoints (to orient the opening patch)."""
-        corrs = dict(self.dmap.corridors)
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            for c in layer.corridors:
-                corrs.setdefault(c.name, c)
+        corrs = self.corridors_by_name
         for ref in d.connects:
             if not ref.startswith("corridor."):
                 continue
@@ -1771,12 +1691,7 @@ class _RenderContext:
         Only degree-1 endpoints (true corridor ends, not bends or junctions)
         qualify; a door on a corridor's side or partway along it is handled by
         `_corridor_opening_patch`, not here."""
-        corrs = dict(self.dmap.corridors)
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            for c in layer.corridors:
-                corrs.setdefault(c.name, c)
+        corrs = self.corridors_by_name
         cx, cy = d.position
         best: tuple[float, Corridor, Vec2, Vec2, float] | None = None
         for ref in d.connects:
@@ -2936,27 +2851,6 @@ class _RenderContext:
 
     # --- line features (bars / curtain / barred) ---
 
-    def _all_line_features(self) -> list[LineFeature]:
-        """Freestanding line features (top-level + visible layers) plus those
-        nested in visible rooms/corridors.
-
-        Nested line features ride along with their node's visibility (like
-        nested features/exits): `all_rooms` and the corridor set exclude hidden
-        layers, and fog prunes undiscovered nodes."""
-        out: list[LineFeature] = list(self.dmap.line_features)
-        for layer in self.dmap.layers:
-            if not layer.hidden:
-                out.extend(layer.line_features)
-        for r in self.all_rooms.values():
-            out.extend(r.line_features)
-        corrs: list[Corridor] = list(self.dmap.corridors.values())
-        for layer in self.dmap.layers:
-            if not layer.hidden:
-                corrs.extend(layer.corridors)
-        for c in corrs:
-            out.extend(c.line_features)
-        return out
-
     def _polyline_path(self, pts: list[Vec2]) -> str:
         """`M …  L …` through the points (with the vertical flip applied)."""
         return "M " + " L ".join(
@@ -3373,12 +3267,7 @@ class _HatchedContext(_RenderContext):
                 parts.append(
                     f'<path d="{d}" stroke-width="{_n(halo_w)}"/>'
                 )
-        all_corridors: list[Corridor] = list(self.dmap.corridors.values())
-        for layer in self.dmap.layers:
-            if layer.hidden:
-                continue
-            all_corridors.extend(layer.corridors)
-        for c in all_corridors:
+        for c in self.all_corridors:
             cd = self._corridor_path(c)
             if not cd:
                 continue

@@ -157,3 +157,19 @@ def test_position_collision_disambiguated():
     keys = [e.key for e in g.edges]
     assert keys[0] == "5,3"
     assert keys[1] == "5,3#2"
+
+
+def test_keyed_doors_match_edge_keys_including_collisions() -> None:
+    from dungml.graph import keyed_doors
+
+    d = parse(
+        'map "M" { grid { bounds 20 x 10 } }\n'
+        'room "a" { rect 1,1 4 x 4 }\nroom "b" { rect 5,1 4 x 4 }\n'
+        'door at 5,3 { connects room.a, room.b type iron }\n'
+        'layer "L" hidden { door at 5,3 { connects room.a, room.b type stone } }\n'
+    )
+    keyed = keyed_doors(d)
+    assert [(k, p.item.type, p.hidden) for k, p in keyed] == [
+        ("5,3", "iron", False), ("5,3#2", "stone", True),
+    ]
+    assert [e.key for e in build_graph(d).edges] == [k for k, _ in keyed]

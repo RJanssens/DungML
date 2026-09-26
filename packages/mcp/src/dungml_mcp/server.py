@@ -82,6 +82,7 @@ from dungml import (
     party_start_node,
     validate as dsl_validate,
 )
+from dungml import walk
 from dungml.geometry import corridor_polygons, room_polygon
 from dungml_backend import models
 from dungml_backend.db import get_sessionmaker, init_schema
@@ -216,18 +217,9 @@ def _num(n: float) -> str:
 
 def _node_objects(dmap: DungeonMap) -> dict[str, object]:
     """Map every node id ('room.x' / 'corridor.y') to its model object,
-    across the top level and all layers."""
-    out: dict[str, object] = {}
-    for name, room in dmap.rooms.items():
-        out[f"room.{name}"] = room
-    for name, corr in dmap.corridors.items():
-        out[f"corridor.{name}"] = corr
-    for layer in dmap.layers:
-        for room in layer.rooms:
-            out[f"room.{room.name}"] = room
-        for corr in layer.corridors:
-            out[f"corridor.{corr.name}"] = corr
-    return out
+    across the top level and all layers (first definition wins, as in the
+    renderer and graph)."""
+    return dict(walk.nodes(dmap))
 
 
 def _bbox_of(node_id: str, obj: object) -> BBox:

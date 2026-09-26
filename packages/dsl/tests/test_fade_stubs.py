@@ -103,3 +103,27 @@ def test_render_fogged_full_has_no_fade_stub():
     dk = door_key(dmap.doors[0])
     svg = render_fogged(dmap, {"corridor.a"}, {dk}, full=True)
     assert "dungml-fade" not in svg
+
+
+def test_stub_through_second_of_two_stacked_doors():
+    # Two doors at one point: build_graph keys the second "5,5#2". The stub
+    # lookup used bare position keys, so it missed that edge entirely.
+    src = TWO.replace(
+        "door at 5,5 {\n  connects corridor.a, corridor.b\n  type open\n}",
+        "door at 5,5 {\n  connects corridor.a\n  type wooden\n}\n"
+        "door at 5,5 {\n  connects corridor.a, corridor.b\n  type open\n}",
+    )
+    dmap = parse(src)
+    assert [e.key for e in build_graph(dmap).edges] == ["5,5#2"]
+    stubs = corridor_fade_stubs(dmap, build_graph(dmap), {"corridor.a"})
+    assert len(stubs) == 1
+    assert stubs[0].fade_from == (5.0, 5.0)
+
+
+def test_no_stub_from_a_door_in_a_hidden_layer():
+    src = TWO.replace(
+        "door at 5,5 {\n  connects corridor.a, corridor.b\n  type open\n}",
+        'layer "gm" hidden {\n door at 5,5 { connects corridor.a, corridor.b type open }\n}',
+    )
+    dmap = parse(src)
+    assert corridor_fade_stubs(dmap, build_graph(dmap), {"corridor.a"}) == []

@@ -13,6 +13,7 @@ import math
 from dataclasses import dataclass
 from typing import Optional, Union
 
+from . import walk
 from .model import (
     ArcEdge,
     ArcSegment,
@@ -473,25 +474,11 @@ def find_overlapping_areas(
 
 
 def _find_room(dmap: DungeonMap, name: str) -> Optional[Room]:
-    room = dmap.rooms.get(name)
-    if room is not None:
-        return room
-    for layer in dmap.layers:
-        for r in layer.rooms:
-            if r.name == name:
-                return r
-    return None
+    return walk.rooms(dmap).get(name)
 
 
 def _find_corridor(dmap: DungeonMap, name: str) -> Optional[Corridor]:
-    corr = dmap.corridors.get(name)
-    if corr is not None:
-        return corr
-    for layer in dmap.layers:
-        for c in layer.corridors:
-            if c.name == name:
-                return c
-    return None
+    return walk.corridors(dmap).get(name)
 
 
 def _corridor_centroid(c: Corridor) -> Optional[Vec2]:

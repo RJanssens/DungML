@@ -24,7 +24,9 @@ from typing import Callable, Iterable, Optional
 
 from pydantic import BaseModel
 
-from .model import Corridor, Door, DungeonMap, Room
+from . import walk
+from .model import Door, DungeonMap, Room
+from .walk import Placed
 
 # A door state that physically blocks passage until something changes
 # (a key, a check, brute force). Everything else — open, closed, ajar,
@@ -212,29 +214,26 @@ class Path:
         }
 
 
-def _iter_rooms(dmap: DungeonMap) -> Iterable[tuple[str, Room, Optional[str], bool]]:
-    """Yield `(name, room, layer_name, hidden)` for top-level + layer rooms."""
-    for name, room in dmap.rooms.items():
-        yield name, room, None, False
-    for layer in dmap.layers:
-        for room in layer.rooms:
-            yield room.name, room, layer.name, layer.hidden
+def keyed_doors(dmap: DungeonMap) -> list[tuple[str, Placed]]:
+    """Every door with the key `build_graph` gives it, in graph order.
 
-
-def _iter_corridors(
-    dmap: DungeonMap,
-) -> Iterable[tuple[str, Corridor, Optional[str], bool]]:
-    for name, corr in dmap.corridors.items():
-        yield name, corr, None, False
-    for layer in dmap.layers:
-        for corr in layer.corridors:
-            yield corr.name, corr, layer.name, layer.hidden
-
-
-def _iter_doors(dmap: DungeonMap) -> Iterable[Door]:
-    yield from dmap.doors
-    for layer in dmap.layers:
-        yield from layer.doors
+    Keys are the door's position (`door_key`); a genuine collision — two
+    doors at one point — gets a `#N` suffix in declaration order. Anything
+    that needs to find "the door behind edge X" goes through this, so the
+    suffixing is defined once.
+    """
+    out: list[tuple[str, Placed]] = []
+    seen: set[str] = set()
+    for p in walk.members(dmap, "doors"):
+        key = door_key(p.item)
+        if key in seen:
+            n = 2
+            while f"{key}#{n}" in seen:
+                n += 1
+            key = f"{key}#{n}"
+        seen.add(key)
+        out.append((key, p))
+    return out
 
 
 def build_graph(dmap: DungeonMap) -> Graph:
@@ -247,27 +246,16 @@ def build_graph(dmap: DungeonMap) -> Graph:
     """
     g = Graph()
 
-    for name, _room, layer, hidden in _iter_rooms(dmap):
-        nid = f"room.{name}"
-        g.nodes.setdefault(
-            nid, Node(id=nid, kind="room", name=name, hidden=hidden, layer=layer)
-        )
-    for name, _corr, layer, hidden in _iter_corridors(dmap):
-        nid = f"corridor.{name}"
-        g.nodes.setdefault(
-            nid, Node(id=nid, kind="corridor", name=name, hidden=hidden, layer=layer)
-        )
+    for kind in ("room", "corridor"):
+        for p in walk.members(dmap, f"{kind}s"):
+            nid = f"{kind}.{p.item.name}"
+            g.nodes[nid] = Node(
+                id=nid, kind=kind, name=p.item.name, hidden=p.hidden,
+                layer=p.layer.name if p.layer is not None else None,
+            )
 
-    seen_keys: set[str] = set()
-    for door in _iter_doors(dmap):
-        key = door_key(door)
-        if key in seen_keys:  # disambiguate genuine position collisions
-            n = 2
-            while f"{key}#{n}" in seen_keys:
-                n += 1
-            key = f"{key}#{n}"
-        seen_keys.add(key)
-
+    for key, placed in keyed_doors(dmap):
+        door = placed.item
         refs = [r for r in door.connects if r in g.nodes]
         hidden = door.type in HIDDEN_DOOR_TYPES
         one_way = door.type in ONE_WAY_DOOR_TYPES

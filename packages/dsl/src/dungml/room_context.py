@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 from typing import Iterable, Mapping, Optional
 
 from .geometry import _point_strictly_inside, corridor_polygons, room_polygon
-from .graph import Graph, is_blocked
+from . import walk
+from .graph import Graph, is_blocked, keyed_doors
 from .model import Corridor, DungeonMap, Room
 
 
@@ -37,17 +38,7 @@ class SessionView:
 # ----- lookup -----
 
 def _nodes(dmap: DungeonMap) -> dict[str, Room | Corridor]:
-    out: dict[str, Room | Corridor] = {}
-    for name, r in dmap.rooms.items():
-        out[f"room.{name}"] = r
-    for name, c in dmap.corridors.items():
-        out[f"corridor.{name}"] = c
-    for layer in dmap.layers:
-        for r in layer.rooms:
-            out.setdefault(f"room.{r.name}", r)
-        for c in layer.corridors:
-            out.setdefault(f"corridor.{c.name}", c)
-    return out
+    return walk.nodes(dmap)
 
 
 def node_label(dmap: DungeonMap, node_id: str) -> str:
@@ -181,27 +172,10 @@ def node_exits(graph: Graph, node: str, view: SessionView, *,
 # ----- the room -----
 
 def _door_extras(dmap: DungeonMap) -> dict[str, object]:
-    """Door objects keyed exactly as `build_graph` keys its edges.
-
-    Two doors at the same position collide on the bare `door_key`;
-    `build_graph` disambiguates with a `#N` suffix, assigned in the same
-    `_iter_doors` order it iterates. Mirror that here — same order, same
-    suffixing — so a colliding door's own extras (description, trapped,
-    dm_notes) never bleed onto its neighbour at the same point.
-    """
-    from .graph import _iter_doors, door_key
-    out: dict[str, object] = {}
-    seen_keys: set[str] = set()
-    for d in _iter_doors(dmap):
-        key = door_key(d)
-        if key in seen_keys:
-            n = 2
-            while f"{key}#{n}" in seen_keys:
-                n += 1
-            key = f"{key}#{n}"
-        seen_keys.add(key)
-        out[key] = d
-    return out
+    """Door objects keyed exactly as `build_graph` keys its edges (the same
+    `keyed_doors`), so a colliding door's own extras (description, trapped,
+    dm_notes) never bleed onto its neighbour at the same point."""
+    return {key: p.item for key, p in keyed_doors(dmap)}
 
 
 def _door_for(doors: Mapping[str, object], key: str):

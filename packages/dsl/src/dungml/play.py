@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from typing import Iterable, Optional
 
 from .geometry import node_centroid
-from .graph import Graph, build_graph, door_key, fog_of_war
+from . import walk
+from .graph import Graph, build_graph, fog_of_war, keyed_doors
 from .model import (
     Corridor,
     DungeonMap,
@@ -118,21 +119,15 @@ def corridor_fade_stubs(
     discovered subset. Computed from the *full* map (before fog pruning).
     Deterministic order (sorted) so mask ids are stable across renders."""
     discovered = set(discovered_nodes)
-    # Keyed by the bare `door_key` (position). This intentionally does not
-    # replicate build_graph's `#N` suffix for two doors stacked at the exact
-    # same point: on that (pathological) collision the lookup below misses and
-    # the stub is silently skipped — a safe fall back to the plain hard edge.
-    pos_by_key: dict[str, Vec2] = {door_key(d): d.position for d in dmap.doors}
-    corr_by_id: dict[str, Corridor] = {
-        f"corridor.{name}": c for name, c in dmap.corridors.items()
+    # Keyed as build_graph keys its edges (so the second of two doors stacked
+    # at one point is found too); hidden-layer doors and corridors are left
+    # out — a stub must never hint at GM-only geometry.
+    pos_by_key: dict[str, Vec2] = {
+        key: p.item.position for key, p in keyed_doors(dmap) if not p.hidden
     }
-    for layer in dmap.layers:
-        if layer.hidden:
-            continue
-        for d in layer.doors:
-            pos_by_key.setdefault(door_key(d), d.position)
-        for c in layer.corridors:
-            corr_by_id.setdefault(f"corridor.{c.name}", c)
+    corr_by_id: dict[str, Corridor] = {
+        f"corridor.{name}": c for name, c in walk.corridors(dmap, visible=True).items()
+    }
 
     stubs: list[FadeStub] = []
     for node_id in sorted(discovered):

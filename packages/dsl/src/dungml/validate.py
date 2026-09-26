@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import difflib
 
+from . import walk
 from .builtins import BUILTIN_FEATURES
 from .errors import Diagnostic
 from .geometry import Area, corridor_polygons, find_overlapping_areas, room_polygon
@@ -102,11 +103,9 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     bh = dmap.map.grid.bounds_h
 
     known_features = set(dmap.feature_defs.keys())
-    known_rooms = set(dmap.rooms) | {r.name for l in dmap.layers for r in l.rooms}
-    known_corridors = set(dmap.corridors) | {
-        c.name for l in dmap.layers for c in l.corridors
-    }
-    all_doors = [*dmap.doors, *(d for l in dmap.layers for d in l.doors)]
+    known_rooms = set(walk.rooms(dmap))
+    known_corridors = set(walk.corridors(dmap))
+    all_doors = [p.item for p in walk.members(dmap, "doors")]
 
     ps = dmap.map.party_start
     if ps is not None and ps.ref is not None:
