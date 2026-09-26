@@ -648,13 +648,15 @@ class _RenderContext:
         """Top-level areas, those in visible layers, and areas nested inside
         rooms/corridors (which ride with their parent through fog)."""
         areas: list[Area] = list(self.dmap.areas)
+        corridors: list[Corridor] = list(self.dmap.corridors.values())
         for layer in self.dmap.layers:
             if layer.hidden:
                 continue
             areas.extend(layer.areas)
-        for r in self.dmap.rooms.values():
+            corridors.extend(layer.corridors)
+        for r in self.all_rooms.values():
             areas.extend(r.areas)
-        for c in self.dmap.corridors.values():
+        for c in corridors:
             areas.extend(c.areas)
         return areas
 

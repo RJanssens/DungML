@@ -118,3 +118,26 @@ def test_nested_area_raises_no_overlap_warning() -> None:
     """
     diags = validate(parse(src))
     assert not any("overlap" in d.message.lower() for d in diags)
+
+
+def test_area_nested_in_visible_layer_room_renders() -> None:
+    src = """
+    map "M" { grid { bounds 30 x 16 } }
+    layer "upper" {
+      room "hall" { rect 2,2 10 x 8  area "pool" kind water { rect 4,4 3 x 3 } }
+      corridor "c" { segment line from 12,5 to 20,5  area "puddle" kind mud { rect 14,4 2 x 2 } }
+    }
+    """
+    svg = render(parse(src))
+    assert 'data-area="pool"' in svg
+    assert 'data-area="puddle"' in svg
+
+
+def test_area_nested_in_hidden_layer_room_does_not_render() -> None:
+    src = """
+    map "M" { grid { bounds 30 x 16 } }
+    layer "secret" hidden {
+      room "hall" { rect 2,2 10 x 8  area "pool" kind water { rect 4,4 3 x 3 } }
+    }
+    """
+    assert 'data-area="pool"' not in render(parse(src))
