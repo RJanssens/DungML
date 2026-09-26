@@ -56,7 +56,7 @@ def test_declared_grid_is_tinted_blue():
     )
     svg = render(parse(src), "oldschool-blue")
     assert 'class="map-grid"' in svg
-    assert f'stroke="{GRID}"' in svg
+    assert f".map-grid{{stroke:{GRID}}}" in svg  # the theme's grid colour
 
 
 def test_author_colours_and_text_are_not_rewritten():

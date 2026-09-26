@@ -1,6 +1,8 @@
 """classic-bw renderer behaviour."""
 from __future__ import annotations
 
+import re
+
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -390,13 +392,19 @@ def test_map_grid_overlay_default_spacing_and_color():
     svg = render(parse(src))
     root = _parse_svg(svg)
     grid = next(e for e in root.iter(f"{SVG_NS}g") if e.get("class") == "map-grid")
-    # No inline stroke when colour omitted; CSS rule handles colour.
-    assert grid.get("stroke") is None
+    # No inline colour when omitted; the stylesheet default handles it.
+    assert grid.get("stroke") is None and grid.get("style") is None
     # 4x4 / spacing 1 → 3 vertical + 3 horizontal interior lines.
     assert len(list(grid.iter(f"{SVG_NS}line"))) == 6
 
 
-def test_map_grid_overlay_color_applied_as_attribute():
+def test_map_grid_overlay_author_colour_wins_over_the_stylesheet():
+    """The author's colour must beat the stylesheet default. A `stroke`
+    attribute on the group didn't: the default rule targeted the lines
+    themselves (`.map-grid line{stroke:…}`), and a rule matching an element
+    beats a value it would inherit — so the grid drew grey regardless
+    (verified by rasterising). Default on the group, author colour as an
+    inline style on the group, lines inherit."""
     src = """
     map "X" {
       grid { cell 10 px bounds 4 x 4 }
@@ -406,7 +414,11 @@ def test_map_grid_overlay_color_applied_as_attribute():
     svg = render(parse(src))
     root = _parse_svg(svg)
     grid = next(e for e in root.iter(f"{SVG_NS}g") if e.get("class") == "map-grid")
-    assert grid.get("stroke") == "#ff0000"
+    assert grid.get("style") == "stroke:#ff0000"
+    css = next(root.iter(f"{SVG_NS}style")).text
+    line_rule = re.search(r"\.map-grid line\{([^}]*)\}", css).group(1)
+    assert "stroke:" not in line_rule  # (stroke-width is fine)
+    assert ".map-grid{stroke:" in css
 
 
 def test_no_grid_overlay_when_not_set():

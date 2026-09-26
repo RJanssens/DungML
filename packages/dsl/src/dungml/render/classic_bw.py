@@ -669,8 +669,10 @@ class _RenderContext:
             # override (inline) wins; lines inherit the stroke.
             f".room-grid{{stroke:{self.ROOM_GRID}}}"
             ".room-grid line{stroke-width:0.04;fill:none}"
-            f".map-grid line{{stroke:{self.MAP_GRID};stroke-width:0.035;fill:none;"
-            "opacity:0.55}"
+            # Default colour on the group (as for .room-grid) so an author's
+            # inline `style="stroke:…"` on the group wins; lines inherit it.
+            f".map-grid{{stroke:{self.MAP_GRID}}}"
+            ".map-grid line{stroke-width:0.035;fill:none;opacity:0.55}"
             "</style>"
         )
 
@@ -816,9 +818,10 @@ class _RenderContext:
             y += spacing
         if not lines:
             return ""
-        stroke_attr = f' stroke="{escape(color)}"' if color else ""
+        color = _css_color(color)
+        style_attr = f' style="stroke:{color}"' if color else ""
         return (
-            f'<g class="map-grid"{stroke_attr}>{"".join(lines)}</g>'
+            f'<g class="map-grid"{style_attr}>{"".join(lines)}</g>'
         )
 
     def _cell_grid_lines(self, clip: list[str], clip_id: str) -> str:
@@ -840,9 +843,9 @@ class _RenderContext:
             n += 1
         if not lines:
             return ""
-        color = self.dmap.map.cell_grid_color
+        color = _css_color(self.dmap.map.cell_grid_color)
         # Inline `style` so it beats the `.room-grid` CSS; lines inherit it.
-        stroke_attr = f' style="stroke:{escape(color)}"' if color else ""
+        stroke_attr = f' style="stroke:{color}"' if color else ""
         return (
             f'<defs><clipPath id="{clip_id}">{"".join(clip)}</clipPath></defs>'
             f'<g class="room-grid" clip-path="url(#{clip_id})"'
@@ -903,9 +906,8 @@ class _RenderContext:
             return ""
         # Inline `style` (not a presentation attr) so it beats the `.room-grid`
         # CSS; lines inherit the stroke.
-        stroke_attr = (
-            f' style="stroke:{escape(r.grid_color)}"' if r.grid_color else ""
-        )
+        grid_color = _css_color(r.grid_color)
+        stroke_attr = f' style="stroke:{grid_color}"' if grid_color else ""
         return (
             f'<defs><clipPath id="{clip_id}">'
             f'<path d="{clip_path}"/></clipPath></defs>'
