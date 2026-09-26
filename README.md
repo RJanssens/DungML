@@ -83,7 +83,9 @@ uv run dmap renderers
 ### Backend API surface (all under `/api`)
 
 - `POST /api/auth/register | /api/auth/login | /api/auth/logout`, `GET /api/auth/me`
-- `GET|POST /api/projects`, `GET|PATCH|DELETE /api/projects/{id}`
+- `GET|POST /api/projects`, `GET|PATCH|DELETE /api/projects/{id}` (projects are
+  public by default — every signed-in user gets member rights; `is_public` on
+  create, owner-only `PATCH {is_public}`)
 - `GET|POST /api/projects/{id}/members`, `DELETE /api/projects/{id}/members/{user_id}`
   (share a project — owner-only; members get everything but delete and sharing.
   Linking a campaign also makes the service principal a member of that project.)

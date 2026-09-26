@@ -132,9 +132,21 @@ co-access on top. **Every route that reaches a project, its maps, its DSL or
 its play sessions authorizes through `access.py`** — `get_project`, `get_map`,
 `can_access`, `require_owner` — rather than comparing `user_id` inline.
 
-- no access at all → **404** (don't leak that a project exists)
+- not public and no access → **404** (don't leak that a private project exists)
 - access but an owner-only action → **403** (deleting a project, managing
   membership). A member can already see it, so a 404 there would be theatre.
+
+**Projects are public by default.** `projects.is_public` gives every signed-in
+user member rights — see, edit, create and delete maps, run sessions, rename.
+The owner switches it (`PATCH {is_public}`, owner-only → 403). Two kinds are
+created private and were set private when the column arrived:
+the ttrpg2 service project (ttrpg2 rewrites those maps on every token move)
+and each user's *Example: dungml samples* project. `ProjectOut.role` says how
+the caller reaches a project: `owner`, `member` or `public`.
+
+**Campaign linking needs a collaborator, not just access.** `link`/`unlink` use
+`access.is_collaborator` (owner or member): a public project must not collect
+strangers' campaigns, and a link grants the daemon membership.
 
 `POST /api/projects/{id}/members` takes a subject *or* an email and 404s if
 nobody matches: a typo must not conjure an account.
@@ -145,9 +157,10 @@ campaign still links there. The service token was always a valid *login* —
 `current_user` resolves it like any other subject — it just had no
 authorization outside its own project, which is why ttrpg2 once resorted to
 writing `dungml.db` directly to add a room. It now reads and creates maps
-through `/api` like a member. Member rights only: no project delete, no
-membership management. It *can* edit the GM's authored maps; that boundary is
-policy in ttrpg2's CLAUDE.md, not mechanism. The GUI labels the row
+through `/api` like a member — on every public project too, not just linked
+ones. Member rights only: no project delete, no membership management. It
+*can* edit the GM's authored maps; that boundary is policy in ttrpg2's
+CLAUDE.md, not mechanism. The GUI labels the row
 "campaign service" so the entry isn't mistaken for a person.
 
 **`users.subject` is nullable.** Rows from before the OIDC migration have
