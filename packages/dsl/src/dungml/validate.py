@@ -774,6 +774,7 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     # map `exit` is legitimate. Nodes in hidden layers still count — the GM
     # authored them and they still need to be reachable in play.
     g = build_graph(dmap)
+    exits_at = _exits_by_node(dmap, g)
     if g.nodes:
         # Undirected adjacency, built once: a one-way door still physically
         # connects two nodes, so connectivity ignores its direction.
@@ -797,14 +798,20 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                         seen.add(nxt)
                         stack.append(nxt)
             parts.append(sorted(comp))
-        if len(parts) > 1:
+        # A part holding an exit is reached from elsewhere — a teleport, a stair
+        # to another printed floor, the level above — so only a part with no
+        # door and no exit is a missing door. The largest part is the map.
+        parts.sort(key=len, reverse=True)
+        cut_off = [p for p in parts[1:] if not any(exits_at.get(n) for n in p)]
+        if cut_off:
+            shown = [parts[0]] + cut_off
             names = "; ".join(
-                ", ".join(p[:3]) + (" …" if len(p) > 3 else "") for p in parts
+                ", ".join(p[:3]) + (" …" if len(p) > 3 else "") for p in shown
             )
             diags.append(
                 _diag(
                     "warning",
-                    f"map is not connected: {len(parts)} separate parts ({names})",
+                    f"map is not connected: {len(shown)} separate parts ({names})",
                 )
             )
 
@@ -815,7 +822,8 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 b.key for b in g.boundary_exits(nid)
             }
             doors |= {e.key for e in g.edges if e.b == nid and e.one_way}
-            if len(doors) == 1:
+            # an exit in the corridor is its way on (a stub off the page)
+            if len(doors) == 1 and not exits_at.get(nid):
                 diags.append(
                     _diag(
                         "warning",
@@ -824,3 +832,27 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 )
 
     return diags
+
+
+def _exits_by_node(dmap: DungeonMap, g) -> dict[str, int]:
+    """How many exits each room/corridor holds: those nested in it, and top-level
+    (or layer-level) exits standing inside its shape."""
+    out: dict[str, int] = {}
+    shapes: list[tuple[str, object]] = []
+    for kind in ("room", "corridor"):
+        for p in walk.members(dmap, f"{kind}s"):
+            nid = f"{kind}.{p.item.name}"
+            if p.item.exits:
+                out[nid] = out.get(nid, 0) + len(p.item.exits)
+            try:
+                polys = [room_polygon(p.item)] if kind == "room" else corridor_polygons(p.item)
+                shapes += [(nid, Polygon(poly).buffer(0)) for poly in polys if len(poly) >= 3]
+            except Exception:       # a malformed shape is reported elsewhere
+                continue
+    loose = list(dmap.exits) + [ex for layer in dmap.layers for ex in layer.exits]
+    for ex in loose:
+        pt = Point(ex.position)
+        host = min(shapes, key=lambda s: s[1].distance(pt), default=None)
+        if host is not None and host[1].distance(pt) <= 0.5:
+            out[host[0]] = out.get(host[0], 0) + 1
+    return out

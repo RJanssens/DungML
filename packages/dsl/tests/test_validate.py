@@ -170,3 +170,47 @@ corridor "spur" { width 1 segment line from 4,2 to 12,2 }
 door at 4,2 { connects room.a, corridor.spur }
 ''')
     assert any(m.startswith("corridor 'spur' has only one door") for m in msgs)
+
+
+def test_exit_at_a_corridors_end_is_its_way_on_not_a_dead_end():
+    # A stub running off the page to the next level has one door and an exit:
+    # the party goes on through the exit, so it isn't a dead end.
+    msgs = _warning_messages('''
+room "a" { rect 0,0 4 x 4 }
+corridor "stairs" {
+  width 1 segment line from 4,2 to 12,2
+  exit at 11.5,2 { to "Level 2" at 3,3 }
+}
+door at 4,2 { connects room.a, corridor.stairs }
+corridor "top" { width 1 segment line from 20,2 to 30,2 }
+exit at 29.5,2 { to "Level 2" at 5,5 }
+door at 20,2 { connects room.a, corridor.top }
+''')
+    assert not [m for m in msgs if "dead end" in m], msgs
+
+
+def test_part_reached_by_an_exit_is_not_a_missing_door():
+    # A sealed vault whose only way in is a teleport (an exit, here to this
+    # same map) is reached — only a part with no door *and* no exit warns.
+    msgs = _warning_messages('''
+room "a" { rect 0,0 4 x 4
+  exit at 2,2 { to "M" at 21,2 secret }
+}
+room "b" { rect 4,0 4 x 4 }
+door at 4,2 { connects room.a, room.b }
+room "vault" { rect 20,0 4 x 4
+  exit at 21,2 { to "M" at 2,2 secret }
+}
+''')
+    assert not [m for m in msgs if m.startswith("map is not connected")], msgs
+    msgs = _warning_messages('''
+room "a" { rect 0,0 4 x 4 }
+room "b" { rect 4,0 4 x 4 }
+door at 4,2 { connects room.a, room.b }
+room "vault" { rect 20,0 4 x 4 }
+room "cave" { rect 30,0 4 x 4
+  exit at 31,2 { to "Surface" at 2,2 }
+}
+''')
+    hit = [m for m in msgs if m.startswith("map is not connected")]
+    assert hit and "room.vault" in hit[0] and "room.cave" not in hit[0]
