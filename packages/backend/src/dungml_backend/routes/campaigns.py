@@ -49,6 +49,11 @@ class PartyIn(BaseModel):
     room_id: str
 
 
+class SecretIn(BaseModel):
+    key: str
+    revealed: bool = True
+
+
 class TokenIn(BaseModel):
     scope: str = "fog"
 
@@ -153,6 +158,7 @@ def render(external_id: str, map_id: str, token: str, db: DbDep) -> Response:
         set(s.discovered_doors or []),
         party_location=s.party_location,
         full=(scope == "gm"),
+        revealed=s.revealed_secrets or [],
     )
     return Response(svg, media_type="image/svg+xml")
 
@@ -275,6 +281,29 @@ def door(external_id: str, map_id: str, body: DoorIn, _svc: CurrentService, db: 
     return {"ok": True, "door": key,
             "state": (s.door_states or {}).get(key, authored),
             "discovered": key in (s.discovered_doors or [])}
+
+
+@router.post("/campaigns/{external_id}/maps/{map_id}/secrets")
+def secret(external_id: str, map_id: str, body: SecretIn, _svc: CurrentService, db: DbDep):
+    """Show a secret (trap, hidden inscription, …) to the players — or hide
+    it again with `revealed: false`. Keys come from a room's
+    `dm_only.secrets`. The authored map never changes; this is the session."""
+    m = contract.map_in_link(db, external_id, map_id)
+    if m is None:
+        return contract.json_error(404, "map not found")
+    try:
+        dmap = parse(m.source)
+    except DmapParseError:
+        return contract.json_error(409, "map does not parse — it may be mid-edit in the editor")
+    sc, candidates = contract.find_secret(dmap, body.key)
+    if sc is None:
+        return contract.json_error(404, {"error": "unknown secret", "key": body.key,
+                                         "candidates": candidates})
+    s = contract.campaign_session_for(db, m, external_id)
+    contract.set_revealed(s, sc.key, body.revealed)
+    db.commit()
+    return {"ok": True, "key": sc.key, "kind": sc.kind, "node": sc.node,
+            "revealed": sc.key in (s.revealed_secrets or [])}
 
 
 @router.get("/campaigns/{external_id}/maps/{map_id}/info")

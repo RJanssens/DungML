@@ -147,5 +147,6 @@ def render(external_id: str, token: str, db: DbDep) -> Response:
         set(s.discovered_doors or []),
         party_location=s.party_location,
         full=(scope == "gm"),
+        revealed=s.revealed_secrets or [],
     )
     return Response(svg, media_type="image/svg+xml")

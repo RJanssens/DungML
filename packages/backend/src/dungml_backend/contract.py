@@ -222,7 +222,28 @@ def session_view(s: models.PlaySession):
         discovered_doors=frozenset(s.discovered_doors or []),
         door_states=dict(s.door_states or {}),
         party_location=s.party_location,
+        revealed=frozenset(s.revealed_secrets or []),
     )
+
+
+def set_revealed(s: models.PlaySession, key: str, revealed: bool) -> None:
+    """Add `key` to (or drop it from) a session's reveal list."""
+    keys = set(s.revealed_secrets or [])
+    keys = keys | {key} if revealed else keys - {key}
+    s.revealed_secrets = sorted(keys)
+
+
+def find_secret(dmap, key: str):
+    """(secret, None) for a known key, else (None, candidate keys) — those
+    containing `key` if any do, else every secret on the map."""
+    from dungml.secrets import list_secrets
+    secrets = list_secrets(dmap)
+    for sc in secrets:
+        if sc.key == key:
+            return sc, None
+    keys = [sc.key for sc in secrets]
+    near = [k for k in keys if key and key in k]
+    return None, sorted(near or keys)
 
 
 def clear_party_elsewhere(db: DbSession, m: models.Map, external_id: str) -> None:

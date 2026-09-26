@@ -21,7 +21,7 @@ from dungml import (
 )
 from dungml.errors import DmapParseError
 
-from .. import access, models
+from .. import access, contract, models
 from ..deps import CurrentUser, DbDep
 
 router = APIRouter(tags=["sessions"])
@@ -36,6 +36,11 @@ class SessionCreateIn(BaseModel):
 
 class MoveIn(BaseModel):
     to: str
+
+
+class SecretIn(BaseModel):
+    key: str
+    revealed: bool = True
 
 
 class RevealIn(BaseModel):
@@ -98,6 +103,7 @@ def _serialize(s: models.PlaySession, graph) -> dict:
         "party_location": s.party_location,
         "discovered_nodes": sorted(discovered),
         "discovered_doors": sorted(set(s.discovered_doors or [])),
+        "revealed_secrets": sorted(set(s.revealed_secrets or [])),
         "exits": _exits(graph, s.party_location, discovered),
     }
 
@@ -192,6 +198,25 @@ def reveal_node(session_id: str, body: RevealIn, user: CurrentUser, db: DbDep):
     return _serialize(s, graph)
 
 
+@router.post("/sessions/{session_id}/secrets")
+def reveal_secret(session_id: str, body: SecretIn, user: CurrentUser, db: DbDep):
+    """GM: show a secret (trap, hidden inscription, …) to the players, or
+    hide it again with `revealed: false`."""
+    s = _get_owned_session(db, session_id, user)
+    dmap, graph = _graph_for(s.map)
+    sc, candidates = contract.find_secret(dmap, body.key)
+    if sc is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"error": "unknown secret", "key": body.key, "candidates": candidates},
+        )
+    contract.set_revealed(s, sc.key, body.revealed)
+    db.commit()
+    db.refresh(s)
+    return dict(_serialize(s, graph), key=sc.key, kind=sc.kind, node=sc.node,
+                revealed=sc.key in (s.revealed_secrets or []))
+
+
 @router.get("/sessions/{session_id}/render")
 def render_session(
     session_id: str,
@@ -211,5 +236,6 @@ def render_session(
         party_location=s.party_location,
         renderer=renderer,
         full=(view == "full"),
+        revealed=s.revealed_secrets or [],
     )
     return {"svg": svg}

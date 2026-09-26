@@ -119,6 +119,12 @@ def ensure_columns() -> None:
                 text("ALTER TABLE campaign_links ADD COLUMN active_map_id VARCHAR(36)")
             )
 
+    # The DM's reveal list (secret keys shown to the players) arrived after
+    # play_sessions shipped. Nullable JSON; the app reads NULL as "none".
+    if "play_sessions" in existing and "revealed_secrets" not in cols("play_sessions"):
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE play_sessions ADD COLUMN revealed_secrets JSON"))
+
     if "maps" in existing:
         idx = {i["name"] for i in insp.get_indexes("maps")}
         if "ix_maps_external_id" not in idx:

@@ -445,3 +445,24 @@ def test_node_objects_let_the_top_level_win_like_the_renderer_and_graph():
         'layer "L" { room "a" { rect 20,1 4 x 4 } }\n'
     )
     assert _node_objects(dmap)["room.a"].shape.position == (1.0, 1.0)
+
+
+_TRAPPED = """include "core.dmap"
+map "M" { grid { bounds 20 x 20 } }
+room "hall" { rect 0,0 10 x 10  feature pit-trap at 3,3 id pit_1 }
+"""
+
+
+def test_reveal_secret_shows_a_trap_in_the_players_view(fresh_db):
+    s = fresh_db
+    p = s.create_project(name="Traps")
+    m = s.create_map(project_id=p["id"], name="T", source=_TRAPPED)
+    sid = s.create_session(map_id=m["id"], name="P", start_location="room.hall")["id"]
+    assert 'data-ref="pit-trap"' not in s.render_session(session_id=sid)["svg"]
+    out = s.reveal_secret(session_id=sid, key="pit_1")
+    assert out["revealed_secrets"] == ["pit_1"]
+    assert 'data-ref="pit-trap"' in s.render_session(session_id=sid)["svg"]
+    out = s.reveal_secret(session_id=sid, key="pit_1", revealed=False)
+    assert out["revealed_secrets"] == []
+    with pytest.raises(ValueError, match="unknown secret 'nope'.*pit_1"):
+        s.reveal_secret(session_id=sid, key="nope")

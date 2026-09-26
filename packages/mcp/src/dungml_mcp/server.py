@@ -192,6 +192,7 @@ def _session_dict(s: models.PlaySession) -> dict:
         "discovered_nodes": sorted(s.discovered_nodes or []),
         "discovered_doors": sorted(s.discovered_doors or []),
         "door_states": dict(s.door_states or {}),
+        "revealed_secrets": sorted(s.revealed_secrets or []),
         "created_at": s.created_at.isoformat(),
         "updated_at": s.updated_at.isoformat(),
     }
@@ -1107,6 +1108,39 @@ def mark_door(
 
 
 @mcp.tool()
+def reveal_secret(
+    session_id: Annotated[str, Field(description="Play-session UUID.")],
+    key: Annotated[
+        str,
+        Field(description="Secret key — a feature/exit/text `id`, or a position key "
+              "like 'room.crypt/feature@3,3'. A room's dm_only.secrets lists them."),
+    ],
+    revealed: Annotated[
+        bool,
+        Field(default=True, description="False hides it from the players again."),
+    ] = True,
+) -> dict:
+    """Show a secret (a trap, hidden inscription, concealed exit, …) to the
+    players in this session's fogged view — or hide it again. The authored
+    map never changes; the reveal lives on the session."""
+    from dungml.secrets import list_secrets
+
+    with _session() as db:
+        user = _get_or_create_mcp_user(db)
+        s = _owned_session(db, session_id, user.id)
+        dmap, _g = _graph_for_session(s, db)
+        keys = [sc.key for sc in list_secrets(dmap)]
+        if key not in keys:
+            raise ValueError(f"unknown secret {key!r}; known: {', '.join(keys) or 'none'}")
+        shown = set(s.revealed_secrets or [])
+        shown = shown | {key} if revealed else shown - {key}
+        s.revealed_secrets = sorted(shown)
+        db.commit()
+        db.refresh(s)
+        return _session_dict(s)
+
+
+@mcp.tool()
 def get_exits(
     session_id: Annotated[str, Field(description="Play-session UUID.")],
     node: Annotated[
@@ -1142,6 +1176,7 @@ def get_exits(
             discovered_doors=frozenset(s.discovered_doors or []),
             door_states=dict(s.door_states or {}),
             party_location=s.party_location,
+            revealed=frozenset(s.revealed_secrets or []),
         )
         perceived, secret = node_exits(g, node, view, labels={})
         exits = []
@@ -1231,6 +1266,7 @@ def get_known_map(
             discovered_doors=frozenset(s.discovered_doors or []),
             door_states=dict(s.door_states or {}),
             party_location=s.party_location,
+            revealed=frozenset(s.revealed_secrets or []),
         )
         km = known_map(_dmap, g, view)
         for n in km["nodes"]:
@@ -1270,6 +1306,7 @@ def render_session(
                 dmap,
                 discovered_nodes=set(s.discovered_nodes or []),
                 discovered_doors=set(s.discovered_doors or []),
+                revealed=set(s.revealed_secrets or []),
             )
         diagnostics = [_diag_to_dict(d) for d in dsl_validate(dmap)]
         name = renderer or dmap.map.renderer

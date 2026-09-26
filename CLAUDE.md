@@ -83,6 +83,14 @@ The per-map session routes mirror `/maps/{external_id}` above (`reveal`,
   the door joining them. 404 `{error: "unknown door", door, between}` if
   neither resolves to a real door, or `{error: "ambiguous door", candidates}`
   if `between` matches more than one. → `{ok, door, state, discovered}`.
+- `POST /campaigns/{external_id}/maps/{map_id}/secrets` `{key, revealed=true}`
+  — show a secret (trap, hidden inscription, concealed exit, …) to the
+  players, or hide it again. Keys come from a room context's
+  `dm_only.secrets` (`{key, kind, label, revealed}`); the session keeps them
+  in `revealed_secrets`, the map never changes. 404
+  `{error: "unknown secret", key, candidates}`; 409 if the map doesn't parse.
+  → `{ok, key, kind, node, revealed}`. The web GM has the same on
+  `POST /api/sessions/{id}/secrets`, and MCP a `reveal_secret` tool.
 
 `GET /maps/{map_id}/rooms` gives the node graph — map-keyed and
 session-independent, because structure is authored truth, not per-campaign.
@@ -170,7 +178,7 @@ See README for the full quickstart. In short:
 
 ```bash
 uv sync                                   # Python workspace (dsl + backend + mcp)
-uv run pytest packages/                   # 695 tests — run this before any commit
+uv run pytest packages/                   # 736 tests — run this before any commit
 uv run dmap-server                        # → http://127.0.0.1:8000
 uv run dmap --help                        # DSL CLI (render, validate, renderers)
 uv run dmap-mcp                           # stdio MCP server, shares the backend DB
@@ -264,11 +272,17 @@ fog for free with no renderer changes. `play.render_fogged` wraps it and adds
 the party marker plus the corridor fade stubs. Keep that property — resist
 pushing fog logic into renderers.
 
-**Secret features are stripped from the players' view**, per-instance
-(`secret`) or per-type (a `feature_def` marked `secret`, e.g. traps in
-`core.dmap`). `full=True` (the GM view) skips `fog_of_war` entirely and so
-shows them. If you add a new kind of GM-only content, teach `fog_of_war` to
-strip it — otherwise it leaks into the fogged render.
+**Secrets are stripped from the players' view until the DM reveals them.**
+`secret` works on features (per instance, or per type — a `feature_def`
+marked `secret`, e.g. core.dmap's traps), texts, areas, line features,
+markers and exits. `dungml.secrets` is the one definition of what is
+revealable and under which key (the `id` if given, else a position key);
+`fog_of_war(..., revealed=)` keeps a secret only if its key is revealed.
+Hidden layers are *not* secrets — wholly GM-only, never revealable.
+`full=True` (the GM view) skips `fog_of_war` entirely and so shows
+everything. If you add a new kind of GM-only content, teach `fog_of_war` to
+strip it (and `dungml.secrets` to list it) — otherwise it leaks into the
+fogged render. `dm_notes` and source spans are stripped wholesale.
 
 ---
 
