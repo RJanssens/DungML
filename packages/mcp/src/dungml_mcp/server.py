@@ -71,7 +71,6 @@ from dungml import (
     Graph,
     SessionView,
     build_graph,
-    door_key,
     fog_of_war,
     get_renderer,
     is_blocked,

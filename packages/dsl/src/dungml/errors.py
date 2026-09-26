@@ -5,7 +5,6 @@ Each carries a source location so the editor can render squigglies.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass

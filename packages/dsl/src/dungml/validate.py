@@ -11,13 +11,18 @@ from __future__ import annotations
 
 import difflib
 
+from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry import box as shapely_box
+
 from . import walk
 from .builtins import BUILTIN_FEATURES
 from .errors import Diagnostic
 from .geometry import Area, corridor_polygons, find_overlapping_areas, room_polygon
 from .graph import build_graph
+from .labels import feature_footprint, text_box
 from .render.theme import list_themes
 from .secrets import list_secrets
+from .walls import DOOR_TOLERANCE, centerline_chains
 
 # Minimum interior-overlap area (square map units) before an overlap is
 # worth reporting. Below this, an overlap is a cosmetic sliver — typically
@@ -93,6 +98,19 @@ def _duplicate(kind: str, name: str, first: SourceSpan, again: SourceSpan) -> Di
     )
 
 
+WINDOW_TOLERANCE = 0.5  # the renderer only draws a window this close to a wall
+LABEL_SIZE = 0.9  # the renderer's base label size
+
+
+def _near_line_wall(room: Room, pos: tuple[float, float], tol: float) -> bool:
+    from .geometry import LineWall, project_onto_wall, room_walls
+
+    return any(
+        project_onto_wall(pos, w)[2] <= tol
+        for w in room_walls(room) if isinstance(w, LineWall)
+    )
+
+
 def _in_bounds(pos: tuple[float, float], w: float, h: float) -> bool:
     x, y = pos
     return 0 <= x <= w and 0 <= y <= h
@@ -105,8 +123,33 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     bh = dmap.map.grid.bounds_h
 
     known_features = set(dmap.feature_defs.keys())
-    known_rooms = set(walk.rooms(dmap))
-    known_corridors = set(walk.corridors(dmap))
+    all_rooms = walk.rooms(dmap)
+    all_corridors = walk.corridors(dmap)
+    known_rooms = set(all_rooms)
+    known_corridors = set(all_corridors)
+
+    def _door_on_a_wall(door: Door) -> bool:
+        """Mirrors where the renderer can seat a door: within reach of a wall
+        of a room it connects, or of a corridor it connects (end or side)."""
+        refs = door.connects or [f"room.{n}" for n in all_rooms] + [
+            f"corridor.{n}" for n in all_corridors
+        ]
+        here = Point(door.position)
+        for ref in refs:
+            kind, _, name = ref.partition(".")
+            if kind == "room" and name in all_rooms:
+                outline = Polygon(room_polygon(all_rooms[name])).buffer(0).boundary
+                if outline.distance(here) <= DOOR_TOLERANCE:
+                    return True
+            elif kind == "corridor" and name in all_corridors:
+                c = all_corridors[name]
+                chains = centerline_chains(c)
+                if chains and min(LineString(ch).distance(here) for ch in chains) <= (
+                    c.width / 2 + DOOR_TOLERANCE
+                ):
+                    return True
+        return False
+
     all_doors = [p.item for p in walk.members(dmap, "doors")]
 
     ps = dmap.map.party_start
@@ -343,6 +386,16 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
         check_choice(
             door.type, KNOWN_DOOR_TYPES, f"door at {door.position}: door type", door.span
         )
+        if not _door_on_a_wall(door):
+            diags.append(
+                _diag(
+                    "warning",
+                    f"door at {door.position} is not on a wall of "
+                    f"{', '.join(door.connects) or 'any room or corridor'} — it draws "
+                    f"as a loose marker; move it onto the wall it opens",
+                    door.span,
+                )
+            )
         check_choice(
             door.state, KNOWN_DOOR_STATES, f"door at {door.position}: door state", door.span
         )
@@ -384,6 +437,27 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
                 _diag(
                     "warning",
                     f"window at {win.position} is outside the map bounds",
+                    win.span,
+                )
+            )
+        kind, _, ident = (win.in_ref or "").partition(".")
+        if kind == "room" and ident in all_rooms and not _near_line_wall(
+            all_rooms[ident], win.position, WINDOW_TOLERANCE
+        ):
+            diags.append(
+                _diag(
+                    "warning",
+                    f"window at {win.position} is not on a wall of room '{ident}' — "
+                    f"it isn't drawn",
+                    win.span,
+                )
+            )
+        elif kind == "corridor" and ident in known_corridors:
+            diags.append(
+                _diag(
+                    "warning",
+                    f"window at {win.position} is in corridor '{ident}' — windows "
+                    f"are only drawn on room walls",
                     win.span,
                 )
             )
@@ -535,6 +609,29 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
     check_choice(
         dmap.map.theme, frozenset(list_themes()), "map theme", dmap.map.span
     )
+    for what, raw, known in dmap._bad_values:
+        check_choice(raw, known, f"map {what}", dmap.map.span)
+
+    # ---- an explicitly placed label sitting on a feature ----
+    for p in walk.members(dmap, "rooms"):
+        room = p.item
+        if room.label is None or room.label.position is None or not room.features:
+            continue
+        w, h = text_box(["00. " + room.label.text], LABEL_SIZE * room.label.size)
+        lx, ly = room.label.position
+        box_ = shapely_box(lx - w / 2, ly - h / 2, lx + w / 2, ly + h / 2)
+        for fi in room.features:
+            if box_.intersects(feature_footprint(dmap.feature_defs.get(fi.ref), fi)):
+                diags.append(
+                    _diag(
+                        "warning",
+                        f"room '{room.name}' label at {room.label.position} sits on "
+                        f"feature '{fi.ref}' — move it, or drop `at` and it will "
+                        f"find a clear spot itself",
+                        room.span,
+                    )
+                )
+                break
 
     # ---- duplicate doors (two doors joining the same pair of nodes) ----
     seen_pairs: dict[frozenset, tuple] = {}

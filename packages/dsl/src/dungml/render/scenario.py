@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..errors import DmapParseError
-from ..model import DungeonMap, Scenario
+from ..model import Scenario
 from ..parser import parse
 from . import get_renderer
 

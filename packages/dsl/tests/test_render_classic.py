@@ -437,15 +437,16 @@ def test_no_grid_overlay_when_not_set():
     assert '<g class="map-grid"' not in svg
 
 
-def test_window_renders_two_parallel_lines(cottage_source):
+def test_window_renders_as_a_framed_pane(cottage_source):
     svg = render(parse(cottage_source))
     root = _parse_svg(svg)
     windows = [
-        e for e in root.iter(f"{SVG_NS}line")
-        if e.get("class") == "window"
+        e for e in root.iter(f"{SVG_NS}g") if e.get("class") == "window-instance"
     ]
-    # Three windows, each rendered as 2 parallel lines.
-    assert len(windows) == 6
+    # Three windows, each a pane (the wall's thickness) with a glazing line.
+    assert len(windows) == 3
+    for w in windows:
+        assert [e.tag.removeprefix(SVG_NS) for e in w] == ["polygon", "line"]
 
 
 def test_room_description_emitted_as_data_attribute(crypt_source):

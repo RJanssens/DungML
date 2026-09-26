@@ -14,7 +14,7 @@ knows what not to say.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Optional
+from typing import Mapping, Optional
 
 from .geometry import owner_node
 from .secrets import is_secret, list_secrets

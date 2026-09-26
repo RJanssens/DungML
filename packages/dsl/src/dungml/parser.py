@@ -203,6 +203,8 @@ def _arc_through(
     )
 
 
+_ROOM_NUMBER_WORDS = frozenset({"on", "off", "true", "false", "yes", "no"})
+
 # Properties an entity takes once; setting one twice silently kept the last.
 _SINGLE = {
     "room": {"shape", "origin", "label", "description", "dm_notes", "grid",
@@ -299,6 +301,7 @@ class _Tx(Transformer):
         self.require_map = require_map
         self.includes: list[str] = []
         self.repeats: list[tuple[str, Any, str, int]] = []
+        self.bad_values: list[tuple[str, str, frozenset[str]]] = []
 
     def _call_userfunc(self, tree: Any, new_children: Any = None) -> Any:
         # Stamp the source span onto every model object a rule produces, at
@@ -414,7 +417,10 @@ class _Tx(Transformer):
         return ("party_start", PartyStart(at=(_num(items[0]), _num(items[1]))))
 
     def room_numbers_decl(self, items: list[Any]) -> tuple[str, Any]:
-        return ("room_numbers", str(items[0]).lower() in ("on", "true", "yes"))
+        raw = str(items[0])
+        if raw.lower() not in _ROOM_NUMBER_WORDS:
+            self.bad_values.append(("room_numbers", raw, _ROOM_NUMBER_WORDS))
+        return ("room_numbers", raw.lower() in ("on", "true", "yes"))
 
     def cell_grid_decl(self, items: list[Any]) -> tuple[str, Any]:
         spacing = 1.0
@@ -1645,6 +1651,7 @@ class _Tx(Transformer):
         )
         dmap._redefinitions = redefinitions
         dmap._repeats = list(self.repeats)
+        dmap._bad_values = list(self.bad_values)
         return dmap
 
 

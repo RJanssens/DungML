@@ -11,12 +11,10 @@ import hashlib
 import math
 import re
 from html import escape
-from typing import Iterable
 
 from ..geometry import (
     ArcWall,
     LineWall,
-    Wall,
     cut_wall,
     party_start_point,
     project_onto_wall,
@@ -39,7 +37,6 @@ from ..model import (
     GlyphPolygon,
     GlyphPolyline,
     GlyphRect,
-    Layer,
     LineFeature,
     LineSegment,
     Area,
@@ -56,6 +53,7 @@ from ..model import (
 )
 from .. import walk
 from ..labels import LINE_H as LABEL_LINE_H, feature_footprint, place_label
+from ..graph import is_concealed
 from ..walls import corridor_outlines
 from shapely.geometry import Point, Polygon
 from shapely.ops import polylabel, unary_union
@@ -101,7 +99,6 @@ STEP_GAP = 0.15  # half-distance between the two thin parallel lines
 LABEL_BASE_SIZE = 0.9
 LABEL_INSET = 0.5  # world-unit padding from the room bbox for relative-aligned labels
 DOOR_WIDTH_DEFAULT = 1.0
-WINDOW_INSET = 0.06  # how far the parallel window lines sit from the wall
 LEGEND_HEIGHT = 4.0  # world-unit thickness of the legend strip below the map
 
 # Marker tag → CSS colour. Any tag string not in this table is passed
@@ -1942,6 +1939,7 @@ class _RenderContext:
             ("Secret", "secret", "closed"),
             ("Window", "window", "closed"),
         ]
+        entries = self._legend_entries_used(entries)
         n = len(entries)
         top = self.H  # SVG-y of the top edge of the legend strip
         cell_w = self.W / n
@@ -1970,6 +1968,33 @@ class _RenderContext:
             )
         parts.append("</g>")
         return "\n".join(parts)
+
+    def _legend_entries_used(
+        self, entries: list[tuple[str, str, str]]
+    ) -> list[tuple[str, str, str]]:
+        """The legend entries this map's (visible) doors and windows use —
+        all of them when it uses none, so an empty map still gets a key."""
+        doors = self._visible("doors")
+        types = {(d.type or "wooden").lower() for d in doors}
+        plain = [
+            d for d in doors
+            if (d.type or "wooden").lower() not in _SPECIAL_DOOR_TYPES and not is_concealed(d)
+        ]
+        used = {
+            "Opening": bool(types & {"open", "opening", "gap"}),
+            "Archway": bool(types & {"arch", "archway"}),
+            "Portcullis": "portcullis" in types,
+            "Door": bool(plain),
+            "Double": bool(types & {"double", "double-door", "double_door"}),
+            "One-way": bool(types & {"one-way", "oneway", "one_way"}),
+            "Locked": any((d.state or "").lower() == "locked" for d in plain),
+            "Trapped": any(d.trapped or (d.state or "").lower() == "trapped" for d in plain),
+            "Open": any((d.state or "").lower() == "open" for d in plain),
+            "Secret": any(is_concealed(d) for d in doors),
+            "Window": bool(self._visible("windows")),
+        }
+        chosen = [e for e in entries if used.get(e[0])]
+        return chosen or entries
 
     def _legend_cell(
         self,
@@ -2012,14 +2037,12 @@ class _RenderContext:
         fixed orientation: wall is horizontal (+x), perpendicular is +y.
         """
         if dtype == "window":
-            inset = WINDOW_INSET
+            t = WALL_STROKE / 2
             return (
-                f'<line class="window" '
-                f'x1="{_n(cx - half)}" y1="{_n(cy - inset)}" '
-                f'x2="{_n(cx + half)}" y2="{_n(cy - inset)}"/>'
-                f'<line class="window" '
-                f'x1="{_n(cx - half)}" y1="{_n(cy + inset)}" '
-                f'x2="{_n(cx + half)}" y2="{_n(cy + inset)}"/>'
+                f'<rect class="window" x="{_n(cx - half)}" y="{_n(cy - t)}" '
+                f'width="{_n(2 * half)}" height="{_n(2 * t)}" fill="{self._floor_fill()}"/>'
+                f'<line class="window" x1="{_n(cx - half)}" y1="{_n(cy)}" '
+                f'x2="{_n(cx + half)}" y2="{_n(cy)}"/>'
             )
 
         dtype_l = (dtype or "wooden").lower()
@@ -2227,14 +2250,19 @@ class _RenderContext:
         half = w.width / 2.0
         s1 = (cx - half * ux, cy - half * uy)
         e1 = (cx + half * ux, cy + half * uy)
-        s2 = (s1[0] + nx * WINDOW_INSET, s1[1] + ny * WINDOW_INSET)
-        e2 = (e1[0] + nx * WINDOW_INSET, e1[1] + ny * WINDOW_INSET)
-        s3 = (s1[0] - nx * WINDOW_INSET, s1[1] - ny * WINDOW_INSET)
-        e3 = (e1[0] - nx * WINDOW_INSET, e1[1] - ny * WINDOW_INSET)
+        # A framed pane filling the wall's thickness (the gap is cut from the
+        # wall), with a glazing line down the middle — two hairlines alone
+        # were nearly invisible at a third of the wall's weight.
+        t = WALL_STROKE / 2
+        corners = [
+            (s1[0] + nx * t, s1[1] + ny * t), (e1[0] + nx * t, e1[1] + ny * t),
+            (e1[0] - nx * t, e1[1] - ny * t), (s1[0] - nx * t, s1[1] - ny * t),
+        ]
+        pts = " ".join(f"{_n(x)},{_n(self.y(y))}" for x, y in corners)
         return (
             f'<g class="window-instance"{self._src(w.span)}>'
-            + self._line_to_svg(LineWall(s2, e2), cls="window")
-            + self._line_to_svg(LineWall(s3, e3), cls="window")
+            f'<polygon class="window" points="{pts}" fill="{self._floor_fill()}"/>'
+            + self._line_to_svg(LineWall(s1, e1), cls="window")
             + "</g>"
         )
 
@@ -2833,9 +2861,7 @@ class _RenderContext:
 
     def _arc_segment_path(self, s: ArcSegment) -> str:
         """Linearized path tail (no leading M) for a parametric arc."""
-        start = _arc_endpoint(s, s.from_angle)
         end = _arc_endpoint(s, s.to_angle)
-        steps = max(12, int(abs(s.to_angle - s.from_angle) // 5) + 1)
         cx, cy = s.center
         a0 = math.radians(s.from_angle)
         a1 = math.radians(s.to_angle)
@@ -2843,6 +2869,9 @@ class _RenderContext:
             a1 -= 2 * math.pi
         elif s.sweep == "ccw" and a1 < a0:
             a1 += 2 * math.pi
+        # About one point per 5° of the arc actually swept (after the sweep
+        # direction applies — the raw angle difference can be far smaller).
+        steps = max(12, int(abs(math.degrees(a1 - a0)) // 5) + 1)
         parts: list[str] = []
         for i in range(1, steps + 1):
             t = i / steps
@@ -2873,6 +2902,14 @@ def _scope_css(css: str, scope: str) -> str:
         selectors = ",".join(f"{scope} {s.strip()}" for s in m.group(1).split(","))
         out.append(f"{selectors}{{{m.group(2)}}}")
     return "".join(out)
+
+
+# Door types drawn with their own glyph rather than a plain leaf.
+_SPECIAL_DOOR_TYPES = frozenset({
+    "open", "opening", "gap", "arch", "archway", "smashed", "broken",
+    "portcullis", "gate", "gates", "double", "double-door", "double_door",
+    "one-way", "oneway", "one_way", "secret", "concealed", "hidden",
+})
 
 
 def _strip_kind(qualified: str) -> str:
@@ -3078,8 +3115,11 @@ class _HatchedContext(_RenderContext):
             '<line x1="0" y1="0" x2="0" y2="0.55" '
             f'stroke="{self.theme.hatch}" stroke-width="0.11"/>'
             '</pattern>'
-            f'<filter id="{self._id("halo-roughen")}" x="-5%" y="-5%" '
-            'width="110%" height="110%">'
+            # Region in user space round the whole canvas: a bbox-relative
+            # region (-5%/110%) cut the displaced halo off in straight lines.
+            f'<filter id="{self._id("halo-roughen")}" filterUnits="userSpaceOnUse" '
+            f'x="{_n(-2 * self.HALO_W)}" y="{_n(-2 * self.HALO_W)}" '
+            f'width="{_n(self.W + 4 * self.HALO_W)}" height="{_n(self.H + 4 * self.HALO_W)}">'
             '<feTurbulence type="fractalNoise" baseFrequency="0.45" '
             'numOctaves="2" seed="7" result="noise"/>'
             '<feDisplacementMap in="SourceGraphic" in2="noise" '

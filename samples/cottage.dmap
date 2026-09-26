@@ -37,7 +37,7 @@ room "kitchen" {
 
 room "parlor" {
   rect 10,2 10 x 7              # shares west wall with kitchen
-  label "Parlor" at 15,5 size 1.1                       # absolute, slightly larger
+  label "Parlor" at 15,7.5 size 1.1                     # absolute, slightly larger
 
   feature hearth     at 19,4 rotate -90
   feature chair      at 13,5

@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import Point, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import polylabel
 from shapely.prepared import prep

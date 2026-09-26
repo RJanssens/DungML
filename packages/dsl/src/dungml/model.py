@@ -614,3 +614,5 @@ class DungeonMap(BaseModel):
     )
     # Single-valued properties set more than once — `(kind, entity, key, n)`.
     _repeats: list = PrivateAttr(default_factory=list)
+    # Enum-ish values the parser couldn't place — `(what, raw, known words)`.
+    _bad_values: list = PrivateAttr(default_factory=list)

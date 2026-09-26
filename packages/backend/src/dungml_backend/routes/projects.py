@@ -9,11 +9,9 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import select
 
 from .. import access, contract, defaults, models, schemas
 from ..deps import CurrentUser, DbDep
-from ..identity import display_name
 from ..library import (
     LibraryAlreadyImported,
     UnknownLibrary,
