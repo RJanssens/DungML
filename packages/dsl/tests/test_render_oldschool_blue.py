@@ -57,3 +57,18 @@ def test_declared_grid_is_tinted_blue():
     svg = render(parse(src), "oldschool-blue")
     assert 'class="map-grid"' in svg
     assert f'stroke="{GRID}"' in svg
+
+
+def test_author_colours_and_text_are_not_rewritten():
+    """Recolouring is a palette, not a find-and-replace over the output: a
+    user colour that merely starts with an ink token, and prose mentioning
+    one, come through untouched."""
+    src = """
+map "M" { grid { bounds 20 x 12 } }
+room "a" { rect 1,1 6 x 6 background "#111827" description "Room #111 is sealed" }
+room "b" { rect 9,1 6 x 6 background "#fafafa" }
+"""
+    svg = render(parse(src), "oldschool-blue")
+    assert "fill:#111827" in svg
+    assert 'data-description="Room #111 is sealed"' in svg
+    assert "fill:#fafafa" in svg  # an explicit author choice, not a knockout

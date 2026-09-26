@@ -260,6 +260,13 @@ class Hatched(ClassicBW):
 # ----- internal helpers -----
 
 class _RenderContext:
+    # Palette. Every piece of line-work and every grid line reads these, so a
+    # style recolours by overriding them (see oldschool_blue) — never by
+    # rewriting the finished SVG, which would also hit author colours/prose.
+    INK = "#111"  # walls, doors, glyph line-work, label text
+    MAP_GRID = "#9a937f"  # map-wide graph-paper grid
+    ROOM_GRID = "#b8b3a3"  # per-room / cell grid
+
     def __init__(self, dmap: DungeonMap) -> None:
         self.dmap = dmap
         self.fade_stubs: list = []
@@ -667,7 +674,7 @@ class _RenderContext:
         # attributes via CSS specificity.
         return (
             "<style>"
-            f".wall{{fill:none;stroke:#111;stroke-width:{_n(WALL_STROKE)};"
+            f".wall{{fill:none;stroke:{self.INK};stroke-width:{_n(WALL_STROKE)};"
             "stroke-linecap:square;stroke-linejoin:miter}"
             # `line_style ruined` — dash-dot walls (a crumbled / ruined
             # structure). The descendant selector outranks `.wall` so it
@@ -683,29 +690,30 @@ class _RenderContext:
             f".dashed .wall{{stroke-dasharray:{_n(WALL_STROKE * 3)},"
             f"{_n(WALL_STROKE * 2)};stroke-linecap:butt}}"
             # `line_style trail` — x-marks drawn along the wall (see below).
-            f".trail-x{{fill:none;stroke:#111;stroke-width:{_n(TRAIL_STROKE)};"
+            f".trail-x{{fill:none;stroke:{self.INK};stroke-width:{_n(TRAIL_STROKE)};"
             "stroke-linecap:round}"
-            f".line-feature{{fill:none;stroke:#111;"
+            f".line-feature{{fill:none;stroke:{self.INK};"
             f"stroke-width:{_n(LINE_FEATURE_STROKE)};stroke-linecap:round;"
             "stroke-linejoin:round}"
             f".floor{{fill:{self._floor_fill()};stroke:none}}"
             ".corridor-wall{fill:none}"
             ".corridor-floor{fill:none}"
-            f".door{{fill:none;stroke:#111;stroke-width:{_n(DOOR_STROKE)};"
+            f".door{{fill:none;stroke:{self.INK};stroke-width:{_n(DOOR_STROKE)};"
             "stroke-linecap:butt}"
-            f".window{{fill:none;stroke:#111;stroke-width:{_n(WINDOW_STROKE)}}}"
-            f".feature{{fill:#fff;stroke:#111;stroke-width:{_n(FEATURE_STROKE)}}}"
-            ".feature-fill{fill:#111;stroke:none}"
+            f".window{{fill:none;stroke:{self.INK};stroke-width:{_n(WINDOW_STROKE)}}}"
+            f".feature{{fill:#fff;stroke:{self.INK};stroke-width:{_n(FEATURE_STROKE)}}}"
+            f".feature-fill{{fill:{self.INK};stroke:none}}"
             f".label{{font-family:Georgia,serif;font-style:italic;"
-            f"fill:#111;"
+            f"fill:{self.INK};"
             # text-anchor/dominant-baseline are set per-element so labels
             # with `align` can override the centered default.
             f"paint-order:stroke;stroke:{self._floor_fill()};"
             f"stroke-width:0.18;stroke-linejoin:round}}"
             # Default colour on the group so a per-grid `style="stroke:…"`
             # override (inline) wins; lines inherit the stroke.
-            ".room-grid{stroke:#b8b3a3}.room-grid line{stroke-width:0.04;fill:none}"
-            ".map-grid line{stroke:#9a937f;stroke-width:0.035;fill:none;"
+            f".room-grid{{stroke:{self.ROOM_GRID}}}"
+            ".room-grid line{stroke-width:0.04;fill:none}"
+            f".map-grid line{{stroke:{self.MAP_GRID};stroke-width:0.035;fill:none;"
             "opacity:0.55}"
             "</style>"
         )
@@ -1104,7 +1112,7 @@ class _RenderContext:
                         )
                         marks.append(
                             f'<path class="corridor-wall" d="{d}" '
-                            f'stroke-width="{_n(WALL_STROKE)}" stroke="#111" '
+                            f'stroke-width="{_n(WALL_STROKE)}" stroke="{self.INK}" '
                             f'stroke-linejoin="{join}" fill="none"/>'
                         )
                 return (
@@ -1114,7 +1122,7 @@ class _RenderContext:
             dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
             line_layer = (
                 f'<path class="corridor-wall" {attrs} d="{floor_d}" '
-                f'stroke-width="{_n(WALL_STROKE)}" stroke="#111" '
+                f'stroke-width="{_n(WALL_STROKE)}" stroke="{self.INK}" '
                 f'stroke-linejoin="{join}" stroke-linecap="{cap}"{dash_attr} '
                 f'fill="none"{filter_attr}/>'
             )
@@ -1124,7 +1132,7 @@ class _RenderContext:
         # Wall outline (drawn first, wider, dark).
         wall_layer = (
             f'<path class="corridor-wall" {attrs} d="{floor_d}" '
-            f'stroke-width="{_n(outline_w)}" stroke="#111" '
+            f'stroke-width="{_n(outline_w)}" stroke="{self.INK}" '
             f'stroke-linejoin="{join}" stroke-linecap="butt" fill="none"'
             f"{filter_attr}/>"
         )
@@ -1236,7 +1244,7 @@ class _RenderContext:
             outline_w = stub.width + 2 * WALL_STROKE
             wall = (
                 f'<path class="corridor-wall" d="{d}" '
-                f'stroke-width="{_n(outline_w)}" stroke="#111" '
+                f'stroke-width="{_n(outline_w)}" stroke="{self.INK}" '
                 f'stroke-linejoin="round" stroke-linecap="butt" fill="none"/>'
             )
             floor_p = (
@@ -1276,7 +1284,7 @@ class _RenderContext:
         )
         return (
             f'<polygon class="corridor-cap" data-corridor="{escape(c.name)}" '
-            f'points="{pts}" fill="#111" stroke="none"{filter_attr}/>'
+            f'points="{pts}" fill="{self.INK}" stroke="none"{filter_attr}/>'
         )
 
     def _corridor_label(self, c: Corridor) -> str:
@@ -2059,7 +2067,7 @@ class _RenderContext:
         )
         return (
             f'<polygon class="door-leaf" points="{pts}" '
-            f'fill="#111" stroke="none"/>'
+            f'fill="{self.INK}" stroke="none"/>'
         )
 
     def _lock_dot(self, cx: float, cy: float) -> str:
@@ -2084,7 +2092,10 @@ class _RenderContext:
         p2 = (cx + arm * ux + arm * nx, cy + arm * uy + arm * ny)
         p3 = (cx - arm * ux + arm * nx, cy - arm * uy + arm * ny)
         p4 = (cx + arm * ux - arm * nx, cy + arm * uy - arm * ny)
-        cls = 'class="door-trap" stroke="#fafafa" stroke-width="0.06" fill="none"'
+        cls = (
+            f'class="door-trap" stroke="{self._floor_fill()}" '
+            'stroke-width="0.06" fill="none"'
+        )
         return (
             f'<line {cls} x1="{_n(p1[0])}" y1="{_n(self.y(p1[1]))}" '
             f'x2="{_n(p2[0])}" y2="{_n(self.y(p2[1]))}"/>'
@@ -2195,7 +2206,7 @@ class _RenderContext:
         arc_d = self._three_point_arc_path(closed_tip, via, open_tip)
         arc = (
             f'<path class="door-swing" d="{arc_d}" fill="none" '
-            f'stroke="#111" stroke-width="{_n(DOOR_STROKE * 0.7)}" '
+            f'stroke="{self.INK}" stroke-width="{_n(DOOR_STROKE * 0.7)}" '
             f'stroke-dasharray="0.18,0.12"/>'
         )
         return leaf + arc
@@ -2245,7 +2256,7 @@ class _RenderContext:
             parts.append(
                 f'<text x="{_n(cx)}" y="{_n(caption_cy)}" '
                 f'font-family="Georgia,serif" font-style="italic" '
-                f'font-size="0.65" fill="#111" '
+                f'font-size="0.65" fill="{self.INK}" '
                 f'text-anchor="middle" dominant-baseline="central">'
                 f'{escape(caption)}</text>'
             )
@@ -2311,11 +2322,11 @@ class _RenderContext:
         if dtype_l == "secret":
             return (
                 f'<circle cx="{_n(cx)}" cy="{_n(cy)}" r="0.42" '
-                f'fill="{self._floor_fill()}" stroke="#111" '
+                f'fill="{self._floor_fill()}" stroke="{self.INK}" '
                 f'stroke-width="{_n(DOOR_STROKE)}"/>'
                 f'<text x="{_n(cx)}" y="{_n(cy)}" '
                 f'font-family="Georgia,serif" font-size="0.62" '
-                f'font-weight="bold" fill="#111" '
+                f'font-weight="bold" fill="{self.INK}" '
                 f'text-anchor="middle" dominant-baseline="central">S</text>'
             )
 
@@ -2357,7 +2368,7 @@ class _RenderContext:
             f'<rect class="door-leaf" '
             f'x="{_n(cx - leaf_half)}" y="{_n(cy - perp)}" '
             f'width="{_n(2 * leaf_half)}" height="{_n(2 * perp)}" '
-            f'fill="#111" stroke="none"/>'
+            f'fill="{self.INK}" stroke="none"/>'
         )
 
     def _legend_portcullis(self, cx: float, cy: float, half: float) -> str:
@@ -2395,7 +2406,7 @@ class _RenderContext:
             f'<path class="door-swing" d="M {_n(closed_tip_x)} {_n(cy)} '
             f'A {_n(radius)} {_n(radius)} 0 0 1 '
             f'{_n(open_tip_x)} {_n(open_tip_y)}" '
-            f'fill="none" stroke="#111" '
+            f'fill="none" stroke="{self.INK}" '
             f'stroke-width="{_n(DOOR_STROKE * 0.7)}" '
             f'stroke-dasharray="0.18,0.12"/>'
         )
@@ -2452,10 +2463,10 @@ class _RenderContext:
             f'<g class="door {kind}-door" data-door="{kind}">'
             f'<circle cx="{_n(px)}" cy="{_n(self.y(py))}" '
             f'r="{_n(radius)}" fill="{self._floor_fill()}" '
-            f'stroke="#111" stroke-width="{_n(DOOR_STROKE)}"/>'
+            f'stroke="{self.INK}" stroke-width="{_n(DOOR_STROKE)}"/>'
             f'<text x="{_n(px)}" y="{_n(self.y(py))}" '
             f'font-family="Georgia,serif" font-size="0.62" '
-            f'font-weight="bold" fill="#111" '
+            f'font-weight="bold" fill="{self.INK}" '
             f'text-anchor="middle" dominant-baseline="central">{letter}</text>'
             f"</g>"
         )
@@ -2525,7 +2536,7 @@ class _RenderContext:
         # any background — same trick the legend uses for door leaves.
         # SVG doesn't natively darken a colour string, but a translucent
         # black stroke achieves the same effect cheaply.
-        stroke = "#111"
+        stroke = self.INK
         attrs = f'class="marker" data-name="{escape(m.name)}" data-tag="{escape(tag)}"'
         if m.location:
             attrs += f' data-location="{escape(m.location)}"'
@@ -2588,7 +2599,7 @@ class _RenderContext:
             parts.append(
                 f'<text x="{_n(cx)}" y="{_n(caption_y)}" '
                 f'font-family="Georgia,serif" font-style="italic" '
-                f'font-size="{_n(radius * 0.95)}" fill="#111" '
+                f'font-size="{_n(radius * 0.95)}" fill="{self.INK}" '
                 f'text-anchor="middle" dominant-baseline="hanging" '
                 f'paint-order="stroke" stroke="{self._floor_fill()}" '
                 f'stroke-width="{_n(radius * 0.2)}" stroke-linejoin="round">'
@@ -2608,7 +2619,7 @@ class _RenderContext:
             # Built-ins live in `core.dmap` (brought in via `include`), so
             # a miss here means an undefined feature. Validate flags it;
             # render a placeholder so the output stays well-formed.
-            body = _generic_glyph("?")
+            body = _generic_glyph("?", self.INK)
             display_label = fi.ref
         x, y = fi.position
         sx = fi.scale
@@ -2684,7 +2695,7 @@ class _RenderContext:
 
     def _shape_svg(self, shape, background, outline) -> str:  # type: ignore[no-untyped-def]
         fill = _css_color(background) or "#ffffff"
-        stroke = _css_color(outline.color if outline else None) or "#111"
+        stroke = _css_color(outline.color if outline else None) or self.INK
         sw = (outline.width if outline else None) or FEATURE_STROKE
         dash = ""
         if outline and outline.stroke == "dashed":
@@ -2711,7 +2722,7 @@ class _RenderContext:
 
     def _overlay_svg(self, ov: Overlay) -> str:
         ox, oy = ov.offset
-        fill = _css_color(ov.fill) or "#111"
+        fill = _css_color(ov.fill) or self.INK
         if isinstance(ov.shape, CircleShape):
             return (
                 f'<circle cx="{_n(ox)}" cy="{_n(oy)}" r="{_n(ov.shape.radius)}" '
@@ -2759,7 +2770,7 @@ class _RenderContext:
             f'<text class="map-title" transform="{transform}" '
             f'text-anchor="{anchor_h}" dominant-baseline="{baseline}" '
             f'font-size="{_n(size)}" font-family="Georgia,serif" '
-            f'font-weight="700" fill="#111">{text}</text>'
+            f'font-weight="700" fill="{self.INK}">{text}</text>'
         )
 
     def _text_annotation(self, ta: TextAnnotation) -> str:
@@ -3105,10 +3116,10 @@ class _RenderContext:
 
 # ----- glyph library (in normalized local coords centered on origin) -----
 
-def _generic_glyph(letter: str) -> str:
+def _generic_glyph(letter: str, ink: str) -> str:
     return (
         '<rect class="feature" x="-0.35" y="-0.35" width="0.7" height="0.7" rx="0.06"/>'
-        f'<text font-family="Georgia,serif" font-size="0.6" fill="#111" '
+        f'<text font-family="Georgia,serif" font-size="0.6" fill="{ink}" '
         f'text-anchor="middle" dominant-baseline="central">{escape(letter)}</text>'
     )
 
