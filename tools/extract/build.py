@@ -77,6 +77,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             t = np.clip(((xx - ax) * vx + (yy - ay) * vy) / max(vx * vx + vy * vy, 1e-9), 0, 1)
             band_px |= np.hypot(xx - ax - t * vx, yy - ay - t * vy) < b["width"] * P / 2 + 3
     circle_cell = -np.ones((N, N), int)
+    vec_cell = np.zeros((N, N), bool)
     for i in range(N):
         for j in range(N):
             s = (slice(int(round(i * P)), int(round((i + 1) * P))), slice(int(round(j * P)), int(round((j + 1) * P))))
@@ -86,8 +87,11 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             if k:                                   # the cell's centre is inside a round room
                 circle_cell[i, j] = k - 1
                 F[i, j] = True
-            elif ((disk_px[s] > 0) | band_px[s])[fl].sum() / nfl >= 0.5 and frac[i, j] < FULL:
+            # (a third is enough: a passage glancing past a room's corner leaves the
+            # corner cell part room-chamfer, part passage — 2A's 25)
+            elif ((disk_px[s] > 0) | band_px[s])[fl].sum() / nfl >= 0.35 and frac[i, j] < FULL:
                 F[i, j] = False                     # a round room's rim or a slanted passage
+                vec_cell[i, j] = True
 
     # ------------------------------------------------------------ grid lines
     def edge_strip(i, j, d, half=3):
@@ -522,8 +526,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     spill_owner: dict = {}
     for i in range(N):
         for j in range(N):
-            if region[i, j] >= 0:
-                continue
+            if region[i, j] >= 0 or vec_cell[i, j]:
+                continue                     # (a slanted passage's or a rim's floor is theirs)
             around = [int(region[i + di, j + dj]) for di in (-1, 0, 1) for dj in (-1, 0, 1)
                       if 0 <= i + di < N and 0 <= j + dj < N and region[i + di, j + dj] >= 0]
             if around:

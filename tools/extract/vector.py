@@ -250,10 +250,62 @@ def find_bands(rock: np.ndarray, P: float, st: dict, circles: list[dict] = ()) -
         for (ex, ey), (ux, uy), why in ((fwd[-1], (dx, dy), why1), (back[-1], (-dx, -dy), why0)):
             if why == "open" and (nxt := beyond(ex, ey, ux, uy, w)):
                 seeds.append((*nxt, ux, uy, w, th))
-        pl = approximate_polygon(pts, st.get("band_simplify", 0.12) * P)
+        pl = _straight_ends(approximate_polygon(pts, st.get("band_simplify", 0.12) * P), 0.8 * P)
         bands.append(dict(points=[[float(px / P), float(py / P)] for px, py in pl],
                           width=round(w / P, 2), ends=[why0, why1],
                           angle=round(math.degrees(th), 1)))
+    return _join_bends(bands)
+
+
+def _straight_ends(pl: np.ndarray, short: float) -> np.ndarray:
+    """Near an end the walls stop being symmetric (a room's corner, a rim), so the
+    re-centring pulls the last step aside: a short kink. Run the end on along the
+    passage instead, as far as the kink reached."""
+    pl = np.array(pl, float)
+    for a, b, c in ((0, 1, 2), (-1, -2, -3)):
+        if len(pl) < 3:
+            break
+        end, prev, before = pl[a], pl[b], pl[c]
+        d = prev - before
+        d /= np.linalg.norm(d) or 1
+        seg = end - prev
+        if np.linalg.norm(seg) < short and abs(math.degrees(math.atan2(d[0] * seg[1] - d[1] * seg[0], d @ seg))) > 12:
+            pl[a] = prev + d * max(float(seg @ d), 0.0)
+    return pl
+
+
+def _join_bends(bands: list[dict], reach: float = 1.2) -> list[dict]:
+    """A passage that bends sharply is traced as two bands whose centre lines run
+    into the outer wall of the bend — two 'dead' ends facing each other (2A's
+    passage by 37 and 25 turns 45° at the "!"). Join them into one polyline."""
+    changed = True
+    while changed:
+        changed = False
+        for a in range(len(bands)):
+            for b in range(a + 1, len(bands)):
+                A, B = bands[a], bands[b]
+                for ea in (0, 1):
+                    for eb in (0, 1):
+                        if A["ends"][ea] != "dead" or B["ends"][eb] != "dead":
+                            continue
+                        pa, pb = A["points"][-ea], B["points"][-eb]
+                        if math.dist(pa, pb) > reach or abs(A["width"] - B["width"]) > 0.25:
+                            continue
+                        ap = A["points"] if ea == 1 else A["points"][::-1]    # ...→ bend
+                        bp = B["points"] if eb == 0 else B["points"][::-1]    # bend → ...
+                        mid = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2]
+                        bands[a] = dict(A, points=ap[:-1] + [mid] + bp[1:],
+                                        ends=[A["ends"][1 - ea], B["ends"][1 - eb]],
+                                        width=round((A["width"] + B["width"]) / 2, 2))
+                        del bands[b]
+                        changed = True
+                        break
+                    if changed:
+                        break
+                if changed:
+                    break
+            if changed:
+                break
     return bands
 
 
