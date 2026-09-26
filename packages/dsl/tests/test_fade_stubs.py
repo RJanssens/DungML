@@ -3,6 +3,8 @@ corridor through an open junction gets a short, fading piece of the hidden
 corridor drawn beyond the boundary."""
 from __future__ import annotations
 
+import re
+
 from dungml import parse
 from dungml.graph import build_graph, door_key
 from dungml.play import clip_corridor, corridor_fade_stubs
@@ -76,7 +78,7 @@ def test_hatched_renders_stub_group_with_mask():
     r.fade_stubs = corridor_fade_stubs(dmap, build_graph(dmap), {"corridor.a"})
     svg = r.render(fog_of_war(dmap, {"corridor.a"}, set()))
     assert 'class="fade-stub"' in svg
-    assert 'mask="url(#dungml-fade-0)"' in svg
+    assert re.search(r'mask="url\(#dm-[0-9a-f]+-fade-0\)"', svg)
     assert "linearGradient" in svg
 
 
@@ -84,7 +86,7 @@ def test_no_stubs_no_fade_markup():
     dmap = parse(TWO)
     r = get_renderer("hatched")()  # fade_stubs defaults to []
     svg = r.render(fog_of_war(dmap, {"corridor.a"}, set()))
-    assert "dungml-fade" not in svg
+    assert not re.search(r"dm-[0-9a-f]+-fade", svg)
 
 
 from dungml.play import render_fogged
@@ -95,14 +97,14 @@ def test_render_fogged_emits_fade_stub():
     dk = door_key(dmap.doors[0])
     svg = render_fogged(dmap, {"corridor.a"}, {dk}, full=False)
     assert 'class="fade-stub"' in svg
-    assert "dungml-fade-0" in svg
+    assert re.search(r"dm-[0-9a-f]+-fade-0", svg)
 
 
 def test_render_fogged_full_has_no_fade_stub():
     dmap = parse(TWO)
     dk = door_key(dmap.doors[0])
     svg = render_fogged(dmap, {"corridor.a"}, {dk}, full=True)
-    assert "dungml-fade" not in svg
+    assert not re.search(r"dm-[0-9a-f]+-fade", svg)
 
 
 def test_stub_through_second_of_two_stacked_doors():

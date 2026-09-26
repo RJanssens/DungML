@@ -1,6 +1,8 @@
 """Top-level `area` terrain primitive: parser, model, renderer, validation."""
 from __future__ import annotations
 
+import re
+
 import xml.etree.ElementTree as ET
 
 from dungml import Area, parse, render
@@ -76,8 +78,8 @@ def test_water_kind_registers_texture_pattern() -> None:
     area "pond" kind water { polygon (1,1) (8,1) (8,8) (1,8) }
     """
     svg = render(parse(src))
-    assert 'pattern id="dungml-tx-water"' in svg
-    assert "fill:url(#dungml-tx-water)" in svg
+    assert re.search(r'pattern id="dm-[0-9a-f]+-tx-water"', svg)
+    assert re.search(r"fill:url\(#dm-[0-9a-f]+-tx-water\)", svg)
 
 
 def test_area_in_layer_renders() -> None:

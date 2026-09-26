@@ -484,9 +484,9 @@ def test_hatched_renderer_registered():
 
 def test_hatched_renderer_emits_pattern_def(crypt_source):
     svg = render(parse(crypt_source), "hatched")
-    assert '<pattern id="hatch"' in svg
+    assert re.search(r'<pattern id="dm-[0-9a-f]+-hatch"', svg)
     # Floors should reference the pattern, not the flat color.
-    assert "url(#hatch)" in svg
+    assert re.search(r"url\(#dm-[0-9a-f]+-hatch\)", svg)
     # Walls / features / labels should still be present and unchanged.
     root = _parse_svg(svg)
     assert root.tag == f"{SVG_NS}svg"
@@ -499,7 +499,7 @@ def test_hatched_renderer_via_convenience_helper(cottage_source):
     """`render(map, 'hatched')` round-trips through the registry."""
     svg = render(parse(cottage_source), "hatched")
     assert svg.startswith("<svg")
-    assert "url(#hatch)" in svg
+    assert re.search(r"url\(#dm-[0-9a-f]+-hatch\)", svg)
 
 
 # ----- per-room grid overlay -----
@@ -517,13 +517,13 @@ def test_room_grid_renders_clipped_lines():
     # The clipPath must exist and be referenced by a room-grid group.
     clip_paths = [e for e in root.iter(f"{SVG_NS}clipPath")]
     assert len(clip_paths) == 1
-    assert clip_paths[0].get("id") == "gridclip-r"
+    assert re.fullmatch(r"dm-[0-9a-f]+-gridclip-r", clip_paths[0].get("id"))
     grid_groups = [
         e for e in root.iter(f"{SVG_NS}g")
         if e.get("class") == "room-grid"
     ]
     assert len(grid_groups) == 1
-    assert grid_groups[0].get("clip-path") == "url(#gridclip-r)"
+    assert grid_groups[0].get("clip-path") == f"url(#{clip_paths[0].get('id')})"
     # 10x8 room with spacing 1 → 11 vertical lines (x=2..12) and 9
     # horizontal lines (y=2..10) inside the group.
     lines = list(grid_groups[0].iter(f"{SVG_NS}line"))

@@ -7,6 +7,8 @@ well-formed XML with no script element and no event-handler attribute.
 """
 from __future__ import annotations
 
+import re
+
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -91,5 +93,5 @@ def test_legitimate_colours_still_pass_through() -> None:
     ))
     assert "fill:#3a5f7d" in svg
     assert "fill:rgb(10, 20, 30)" in svg
-    assert "url(#dungml-tx-stone)" in svg
+    assert re.search(r"url\(#dm-[0-9a-f]+-tx-stone\)", svg)
     assert 'fill="tomato"' in svg

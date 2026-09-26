@@ -7,6 +7,7 @@ world coordinates throughout.
 """
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from html import escape
@@ -224,7 +225,7 @@ def _resolve_fill(value: str | None) -> tuple[str | None, str | None]:
     if not value:
         return None, None
     if value in _TEXTURES:
-        return f"url(#dungml-tx-{value})", value
+        return None, value
     return _css_color(value), None
 
 
@@ -275,6 +276,7 @@ class _RenderContext:
         # kinds, …) reads the theme — a style recolours by choosing a theme,
         # never by rewriting the finished SVG.
         self.theme = theme or THEMES["mono"]
+        self.ns = "dm"  # set per drawing by render()
         self.INK = self.theme.ink
         self.MAP_GRID = self.theme.map_grid
         self.ROOM_GRID = self.theme.room_grid
@@ -326,6 +328,7 @@ class _RenderContext:
         fill, texture = _resolve_fill(value)
         if texture is not None:
             self._textures_used.add(texture)
+            return f"url(#{self._id('tx-' + texture)})"
         return fill
 
     # --- coordinate helpers ---
@@ -338,7 +341,25 @@ class _RenderContext:
 
     # --- top-level ---
 
+    def _id(self, name: str) -> str:
+        """An SVG id unique to this drawing (see `render`)."""
+        return f"{self.ns}-{name}"
+
     def render(self) -> str:
+        """Render to SVG, with ids and stylesheet namespaced per drawing.
+
+        Inline SVG ids are document-global and an inline <style> applies to
+        the whole page, so maps sharing a page (scenario, print, GM + fog)
+        would otherwise clip, mask and style each other. The prefix is a
+        hash of the drawing itself (rendered once with a neutral prefix):
+        identical drawings stay byte-identical, different ones never share
+        an id — and nothing is ever find-and-replaced into the output."""
+        self.ns = "dm"
+        digest = hashlib.sha1(self._render_once().encode()).hexdigest()[:10]
+        self.ns = f"dm-{digest}"
+        return self._render_once()
+
+    def _render_once(self) -> str:
         cell = self.cfg.cell_px
         legend_h = LEGEND_HEIGHT if self.dmap.map.legend else 0.0
         total_h = self.H + legend_h
@@ -346,7 +367,7 @@ class _RenderContext:
         h_px = total_h * cell
         title = escape(self.dmap.map.name)
         parts: list[str] = [
-            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'<svg xmlns="http://www.w3.org/2000/svg" class="{self.ns}" '
             f'viewBox="0 0 {_n(self.W)} {_n(total_h)}" '
             f'width="{_n(w_px)}" height="{_n(h_px)}" '
             f'data-name="{title}" '
@@ -543,7 +564,10 @@ class _RenderContext:
         """Wrap every used texture pattern in a single <defs>."""
         if not self._textures_used:
             return ""
-        patterns = "".join(_TEXTURES[name] for name in sorted(self._textures_used))
+        patterns = "".join(
+            _TEXTURES[name].replace('id="dungml-tx-', f'id="{self.ns}-tx-', 1)
+            for name in sorted(self._textures_used)
+        )
         return f"<defs>{patterns}</defs>"
 
     def _line_style_defs_block(self) -> str:
@@ -582,8 +606,10 @@ class _RenderContext:
     def _organic_id(self, amount: float | None) -> str:
         a = 1.0 if amount is None else amount
         if abs(a - 1.0) < 1e-9:
-            return "dungml-fx-organic"
-        return "dungml-fx-organic-" + ("%g" % a).replace("-", "m").replace(".", "_")
+            return self._id("fx-organic")
+        return self._id(
+            "fx-organic-" + ("%g" % a).replace("-", "m").replace(".", "_")
+        )
 
     def _organic_filter_attr(
         self, line_style: str | None, amount: float | None
@@ -628,8 +654,7 @@ class _RenderContext:
         # with inline stroke + stroke-width attributes; the classes here
         # only set fill, so they don't override those presentation
         # attributes via CSS specificity.
-        return (
-            "<style>"
+        css = (
             f".wall{{fill:none;stroke:{self.INK};stroke-width:{_n(WALL_STROKE)};"
             "stroke-linecap:square;stroke-linejoin:miter}"
             # `line_style ruined` — dash-dot walls (a crumbled / ruined
@@ -673,8 +698,11 @@ class _RenderContext:
             # inline `style="stroke:…"` on the group wins; lines inherit it.
             f".map-grid{{stroke:{self.MAP_GRID}}}"
             ".map-grid line{stroke-width:0.035;fill:none;opacity:0.55}"
-            "</style>"
         )
+        # Scoped to this SVG's root class: an inline <style> applies to the
+        # whole page, so unscoped rules would restyle other maps on it (and
+        # any host element that happens to be called `.label` or `.floor`).
+        return f"<style>{_scope_css(css, '.' + self.ns)}</style>"
 
     # ---- hooks for subclasses ----
 
@@ -859,7 +887,7 @@ class _RenderContext:
             for r in self.all_rooms.values()
             if r.grid is None
         ]
-        return self._cell_grid_lines(clip, "dungml-cell-grid-rooms")
+        return self._cell_grid_lines(clip, self._id("cell-grid-rooms"))
 
     def _cell_grid_corridors(self, all_corridors: list[Corridor]) -> str:
         """Cell grid clipped to corridor areas."""
@@ -868,14 +896,14 @@ class _RenderContext:
             for poly in corridor_polygons(c):
                 pts = " ".join(f"{_n(p[0])},{_n(self.y(p[1]))}" for p in poly)
                 clip.append(f'<polygon points="{pts}"/>')
-        return self._cell_grid_lines(clip, "dungml-cell-grid-corr")
+        return self._cell_grid_lines(clip, self._id("cell-grid-corr"))
 
     def _room_grid_overlay(self, r: Room) -> str:
         if r.grid is None or r.grid <= 0:
             return ""
         spacing = r.grid
         minx, miny, maxx, maxy = self._room_bbox(r)
-        clip_id = f"gridclip-{_slug(r.name)}"
+        clip_id = self._id(f"gridclip-{_slug(r.name)}")
         clip_path = self._room_path(r)
         lines: list[str] = []
         # Vertical lines: aligned to integer multiples of `spacing`.
@@ -1185,8 +1213,8 @@ class _RenderContext:
             d = self._corridor_path(corr)
             if not d:
                 continue
-            gid = f"dungml-fade-grad-{i}"
-            mid = f"dungml-fade-{i}"
+            gid = self._id(f"fade-grad-{i}")
+            mid = self._id(f"fade-{i}")
             x1, y1 = stub.fade_from[0], self.y(stub.fade_from[1])
             x2, y2 = stub.fade_to[0], self.y(stub.fade_to[1])
             defs.append(
@@ -2477,9 +2505,8 @@ class _RenderContext:
             # an <image> clipped to a circle. The initial glyph is suppressed
             # since the portrait takes its place. Clip id mixes name and
             # position so multiple tokens with the same name don't collide.
-            clip_id = (
-                f"marker-clip-{_slug(m.name)}-"
-                f"{_slug(_n(cx))}-{_slug(_n(sy))}"
+            clip_id = self._id(
+                f"marker-clip-{_slug(m.name)}-{_slug(_n(cx))}-{_slug(_n(sy))}"
             )
             img_size = radius * 2
             parts.append(
@@ -3031,6 +3058,16 @@ def _generic_glyph(letter: str, ink: str, font: str) -> str:
 
 # ----- free functions -----
 
+def _scope_css(css: str, scope: str) -> str:
+    """Prefix every selector in a flat stylesheet (`sel, sel{…}` rules, no
+    at-rules) with `scope `."""
+    out: list[str] = []
+    for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        selectors = ",".join(f"{scope} {s.strip()}" for s in m.group(1).split(","))
+        out.append(f"{selectors}{{{m.group(2)}}}")
+    return "".join(out)
+
+
 def _strip_kind(qualified: str) -> str:
     """Strip a `room.` or `corridor.` prefix and return the bare name."""
     if "." in qualified:
@@ -3240,12 +3277,12 @@ class _HatchedContext(_RenderContext):
         # the map background actually recolours the negative space.
         return (
             '<defs>'
-            '<pattern id="hatch" patternUnits="userSpaceOnUse" '
+            f'<pattern id="{self._id("hatch")}" patternUnits="userSpaceOnUse" '
             'width="0.55" height="0.55" patternTransform="rotate(45)">'
             '<line x1="0" y1="0" x2="0" y2="0.55" '
             f'stroke="{self.theme.hatch}" stroke-width="0.11"/>'
             '</pattern>'
-            '<filter id="halo-roughen" x="-5%" y="-5%" '
+            f'<filter id="{self._id("halo-roughen")}" x="-5%" y="-5%" '
             'width="110%" height="110%">'
             '<feTurbulence type="fractalNoise" baseFrequency="0.45" '
             'numOctaves="2" seed="7" result="noise"/>'
@@ -3258,8 +3295,8 @@ class _HatchedContext(_RenderContext):
     def _pre_rooms_layer(self) -> str:
         halo_w = self.HALO_W * 2.0  # stroke is centred — half visible outside
         parts: list[str] = [
-            '<g class="hatch-halo" filter="url(#halo-roughen)" '
-            'fill="none" stroke="url(#hatch)" stroke-linejoin="round" '
+            f'<g class="hatch-halo" filter="url(#{self._id("halo-roughen")})" '
+            f'fill="none" stroke="url(#{self._id("hatch")})" stroke-linejoin="round" '
             'stroke-linecap="round">'
         ]
         for r in self.all_rooms.values():
