@@ -252,3 +252,43 @@ exit at 5,5 { to "cellar" at 1,1 }
     assert [mk.name for mk in m.markers] == ["bob"]
     assert [lf.name for lf in m.line_features] == ["rail"]
     assert [ex.target_map for ex in m.exits] == ["cellar"]
+
+
+def _count_lark_parses(monkeypatch) -> list[str]:
+    import dungml.parser as P
+
+    seen: list[str] = []
+    real = P._get_parser()
+
+    class Spy:
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+        def parse(self, text):
+            seen.append(text)
+            return real.parse(text)
+
+    monkeypatch.setattr(P, "_get_parser", lambda: Spy())
+    return seen
+
+
+def test_included_library_is_parsed_once_across_calls(monkeypatch) -> None:
+    lib = 'feature_def "cached_thing" { shape circle radius 0.5 }'
+    seen = _count_lark_parses(monkeypatch)
+    for n in range(3):
+        m = parse(
+            f'include "lib.dmap"\nmap "t{n}" {{ grid {{ bounds 10 x 10 }} }}',
+            include_sources={"lib.dmap": lib},
+        )
+        assert "cached_thing" in m.feature_defs
+    assert seen.count(lib) == 1  # the library once; each map text every time
+    assert len(seen) == 4
+
+
+def test_cached_include_results_are_isolated_between_parses() -> None:
+    lib = 'feature_def "shared_thing" { shape circle radius 0.5 }'
+    src = 'include "lib.dmap"\nmap "t" { grid { bounds 10 x 10 } }'
+    first = parse(src, include_sources={"lib.dmap": lib})
+    first.feature_defs["shared_thing"].display_name = "MUTATED"
+    second = parse(src, include_sources={"lib.dmap": lib})
+    assert second.feature_defs["shared_thing"].display_name is None

@@ -170,7 +170,7 @@ See README for the full quickstart. In short:
 
 ```bash
 uv sync                                   # Python workspace (dsl + backend + mcp)
-uv run pytest packages/                   # 570 tests — run this before any commit
+uv run pytest packages/                   # 659 tests — run this before any commit
 uv run dmap-server                        # → http://127.0.0.1:8000
 uv run dmap --help                        # DSL CLI (render, validate, renderers)
 uv run dmap-mcp                           # stdio MCP server, shares the backend DB

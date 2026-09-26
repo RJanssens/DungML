@@ -1649,6 +1649,25 @@ def _parse_text(
     return model, tx.includes
 
 
+# Parsed include libraries, keyed by source text. `core.dmap` alone costs
+# ~0.25 s to parse and is pulled into nearly every map — ttrpg2 re-renders on
+# every token move. Callers get a deep copy: `_merge` splices the library's
+# objects into the including map, which callers are free to mutate.
+_INCLUDE_CACHE: dict[str, tuple[DungeonMap, list[str]]] = {}
+_INCLUDE_CACHE_MAX = 32
+
+
+def _parse_include(text: str) -> tuple[DungeonMap, list[str]]:
+    hit = _INCLUDE_CACHE.get(text)
+    if hit is None:
+        hit = _parse_text(text, require_map=False)
+        if len(_INCLUDE_CACHE) >= _INCLUDE_CACHE_MAX:
+            _INCLUDE_CACHE.pop(next(iter(_INCLUDE_CACHE)))  # oldest first
+        _INCLUDE_CACHE[text] = hit
+    model, nested = hit
+    return model.model_copy(deep=True), list(nested)
+
+
 def parse(
     text: str,
     *,
@@ -1720,9 +1739,7 @@ def _load_include_into(
         if key in seen:
             return  # cycle — silently skip
         seen.add(key)
-        included, nested_includes = _parse_text(
-            include_sources[inc_name], require_map=False
-        )
+        included, nested_includes = _parse_include(include_sources[inc_name])
         if origins is not None:
             for fname in included.feature_defs:
                 origins.setdefault(fname, inc_name)
@@ -1741,7 +1758,7 @@ def _load_include_into(
         return  # cycle — silently skip
     seen.add(key)
     included_text = resolved.read_text(encoding="utf-8")
-    included, nested_includes = _parse_text(included_text, require_map=False)
+    included, nested_includes = _parse_include(included_text)
     if origins is not None:
         for fname in included.feature_defs:
             origins.setdefault(fname, inc_name)
