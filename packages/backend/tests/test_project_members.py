@@ -26,7 +26,7 @@ def _provision_other(client) -> None:
 
 
 def _project(client, name: str = "Shared") -> str:
-    return client.post("/api/projects", json={"name": name}, headers=OWNER).json()["id"]
+    return client.post("/api/projects", json={"name": name, "is_public": False}, headers=OWNER).json()["id"]
 
 
 def test_member_sees_shared_project_in_list(client):

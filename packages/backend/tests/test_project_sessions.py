@@ -15,7 +15,7 @@ EXT = "return-to-stonehell"
 
 
 def _project(client, name="Stonehell") -> str:
-    return client.post("/api/projects", json={"name": name}, headers=OWNER).json()["id"]
+    return client.post("/api/projects", json={"name": name, "is_public": False}, headers=OWNER).json()["id"]
 
 
 def _map(client, pid: str, name: str, source: str) -> str:

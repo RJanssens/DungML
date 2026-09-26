@@ -8,11 +8,14 @@ replaces.
 
 Two failure modes, deliberately different:
 
-- **No access at all → 404.** Same as before: don't leak that a project or
-  map exists to someone who can't see it.
+- **Not public and not a collaborator → 404.** Don't leak that a private
+  project or its maps exist.
 - **Access, but the action is owner-only → 403.** A member can already see
   the project, so hiding its existence would be theatre. Deleting a project
   and managing its membership are the owner-only actions.
+
+A public project gives every signed-in user member rights; campaign linking
+still needs a collaborator (`is_collaborator`).
 """
 from __future__ import annotations
 
@@ -27,8 +30,25 @@ def is_member(db: DbSession, project_id: str, user: models.User) -> bool:
     return db.get(models.ProjectMember, (project_id, user.id)) is not None
 
 
-def can_access(db: DbSession, project: models.Project, user: models.User) -> bool:
+def is_collaborator(db: DbSession, project: models.Project, user: models.User) -> bool:
+    """Owner or member — the people a project actually belongs to. Public
+    access doesn't count: it is for using a project, not for tying outside
+    systems (campaign links) to it."""
     return project.user_id == user.id or is_member(db, project.id, user)
+
+
+def can_access(db: DbSession, project: models.Project, user: models.User) -> bool:
+    """Member rights: any collaborator, and everyone on a public project."""
+    return project.is_public or is_collaborator(db, project, user)
+
+
+def collaborator_project(
+    db: DbSession, project_id: str, user: models.User
+) -> models.Project | None:
+    proj = db.get(models.Project, project_id)
+    if proj is None or not is_collaborator(db, proj, user):
+        return None
+    return proj
 
 
 def accessible_project(
@@ -66,7 +86,8 @@ def require_owner(project: models.Project, user: models.User) -> models.Project:
 
 
 def list_projects(db: DbSession, user: models.User) -> list[models.Project]:
-    """Every project this user owns or is a member of, most recent first."""
+    """Every project this user owns, is a member of, or that is public,
+    most recent first."""
     member_ids = select(models.ProjectMember.project_id).where(
         models.ProjectMember.user_id == user.id
     )
@@ -76,6 +97,7 @@ def list_projects(db: DbSession, user: models.User) -> list[models.Project]:
             or_(
                 models.Project.user_id == user.id,
                 models.Project.id.in_(member_ids),
+                models.Project.is_public.is_(True),
             )
         )
         .order_by(models.Project.updated_at.desc())

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from dungml_backend import contract, db, models
 
 OWNER = {"Authorization": "Bearer dev-user"}
@@ -72,3 +74,84 @@ def test_migration_runs_once_so_an_owner_choice_sticks(client, db_path):
         con.execute("UPDATE projects SET is_public = 1 WHERE id = ?", (example,))
     db.ensure_columns()   # every boot calls it
     assert _row(example).is_public is True
+
+
+# ---- Task 2: access ----
+
+
+def _public(client, name="Pub") -> str:
+    return client.post("/api/projects", json={"name": name}, headers=OWNER).json()["id"]
+
+
+def _private(client, name="Priv") -> str:
+    return client.post(
+        "/api/projects", json={"name": name, "is_public": False}, headers=OWNER
+    ).json()["id"]
+
+
+def test_stranger_sees_public_project_in_list(client):
+    pid = _public(client)
+    assert pid in [p["id"] for p in client.get("/api/projects", headers=OTHER).json()]
+
+
+def test_stranger_does_not_see_private_project(client):
+    pid = _private(client)
+    assert pid not in [p["id"] for p in client.get("/api/projects", headers=OTHER).json()]
+    assert client.get(f"/api/projects/{pid}", headers=OTHER).status_code == 404
+
+
+def test_stranger_can_edit_maps_of_a_public_project(client, cottage_source):
+    pid = _public(client)
+    r = client.post(f"/api/projects/{pid}/maps", json={"name": "M", "source": cottage_source},
+                    headers=OTHER)
+    assert r.status_code == 201
+    mid = r.json()["id"]
+    assert client.put(f"/api/maps/{mid}", json={"source": cottage_source}, headers=OTHER).status_code == 200
+    assert client.get(f"/api/maps/{mid}/render", headers=OTHER).status_code == 200
+
+
+def test_stranger_gets_403_on_owner_only_actions_of_a_public_project(client):
+    pid = _public(client)
+    assert client.delete(f"/api/projects/{pid}", headers=OTHER).status_code == 403
+    assert client.post(f"/api/projects/{pid}/members", json={"identifier": "dev-user"},
+                       headers=OTHER).status_code == 403
+
+
+def test_stranger_cannot_link_a_campaign_to_a_public_project(client):
+    pid = _public(client)
+    r = client.post("/campaigns/their-game/link", json={"project_id": pid}, headers=OTHER)
+    assert r.status_code == 404
+
+
+@pytest.fixture
+def stranger(client, monkeypatch):
+    """A third, ordinary user. `dev-service` can't play the stranger here:
+    linking a campaign makes the service a member (grant_service_access)."""
+    from dungml_backend import deps
+    from dungml_backend.identity import Principal, StaticIdentityProvider
+
+    base = StaticIdentityProvider()
+    tokens = dict(base._tokens)
+    tokens["stranger"] = Principal("stranger", "stranger@dungml.local", (), False)
+    monkeypatch.setattr(deps, "get_identity_provider", lambda: StaticIdentityProvider(tokens))
+    return {"Authorization": "Bearer stranger"}
+
+
+def test_stranger_cannot_unlink_from_a_public_project(client, stranger):
+    pid = _public(client)
+    assert client.post("/campaigns/g1/link", json={"project_id": pid}, headers=OWNER).status_code == 200
+    assert client.delete("/campaigns/g1/link", headers=stranger).status_code == 404
+    s = db.get_sessionmaker()()
+    assert s.get(models.CampaignLink, "g1") is not None
+
+
+def test_campaign_routes_stay_bounded_to_the_linked_project(client, cottage_source):
+    linked = _public(client, "Linked")
+    other = _public(client, "Other")
+    other_map = client.post(f"/api/projects/{other}/maps",
+                            json={"name": "M", "source": cottage_source}, headers=OWNER).json()["id"]
+    assert client.post("/campaigns/g1/link", json={"project_id": linked}, headers=OWNER).status_code == 200
+    # public, so the service can read it through /api like anyone …
+    assert client.get(f"/api/maps/{other_map}", headers=OTHER).status_code == 200
+    # … but the campaign-scoped routes only reach the linked project
+    assert client.get(f"/campaigns/g1/maps/{other_map}/known", headers=OTHER).status_code == 404

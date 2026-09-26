@@ -55,17 +55,17 @@ class TokenIn(BaseModel):
 
 @router.post("/campaigns/{external_id}/link")
 def link(external_id: str, body: LinkIn, user: CurrentUser, db: DbDep) -> dict:
-    proj = access.accessible_project(db, body.project_id, user)
+    proj = access.collaborator_project(db, body.project_id, user)
     if proj is None:
         # Treat unauthorized the same as missing — don't leak existence.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
     existing_link = db.get(models.CampaignLink, external_id)
     if existing_link is not None:
-        # Re-linking is fine for anyone who can reach the project the campaign
+        # Re-linking is fine for any collaborator on the project the campaign
         # currently points at — the link records who created it, which must not
         # lock out the owner's collaborators. Anyone else gets the same no-leak
         # 404 as an unknown project.
-        if access.accessible_project(db, existing_link.project_id, user) is None:
+        if access.collaborator_project(db, existing_link.project_id, user) is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
     contract.link_campaign(db, external_id, proj)
     return {"external_id": external_id, "project_id": proj.id}
@@ -77,7 +77,7 @@ def unlink(external_id: str, user: CurrentUser, db: DbDep) -> None:
     if link_row is None:
         return  # idempotent
     proj = db.get(models.Project, link_row.project_id)
-    if proj is not None and not access.can_access(db, proj, user):
+    if proj is not None and not access.is_collaborator(db, proj, user):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
     project_id = link_row.project_id
     db.delete(link_row)

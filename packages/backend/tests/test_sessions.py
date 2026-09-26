@@ -15,7 +15,7 @@ door at 12,3 { connects corridor.c1, room.b type wooden }
 
 @pytest.fixture
 def map_id(auth_client) -> str:
-    pid = auth_client.post("/api/projects", json={"name": "P"}).json()["id"]
+    pid = auth_client.post("/api/projects", json={"name": "P", "is_public": False}).json()["id"]
     r = auth_client.post(
         f"/api/projects/{pid}/maps", json={"name": "M", "source": MAP_SRC}
     )

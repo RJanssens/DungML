@@ -151,7 +151,7 @@ def test_project_campaigns_hidden_without_access(client, cottage_source):
     the membership a link grants. It must still see nothing elsewhere."""
     pid, _mid = _linked_project(client, cottage_source)
     elsewhere = client.post(
-        "/api/projects", json={"name": "Unrelated"}, headers=OWNER
+        "/api/projects", json={"name": "Unrelated", "is_public": False}, headers=OWNER
     ).json()["id"]
 
     assert client.get(f"/api/projects/{pid}/campaigns", headers=SVC).status_code == 200

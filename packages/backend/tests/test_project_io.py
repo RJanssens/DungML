@@ -13,7 +13,7 @@ MAP_B = 'map "B" { grid { bounds 10 x 10 } }\n'
 
 @pytest.fixture
 def project_id(auth_client) -> str:
-    pid = auth_client.post("/api/projects", json={"name": "Dungeon"}).json()["id"]
+    pid = auth_client.post("/api/projects", json={"name": "Dungeon", "is_public": False}).json()["id"]
     auth_client.post(f"/api/projects/{pid}/maps", json={"name": "Level 1", "source": MAP_A})
     auth_client.post(f"/api/projects/{pid}/maps", json={"name": "Level 2", "source": MAP_B})
     return pid
