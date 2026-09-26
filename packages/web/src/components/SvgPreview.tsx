@@ -19,6 +19,13 @@ import {
   type KeyboardEvent,
 } from "react";
 import styles from "./SvgPreview.module.css";
+import { innermostAnchor, type CursorPos } from "../lib/sourceAnchor";
+
+// Lengths are in map units (the SVG's user space): 0.12 ≈ 4px at 32px/cell.
+const SOURCE_HIGHLIGHT_CSS =
+  "[data-src-hl]{filter:drop-shadow(0 0 0.12px #f5a623) drop-shadow(0 0 0.3px #f5a623)}" +
+  "path.floor[data-src-hl],path.corridor-floor[data-src-hl],path.area[data-src-hl]" +
+  "{stroke:#f5a623 !important;stroke-width:0.14 !important;stroke-opacity:0.9}";
 import {
   DRAG_TOOLS,
   FEATURE_TOOLS,
@@ -84,6 +91,7 @@ export function SvgPreview({
   pathCheck = false,
   connectivity = null,
   focusTarget = null,
+  highlightAt = null,
   onEmit,
   onPick,
 }: {
@@ -147,6 +155,9 @@ export function SvgPreview({
    * zooms to that node (+1 cell of margin) and re-frames when it changes.
    * Null hides the toggle. Used by the play view to follow the party. */
   focusTarget?: string | null;
+  /** An editor cursor position: the entity whose source range contains it
+   * (the innermost — a feature over its room) is highlighted on the map. */
+  highlightAt?: CursorPos | null;
   /** Called with a completed shape; the editor turns it into a snippet. */
   onEmit?: (shape: DraftShape) => void;
   /** Select-mode: a click on a room/corridor (jump-to-definition). */
@@ -272,6 +283,30 @@ export function SvgPreview({
       ".door-leaf{fill:#1763c9 !important}";
     root.appendChild(style);
   }, [svg, pathCheck, connectivity]);
+
+  // Source highlight: every element anchored to the entity under the editor
+  // cursor (`data-src`, written by the renderer) gets a glow; floors also an
+  // outline. Non-destructive, so textures and the path tint stay visible.
+  useLayoutEffect(() => {
+    const root = mapRef.current?.querySelector("svg");
+    if (!root) return;
+    root.querySelectorAll("[data-src-hl]").forEach((el) => el.removeAttribute("data-src-hl"));
+    root.querySelector("#dungml-src-hl-style")?.remove();
+    if (!highlightAt) return;
+    const anchored = Array.from(root.querySelectorAll("[data-src]"));
+    const pick = innermostAnchor(
+      new Set(anchored.map((el) => el.getAttribute("data-src") ?? "")),
+      highlightAt,
+    );
+    if (!pick) return;
+    for (const el of anchored) {
+      if (el.getAttribute("data-src") === pick) el.setAttribute("data-src-hl", "1");
+    }
+    const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    style.id = "dungml-src-hl-style";
+    style.textContent = SOURCE_HIGHLIGHT_CSS;
+    root.appendChild(style);
+  }, [svg, highlightAt]);
 
   // Recompute fit scale + translate whenever natural or container size changes.
   const fit = useCallback(() => {

@@ -21,6 +21,7 @@ import type {
   RenderResponse,
 } from "../lib/types";
 import { useDebounce } from "../lib/useDebounce";
+import type { CursorPos } from "../lib/sourceAnchor";
 import { Button } from "../components/Primitives";
 import { AppHeader, PageShell } from "../components/Layout";
 import { MonacoEditor } from "../components/MonacoEditor";
@@ -205,6 +206,9 @@ export function MapEditorPage() {
       return s + snippet;
     });
   }, []);
+
+  // Where the editor cursor is — the map highlights the entity under it.
+  const [cursor, setCursor] = useState<CursorPos | null>(null);
 
   // Jump-to-definition: reveal a line in the editor (nonce forces re-trigger).
   const [goto, setGoto] = useState<{
@@ -510,6 +514,7 @@ export function MapEditorPage() {
               diagnostics={diagnostics}
               onSave={onSave}
               goto={goto}
+              onCursor={setCursor}
             />
           </div>
           <DiagnosticsPanel diagnostics={diagnostics} onJump={onJump} />
@@ -630,6 +635,7 @@ export function MapEditorPage() {
               exitGlobal={exitGlobal}
               pathCheck={pathCheck}
               connectivity={connectivity}
+              highlightAt={cursor}
               onEmit={onEmit}
               onPick={onPick}
               notice={

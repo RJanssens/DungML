@@ -25,7 +25,7 @@ from typing import Callable, Iterable, Optional
 from pydantic import BaseModel
 
 from . import walk
-from .model import Door, DungeonMap, Room
+from .model import Door, DungeonMap, Room, SourceSpan
 from .walk import Placed
 
 # A door state that physically blocks passage until something changes
@@ -308,6 +308,26 @@ def _strip_dm_notes(obj: object) -> None:
             _strip_dm_notes(item)
 
 
+def _strip_spans(obj: object) -> None:
+    """Reset every source span in a model tree, in place. The renderer
+    anchors entities to their source lines for the editor; in the players'
+    view the gaps between those lines would hint at what is hidden."""
+    if isinstance(obj, SourceSpan):
+        return
+    if isinstance(obj, BaseModel):
+        if isinstance(getattr(obj, "span", None), SourceSpan):
+            obj.span = SourceSpan()
+        for name in type(obj).model_fields:
+            if name != "span":
+                _strip_spans(getattr(obj, name))
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            _strip_spans(item)
+    elif isinstance(obj, dict):
+        for item in obj.values():
+            _strip_spans(item)
+
+
 def fog_of_war(
     dmap: DungeonMap,
     discovered_nodes: Iterable[str],
@@ -365,6 +385,7 @@ def fog_of_war(
         if r.number is None:
             r.number = i + 1
     _strip_dm_notes(out)
+    _strip_spans(out)
     strip_secret(out)
     out.rooms = {n: r for n, r in out.rooms.items() if f"room.{n}" in nodes}
     out.corridors = {

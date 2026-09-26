@@ -28,6 +28,8 @@ export interface MonacoEditorProps {
   onSave?: () => void;
   /** Reveal a position when this changes — `nonce` forces re-trigger. */
   goto?: { line: number; column?: number; nonce: number } | null;
+  /** Called with the 1-based cursor position whenever it moves. */
+  onCursor?: (pos: { line: number; column: number }) => void;
 }
 
 export function MonacoEditor({
@@ -36,9 +38,13 @@ export function MonacoEditor({
   diagnostics = [],
   onSave,
   goto = null,
+  onCursor,
 }: MonacoEditorProps) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  // Latest callback, read from the listener registered once on mount.
+  const onCursorRef = useRef(onCursor);
+  onCursorRef.current = onCursor;
 
   // Reveal + place the cursor whenever `goto` changes (jump-to-definition).
   useEffect(() => {
@@ -89,6 +95,10 @@ export function MonacoEditor({
     const model = editor.getModel();
     if (model) monacoNs.editor.setModelLanguage(model, LANGUAGE_ID);
     setMarkers(diagnostics);
+
+    editor.onDidChangeCursorPosition((e) => {
+      onCursorRef.current?.({ line: e.position.lineNumber, column: e.position.column });
+    });
 
     if (onSave) {
       editor.addCommand(

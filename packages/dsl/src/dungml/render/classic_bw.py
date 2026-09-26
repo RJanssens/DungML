@@ -49,6 +49,7 @@ from ..model import (
     RectShape,
     Room,
     Slice,
+    SourceSpan,
     Vec2,
     Window,
 )
@@ -341,6 +342,17 @@ class _RenderContext:
         return (p[0], self.y(p[1]))
 
     # --- top-level ---
+
+    @staticmethod
+    def _src(span: SourceSpan) -> str:
+        """` data-src="L:C-L:C"` — the entity's source range, so the editor
+        can highlight what the cursor is on (innermost range wins). Empty
+        when the span is unset (fog_of_war clears them for the players)."""
+        if not span.line:
+            return ""
+        return (
+            f' data-src="{span.line}:{span.column}-{span.end_line}:{span.end_column}"'
+        )
 
     def _id(self, name: str) -> str:
         """An SVG id unique to this drawing (see `render`)."""
@@ -750,7 +762,7 @@ class _RenderContext:
     def _room_floor(self, r: Room) -> str:
         d = self._room_path(r)
         number = self.room_numbers.get(r.name)
-        attrs = f'class="floor" data-room="{escape(r.name)}"'
+        attrs = f'class="floor" data-room="{escape(r.name)}"{self._src(r.span)}'
         if number is not None:
             attrs += f' data-number="{number}"'
         if r.label is not None and r.label.text:
@@ -783,7 +795,7 @@ class _RenderContext:
         fill = self._resolve_bg(a.background) or self._resolve_bg(kind_fill) or "#9fb0bd"
         attrs = (
             f'class="area" data-area="{escape(a.name)}" '
-            f'data-kind="{escape(a.kind)}"'
+            f'data-kind="{escape(a.kind)}"{self._src(a.span)}'
         )
         if a.label is not None and a.label.text:
             attrs += f' data-label="{escape(a.label.text)}"'
@@ -803,7 +815,9 @@ class _RenderContext:
         """Draw an area's label, if any, reusing room-label placement."""
         if a.label is None:
             return ""
-        return self._room_label(Room(name=a.name, shape=a.shape, label=a.label))
+        return self._room_label(
+            Room(name=a.name, shape=a.shape, label=a.label, span=a.span)
+        )
 
     def _room_bbox(self, r: Room) -> tuple[float, float, float, float]:
         walls = room_walls(r)
@@ -992,7 +1006,7 @@ class _RenderContext:
         )
         cls_attr = f' class="{cls}"' if cls else ""
         return (
-            f'<g data-room="{escape(r.name)}"{cls_attr}{filter_attr}>'
+            f'<g data-room="{escape(r.name)}"{cls_attr}{self._src(r.span)}{filter_attr}>'
             + "".join(pieces)
             + "</g>"
         )
@@ -1055,7 +1069,10 @@ class _RenderContext:
         if not floor_d:
             return ""
         display = c.display_name or c.name
-        attrs = f'data-corridor="{escape(c.name)}" data-label="{escape(display)}"'
+        attrs = (
+            f'data-corridor="{escape(c.name)}" data-label="{escape(display)}"'
+            f"{self._src(c.span)}"
+        )
         if c.description:
             attrs += f' data-description="{escape(c.description)}"'
         if c.dm_notes:
@@ -1122,7 +1139,8 @@ class _RenderContext:
             f'<path class="wall" d="{self._polyline_d(p)}"/>' for p in outline.wall_paths
         )
         wall_layer = (
-            f'<g class="{cls}" data-corridor="{escape(c.name)}"{filter_attr}>{walls}</g>'
+            f'<g class="{cls}" data-corridor="{escape(c.name)}"{self._src(c.span)}'
+            f'{filter_attr}>{walls}</g>'
         )
         return floor_layer + wall_layer + label_layer
 
@@ -1236,7 +1254,7 @@ class _RenderContext:
                 f"translate({_n(mx)},{_n(my)}) rotate({_n(angle)})"
             )
         return (
-            f'<text class="label corridor-label" transform="{transform}" '
+            f'<text class="label corridor-label"{self._src(c.span)} transform="{transform}" '
             f'text-anchor="{anchor_h}" dominant-baseline="{baseline}" '
             f'font-size="{_n(size)}">{text}</text>'
         )
@@ -1279,7 +1297,7 @@ class _RenderContext:
                 f"translate({_n(mx)},{_n(my)}) rotate({_n(angle)})"
             )
         return (
-            f'<text class="label slice-label" transform="{transform}" '
+            f'<text class="label slice-label"{self._src(s.span)} transform="{transform}" '
             f'text-anchor="{anchor_h}" dominant-baseline="{baseline}" '
             f'font-size="{_n(size)}">{text}</text>'
         )
@@ -1367,7 +1385,7 @@ class _RenderContext:
         tx, ty = ex.target_position
         accent = "#5b4b8a"  # indigo — distinct from the green party-start
         attrs = (
-            f'class="exit" '
+            f'class="exit"{self._src(ex.span)} '
             f'data-exit-to="{escape(ex.target_map)}" '
             f'data-target-x="{_n(tx)}" data-target-y="{_n(ty)}"'
         )
@@ -1485,7 +1503,7 @@ class _RenderContext:
             s.kind, self._SLICE_PALETTE["river"]
         )
         attrs = (
-            f'data-slice="{escape(s.name)}" '
+            f'data-slice="{escape(s.name)}"{self._src(s.span)} '
             f'data-kind="{escape(s.kind)}" '
             f'data-label="{escape(s.label.text if s.label else s.name)}"'
         )
@@ -2101,7 +2119,7 @@ class _RenderContext:
         something to say (description or dm_notes) so plain doors don't
         clutter the hover UI.
         """
-        attrs = f'class="door-instance" data-door="{escape(d.type)}"'
+        attrs = f'class="door-instance" data-door="{escape(d.type)}"{self._src(d.span)}'
         if d.description or d.dm_notes:
             bits: list[str] = []
             if d.state and d.state not in ("closed", ""):
@@ -2207,8 +2225,10 @@ class _RenderContext:
         s3 = (s1[0] - nx * WINDOW_INSET, s1[1] - ny * WINDOW_INSET)
         e3 = (e1[0] - nx * WINDOW_INSET, e1[1] - ny * WINDOW_INSET)
         return (
-            self._line_to_svg(LineWall(s2, e2), cls="window")
+            f'<g class="window-instance"{self._src(w.span)}>'
+            + self._line_to_svg(LineWall(s2, e2), cls="window")
             + self._line_to_svg(LineWall(s3, e3), cls="window")
+            + "</g>"
         )
 
     # --- markers ---
@@ -2229,7 +2249,10 @@ class _RenderContext:
         # SVG doesn't natively darken a colour string, but a translucent
         # black stroke achieves the same effect cheaply.
         stroke = self.INK
-        attrs = f'class="marker" data-name="{escape(m.name)}" data-tag="{escape(tag)}"'
+        attrs = (
+            f'class="marker" data-name="{escape(m.name)}" data-tag="{escape(tag)}"'
+            f"{self._src(m.span)}"
+        )
         if m.location:
             attrs += f' data-location="{escape(m.location)}"'
         if m.description:
@@ -2329,7 +2352,7 @@ class _RenderContext:
             )
         attrs = (
             f'class="feature-instance" data-ref="{escape(fi.ref)}" '
-            f'data-label="{escape(display_label)}" '
+            f'data-label="{escape(display_label)}"{self._src(fi.span)} '
             f'transform="{transform}"'
         )
         if fi.description:
@@ -2480,7 +2503,7 @@ class _RenderContext:
             )
         else:
             transform = f"translate({_n(x)},{_n(y)}) rotate({_n(ta.rotate)})"
-        attrs = 'class="label text-annotation"'
+        attrs = f'class="label text-annotation"{self._src(ta.span)}'
         if ta.description:
             attrs += f' data-description="{escape(ta.description)}"'
         if ta.dm_notes:
@@ -2526,7 +2549,7 @@ class _RenderContext:
                 f"translate({_n(x)},{_n(y)}) rotate({_n(label.rotate)})"
             )
         return (
-            f'<text class="label" transform="{transform}" '
+            f'<text class="label"{self._src(r.span)} transform="{transform}" '
             f'text-anchor="{anchor_h}" dominant-baseline="{baseline}" '
             f'font-size="{_n(size)}">{text}</text>'
         )
@@ -2668,7 +2691,10 @@ class _RenderContext:
         if len(pts) < 2:
             return ""
         kind = (lf.kind or "bars").lower()
-        attrs = f'data-line-feature="{escape(lf.name)}" data-kind="{escape(kind)}"'
+        attrs = (
+            f'data-line-feature="{escape(lf.name)}" data-kind="{escape(kind)}"'
+            f"{self._src(lf.span)}"
+        )
         if lf.description:
             attrs += f' data-description="{escape(lf.description)}"'
         if lf.dm_notes:
