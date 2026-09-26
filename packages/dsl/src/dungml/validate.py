@@ -16,6 +16,7 @@ from .builtins import BUILTIN_FEATURES
 from .errors import Diagnostic
 from .geometry import Area, corridor_polygons, find_overlapping_areas, room_polygon
 from .graph import build_graph
+from .render.theme import list_themes
 
 # Minimum interior-overlap area (square map units) before an overlap is
 # worth reporting. Below this, an overlap is a cosmetic sliver — typically
@@ -529,6 +530,9 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
             check_window(win)
     check_choice(
         dmap.map.default_corners, KNOWN_CORNERS, "map corners", dmap.map.span
+    )
+    check_choice(
+        dmap.map.theme, frozenset(list_themes()), "map theme", dmap.map.span
     )
 
     # ---- duplicate doors (two doors joining the same pair of nodes) ----

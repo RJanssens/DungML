@@ -15,7 +15,7 @@ map "The Sunken Library" {
     origin top-left
   }
   renderer "classic-bw"
-  theme    dark
+  theme    paper
   party_start "entry_hall"   # optional: room the PCs begin in on load
 }
 ```
@@ -66,9 +66,18 @@ If omitted, defaults to `"classic-bw"`.
 
 ### `theme`
 
-A renderer-specific hint, e.g. `theme dark`. The built-in renderers
-accept it but do not currently change palette; the field is preserved
-in the parsed model for downstream consumers.
+The palette and font to draw with, independent of the renderer's geometry:
+`renderer "hatched"` + `theme blue` is blue ink on a hatched halo. Built-in
+themes (`GET /api/dsl/themes` lists them):
+
+- `mono` — black line-work on white (default for `classic-bw` / `floorplan`)
+- `paper` — warm paper page and floors, sepia hatching (default for `hatched`)
+- `blue` — blue ink, white floors, light-blue page (default for `oldschool-blue`)
+
+If omitted, the renderer's default theme applies. An unknown name draws with
+that default too, and validation warns (with a suggestion). Semantic colours —
+marker tags, area and slice kinds, the party-start and exit accents — are not
+part of a theme.
 
 ### `grid_overlay` — graph-paper grid across the canvas
 

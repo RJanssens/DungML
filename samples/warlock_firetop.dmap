@@ -21,7 +21,6 @@ map "The Warlock of Firetop Mountain" {
     origin  top-left
   }
   renderer "hatched"
-  theme    dark
   description """
   A crack in the eastern cliff face yawns wide enough for a hunched
   figure. Cold air sighs from the dark inside. Somewhere beneath the

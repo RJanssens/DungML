@@ -273,3 +273,9 @@ def test_render_stored_map_404_for_other_user(client, cottage_source):
     ).json()["id"]
     hb = {"Authorization": "Bearer dev-service"}
     assert client.get(f"/api/maps/{mid}/render", headers=hb).status_code == 404
+
+
+def test_themes_lists_the_builtin_palettes(client):
+    r = client.get("/api/dsl/themes")
+    assert r.status_code == 200
+    assert {"mono", "paper", "blue"} <= set(r.json())

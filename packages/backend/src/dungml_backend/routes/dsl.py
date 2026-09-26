@@ -14,6 +14,8 @@ from dungml import (
     validate,
 )
 
+from dungml.render.theme import list_themes
+
 from .. import access, models, schemas
 from ..deps import CurrentUser, DbDep
 from ..library import project_include_sources
@@ -50,6 +52,12 @@ def _parse_error_response(e: DmapParseError) -> dict:
 @router.get("/renderers", response_model=list[str])
 def renderers() -> list[str]:
     return list_renderers()
+
+
+@router.get("/themes", response_model=list[str])
+def themes() -> list[str]:
+    """Palettes a map can pick with `theme NAME` (any renderer)."""
+    return list_themes()
 
 
 @router.post("/parse")

@@ -13,7 +13,6 @@ map "Goblin Warren of the Broken Tooth" {
     origin  top-left
   }
   renderer "hatched"
-  theme    dark
   description """
   The trail of stolen cattle ends at a crack in the hillside. Bones
   hang on twine from low branches outside — fox skulls, mostly, but

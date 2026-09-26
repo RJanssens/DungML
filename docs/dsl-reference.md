@@ -106,7 +106,7 @@ display options.
 |-------|-------------|
 | `grid { … }` | *Required.* Cell size, units, bounds, origin. See [`grid`](#grid). |
 | `renderer STRING` | Renderer id, e.g. `"classic-bw"`, `"floorplan"`. |
-| `theme NAME` | Named colour theme for the renderer. |
+| `theme NAME` | Palette + font: `mono`, `paper`, `blue`. Defaults to the renderer's own (see dsl-map). |
 | `legend` | Draw a symbol-legend strip below the map. |
 | `grid_overlay [NUMBER [STRING]]` | Graph-paper grid across the whole canvas; optional spacing + CSS colour. |
 | `cell_grid [NUMBER [STRING]]` | Per-cell grid inside rooms/corridors; optional spacing + colour. |

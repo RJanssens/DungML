@@ -8,51 +8,36 @@ carved out of solid rock. A `grid_overlay` (if the map declares one) is
 tinted blue to match.
 
 Implementation: this reuses the classic-bw geometry wholesale (rooms, walls,
-doors, features) and only restyles it, by overriding the render context's
-palette (`INK`, the grid colours) and its floor/page hooks. Paper-coloured
-knockouts (door gaps, label halos) follow `_floor_fill`.
+doors, features) and only restyles it: its default theme is `blue` (see
+`render.theme`), so `renderer "classic-bw" theme blue` draws the same.
 """
 from __future__ import annotations
 
 from ..model import DungeonMap
 from . import register
 from .classic_bw import ClassicBW, _RenderContext
+from .theme import THEMES
 
-# Palette — a medium royal blue ink over a solid light-blue page.
-INK = "#1b4fa1"          # walls, doors, features, labels
-PAGE = "#cfe0f4"         # solid background fill (the "rock" / negative space)
-FLOOR = "#ffffff"        # room / corridor floor — white so it pops off the page
-GRID = "#a9c4e8"         # graph-paper grid lines
+# The blue palette, kept importable under its old names.
+_BLUE = THEMES["blue"]
+INK, PAGE, FLOOR, GRID = _BLUE.ink, _BLUE.page, _BLUE.floor, _BLUE.map_grid
 
 
 @register("oldschool-blue")
 class OldSchoolBlue(ClassicBW):
-    """Classic blue-ink dungeon style: blue line-work, solid fill, grid."""
+    """Classic blue-ink dungeon style: classic-bw geometry, blue theme."""
+
+    default_theme = "blue"
 
     def _context_for(self, dmap: DungeonMap) -> "_OldSchoolBlueContext":
-        return _OldSchoolBlueContext(dmap)
+        return _OldSchoolBlueContext(dmap, self._theme_for(dmap))
 
 
 class _OldSchoolBlueContext(_RenderContext):
-    INK = INK
-    MAP_GRID = GRID
-    ROOM_GRID = GRID
-
-    def _bg_default(self) -> str:
-        # Solid fill behind everything — white floors are drawn on top, so the
-        # exterior reads as solid rock rather than a hatched halo.
-        return PAGE
-
-    def _floor_fill(self) -> str:
-        return FLOOR
-
-    def _corridor_floor_fill(self) -> str:
-        return FLOOR
-
     def _grid_overlay(self) -> tuple[float | None, str | None]:
         """Honour the map's `grid_overlay` setting (off unless declared), but
-        tint it blue when the author didn't pick a colour."""
+        tint it with the theme's grid colour when the author didn't pick one."""
         spacing, color = super()._grid_overlay()
         if not spacing:
             return None, None
-        return spacing, (color or GRID)
+        return spacing, (color or self.MAP_GRID)

@@ -33,7 +33,6 @@ map "The Sunken Library of Cael Voren" {
     origin  top-left
   }
   renderer "classic-bw"
-  theme    dark
   legend
   description """
   The entry stair ends at a bronze door long since forced. Beyond,

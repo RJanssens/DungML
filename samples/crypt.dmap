@@ -11,7 +11,6 @@ map "Crypt of Saint Vellis" {
     origin  top-left
   }
   renderer "classic-bw"
-  theme    dark
   legend
   background "#1a1a1a"
   description """

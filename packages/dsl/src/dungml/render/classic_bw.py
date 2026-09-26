@@ -54,6 +54,7 @@ from ..model import (
 )
 from .. import walk
 from . import Renderer, register
+from .theme import THEMES, Theme, get_theme
 
 # Stroke / sizing constants, all in world units.
 WALL_STROKE = 0.18
@@ -231,13 +232,19 @@ def _resolve_fill(value: str | None) -> tuple[str | None, str | None]:
 class ClassicBW(Renderer):
     """Technical-drawing style B/W renderer."""
 
+    # Palette used unless the map picks one with `theme NAME`.
+    default_theme = "mono"
+
     def render(self, dmap: DungeonMap) -> str:
         ctx = self._context_for(dmap)
         ctx.fade_stubs = self.fade_stubs
         return ctx.render()
 
+    def _theme_for(self, dmap: DungeonMap) -> Theme:
+        return get_theme(dmap.map.theme) or THEMES[self.default_theme]
+
     def _context_for(self, dmap: DungeonMap) -> "_RenderContext":
-        return _RenderContext(dmap)
+        return _RenderContext(dmap, self._theme_for(dmap))
 
 
 # Aliases that share the same look — also registered.
@@ -254,21 +261,23 @@ class Hatched(ClassicBW):
     labels render the same as classic-bw; only the floor pattern changes.
     """
 
+    default_theme = "paper"
+
     def _context_for(self, dmap: DungeonMap) -> "_RenderContext":
-        return _HatchedContext(dmap)
+        return _HatchedContext(dmap, self._theme_for(dmap))
 
 
 # ----- internal helpers -----
 
 class _RenderContext:
-    # Palette. Every piece of line-work and every grid line reads these, so a
-    # style recolours by overriding them (see oldschool_blue) — never by
-    # rewriting the finished SVG, which would also hit author colours/prose.
-    INK = "#111"  # walls, doors, glyph line-work, label text
-    MAP_GRID = "#9a937f"  # map-wide graph-paper grid
-    ROOM_GRID = "#b8b3a3"  # per-room / cell grid
-
-    def __init__(self, dmap: DungeonMap) -> None:
+    def __init__(self, dmap: DungeonMap, theme: Theme | None = None) -> None:
+        # Palette + font. Every colour that isn't semantic (marker tags, area
+        # kinds, …) reads the theme — a style recolours by choosing a theme,
+        # never by rewriting the finished SVG.
+        self.theme = theme or THEMES["mono"]
+        self.INK = self.theme.ink
+        self.MAP_GRID = self.theme.map_grid
+        self.ROOM_GRID = self.theme.room_grid
         self.dmap = dmap
         self.fade_stubs: list = []
         self.cfg = dmap.map.grid
@@ -650,7 +659,7 @@ class _RenderContext:
             f".window{{fill:none;stroke:{self.INK};stroke-width:{_n(WINDOW_STROKE)}}}"
             f".feature{{fill:#fff;stroke:{self.INK};stroke-width:{_n(FEATURE_STROKE)}}}"
             f".feature-fill{{fill:{self.INK};stroke:none}}"
-            f".label{{font-family:Georgia,serif;font-style:italic;"
+            f".label{{font-family:{self.theme.font};font-style:italic;"
             f"fill:{self.INK};"
             # text-anchor/dominant-baseline are set per-element so labels
             # with `align` can override the centered default.
@@ -669,15 +678,15 @@ class _RenderContext:
 
     def _floor_fill(self) -> str:
         """CSS fill value used for room floors when no per-room override."""
-        return "#fafafa"
+        return self.theme.floor
 
     def _corridor_floor_fill(self) -> str:
         """CSS fill value used for corridor floors when no per-corridor override."""
-        return "#fafafa"
+        return self.theme.corridor
 
     def _bg_default(self) -> str:
-        """Subclass hook: default page background when map.background unset."""
-        return "#ffffff"
+        """Default page background when map.background is unset."""
+        return self.theme.page
 
     def _grid_overlay(self) -> tuple[float | None, str | None]:
         """Subclass hook: (spacing, color) for the graph-paper grid overlay.
@@ -1394,7 +1403,7 @@ class _RenderContext:
             f'data-description="Starting position">'
             f'<circle cx="{_n(x)}" cy="{_n(cy)}" r="0.42" '
             f'fill="#2aa05a" stroke="#0f3d22" stroke-width="0.1"/>'
-            f'<text x="{_n(x)}" y="{_n(cy)}" font-family="Georgia,serif" '
+            f'<text x="{_n(x)}" y="{_n(cy)}" font-family="{self.theme.font}" '
             f'font-size="0.6" fill="#fff" text-anchor="middle" '
             f'dominant-baseline="central">S</text>'
             f"</g>"
@@ -1442,7 +1451,7 @@ class _RenderContext:
         if label_text:
             parts.append(
                 f'<text x="{_n(x)}" y="{_n(cy + 0.92)}" '
-                f'font-family="Georgia,serif" font-size="0.5" '
+                f'font-family="{self.theme.font}" font-size="0.5" '
                 f'fill="{accent}" text-anchor="middle" '
                 f'dominant-baseline="hanging">{escape(label_text)}</text>'
             )
@@ -2170,7 +2179,7 @@ class _RenderContext:
             parts.append(self._legend_cell(cx, symbol_cy, door_w, dtype, dstate))
             parts.append(
                 f'<text x="{_n(cx)}" y="{_n(caption_cy)}" '
-                f'font-family="Georgia,serif" font-style="italic" '
+                f'font-family="{self.theme.font}" font-style="italic" '
                 f'font-size="0.65" fill="{self.INK}" '
                 f'text-anchor="middle" dominant-baseline="central">'
                 f'{escape(caption)}</text>'
@@ -2240,7 +2249,7 @@ class _RenderContext:
                 f'fill="{self._floor_fill()}" stroke="{self.INK}" '
                 f'stroke-width="{_n(DOOR_STROKE)}"/>'
                 f'<text x="{_n(cx)}" y="{_n(cy)}" '
-                f'font-family="Georgia,serif" font-size="0.62" '
+                f'font-family="{self.theme.font}" font-size="0.62" '
                 f'font-weight="bold" fill="{self.INK}" '
                 f'text-anchor="middle" dominant-baseline="central">S</text>'
             )
@@ -2380,7 +2389,7 @@ class _RenderContext:
             f'r="{_n(radius)}" fill="{self._floor_fill()}" '
             f'stroke="{self.INK}" stroke-width="{_n(DOOR_STROKE)}"/>'
             f'<text x="{_n(px)}" y="{_n(self.y(py))}" '
-            f'font-family="Georgia,serif" font-size="0.62" '
+            f'font-family="{self.theme.font}" font-size="0.62" '
             f'font-weight="bold" fill="{self.INK}" '
             f'text-anchor="middle" dominant-baseline="central">{letter}</text>'
             f"</g>"
@@ -2500,7 +2509,7 @@ class _RenderContext:
             )
             parts.append(
                 f'<text x="{_n(cx)}" y="{_n(sy)}" '
-                f'font-family="Georgia,serif" font-weight="bold" '
+                f'font-family="{self.theme.font}" font-weight="bold" '
                 f'font-size="{font}" fill="#fff" '
                 f'text-anchor="middle" dominant-baseline="central">'
                 f"{escape(initial)}</text>"
@@ -2513,7 +2522,7 @@ class _RenderContext:
             caption_y = sy + radius * 1.85
             parts.append(
                 f'<text x="{_n(cx)}" y="{_n(caption_y)}" '
-                f'font-family="Georgia,serif" font-style="italic" '
+                f'font-family="{self.theme.font}" font-style="italic" '
                 f'font-size="{_n(radius * 0.95)}" fill="{self.INK}" '
                 f'text-anchor="middle" dominant-baseline="hanging" '
                 f'paint-order="stroke" stroke="{self._floor_fill()}" '
@@ -2534,7 +2543,7 @@ class _RenderContext:
             # Built-ins live in `core.dmap` (brought in via `include`), so
             # a miss here means an undefined feature. Validate flags it;
             # render a placeholder so the output stays well-formed.
-            body = _generic_glyph("?", self.INK)
+            body = _generic_glyph("?", self.INK, self.theme.font)
             display_label = fi.ref
         x, y = fi.position
         sx = fi.scale
@@ -2684,7 +2693,7 @@ class _RenderContext:
         return (
             f'<text class="map-title" transform="{transform}" '
             f'text-anchor="{anchor_h}" dominant-baseline="{baseline}" '
-            f'font-size="{_n(size)}" font-family="Georgia,serif" '
+            f'font-size="{_n(size)}" font-family="{self.theme.font}" '
             f'font-weight="700" fill="{self.INK}">{text}</text>'
         )
 
@@ -3010,10 +3019,10 @@ class _RenderContext:
 
 # ----- glyph library (in normalized local coords centered on origin) -----
 
-def _generic_glyph(letter: str, ink: str) -> str:
+def _generic_glyph(letter: str, ink: str, font: str) -> str:
     return (
         '<rect class="feature" x="-0.35" y="-0.35" width="0.7" height="0.7" rx="0.06"/>'
-        f'<text font-family="Georgia,serif" font-size="0.6" fill="{ink}" '
+        f'<text font-family="{font}" font-size="0.6" fill="{ink}" '
         f'text-anchor="middle" dominant-baseline="central">{escape(letter)}</text>'
     )
 
@@ -3218,16 +3227,6 @@ class _HatchedContext(_RenderContext):
     # World-unit thickness of the hatched band around explorable space.
     HALO_W = 2.5
 
-    def _bg_default(self) -> str:
-        # Plain paper — hatching is drawn only as a halo, not full-bleed.
-        return "#fdfaf3"
-
-    def _floor_fill(self) -> str:
-        return "#fdfaf3"
-
-    def _corridor_floor_fill(self) -> str:
-        return "#fdfaf3"
-
     def _extra_defs_block(self) -> str:
         # Single-direction diagonal hatch lines (Warlock-style). The
         # roughen filter perturbs the halo's outer edge so it reads as
@@ -3242,7 +3241,7 @@ class _HatchedContext(_RenderContext):
             '<pattern id="hatch" patternUnits="userSpaceOnUse" '
             'width="0.55" height="0.55" patternTransform="rotate(45)">'
             '<line x1="0" y1="0" x2="0" y2="0.55" '
-            'stroke="#2b2418" stroke-width="0.11"/>'
+            f'stroke="{self.theme.hatch}" stroke-width="0.11"/>'
             '</pattern>'
             '<filter id="halo-roughen" x="-5%" y="-5%" '
             'width="110%" height="110%">'

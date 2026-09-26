@@ -28,7 +28,6 @@ def test_parse_crypt(crypt_source: str) -> None:
     assert m.map.grid.bounds_w == 60
     assert m.map.grid.bounds_h == 40
     assert m.map.renderer == "classic-bw"
-    assert m.map.theme == "dark"
 
     # custom feature definitions (the built-in `core` prelude is also
     # merged into feature_defs, so check the custom defs are a subset).
