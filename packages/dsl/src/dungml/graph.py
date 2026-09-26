@@ -332,8 +332,12 @@ def fog_of_war(
     dmap: DungeonMap,
     discovered_nodes: Iterable[str],
     discovered_doors: Iterable[str],
+    revealed: Iterable[str] = (),
 ) -> DungeonMap:
     """Return a copy of `dmap` pruned to what a play-session has discovered.
+
+    Secrets (see `dungml.secrets`) are hidden unless their key is in
+    `revealed` — the DM's reveal list.
 
     Rooms and corridors not in `discovered_nodes` are dropped; doors not
     in `discovered_doors` are dropped; windows and location-bound markers
@@ -347,13 +351,9 @@ def fog_of_war(
     nodes = set(discovered_nodes)
     doors = set(discovered_doors)
 
-    # Feature types marked `secret` in their `feature_def` (e.g. traps defined
-    # in core.dmap) are GM-only knowledge — strip every instance of them, plus
-    # any instance flagged `secret` individually, from the players' view. The
-    # full GM view (full=True) skips fog_of_war entirely, so it still shows them.
-    secret_refs = {
-        name for name, fd in dmap.feature_defs.items() if getattr(fd, "secret", False)
-    }
+    from .secrets import is_secret, secret_key
+
+    shown = set(revealed)
 
     def keep_window(in_ref: str) -> bool:
         return in_ref in nodes
@@ -361,17 +361,19 @@ def fog_of_war(
     def keep_marker(location: Optional[str]) -> bool:
         return location is None or location in nodes
 
-    def strip_secret(host) -> None:
-        # Secret features (per-instance or per-type) and secret exits are
-        # GM-only — drop them even when the host node itself is discovered.
-        feats = getattr(host, "features", None)
-        if feats:
-            host.features = [
-                f for f in feats if not (f.secret or f.ref in secret_refs)
-            ]
-        exits = getattr(host, "exits", None)
-        if exits:
-            host.exits = [e for e in exits if not e.secret]
+    def strip_secret(host, scope: str) -> None:
+        # Secrets — features secret by instance or by type (core.dmap's
+        # traps), and secret texts, areas, line features, markers and exits —
+        # are GM-only: dropped even when their node is discovered, unless the
+        # DM has revealed them. The GM's full view skips fog_of_war entirely.
+        for kind in ("features", "exits", "texts", "areas", "line_features", "markers"):
+            items = getattr(host, kind, None)
+            if items:
+                setattr(host, kind, [
+                    it for it in items
+                    if not is_secret(dmap, kind, it)
+                    or secret_key(kind, it, scope) in shown
+                ])
 
     out = dmap.model_copy(deep=True)
     # Freeze label numbers from the full map before pruning, so the players'
@@ -386,15 +388,15 @@ def fog_of_war(
             r.number = i + 1
     _strip_dm_notes(out)
     _strip_spans(out)
-    strip_secret(out)
+    strip_secret(out, "map")
     out.rooms = {n: r for n, r in out.rooms.items() if f"room.{n}" in nodes}
     out.corridors = {
         n: c for n, c in out.corridors.items() if f"corridor.{n}" in nodes
     }
     for r in out.rooms.values():
-        strip_secret(r)
+        strip_secret(r, f"room.{r.name}")
     for c in out.corridors.values():
-        strip_secret(c)
+        strip_secret(c, f"corridor.{c.name}")
     out.doors = [d for d in out.doors if door_key(d) in doors]
 
     # A door's `trapped` flag is GM-only knowledge — never expose it in the
@@ -408,23 +410,20 @@ def fog_of_war(
     _hide_traps(out.doors)
     out.windows = [w for w in out.windows if keep_window(w.in_ref)]
     out.markers = [m for m in out.markers if keep_marker(m.location)]
-    # `secret` exits are GM-only — hidden from players until discovered.
-    out.exits = [e for e in out.exits if not e.secret]
 
     for layer in out.layers:
-        strip_secret(layer)
+        strip_secret(layer, f"layer.{layer.name}")
         layer.rooms = [r for r in layer.rooms if f"room.{r.name}" in nodes]
         layer.corridors = [
             c for c in layer.corridors if f"corridor.{c.name}" in nodes
         ]
         for r in layer.rooms:
-            strip_secret(r)
+            strip_secret(r, f"room.{r.name}")
         for c in layer.corridors:
-            strip_secret(c)
+            strip_secret(c, f"corridor.{c.name}")
         layer.doors = [d for d in layer.doors if door_key(d) in doors]
         _hide_traps(layer.doors)
         layer.windows = [w for w in layer.windows if keep_window(w.in_ref)]
         layer.markers = [m for m in layer.markers if keep_marker(m.location)]
-        layer.exits = [e for e in layer.exits if not e.secret]
 
     return out

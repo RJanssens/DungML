@@ -16,7 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Mapping, Optional
 
-from .geometry import _point_strictly_inside, corridor_polygons, room_polygon
+from .geometry import owner_node
+from .secrets import is_secret, list_secrets
 from . import walk
 from .graph import Graph, is_blocked, keyed_doors
 from .model import Corridor, DungeonMap, Room
@@ -30,6 +31,8 @@ class SessionView:
     discovered_doors: frozenset[str] = frozenset()
     door_states: Mapping[str, str] = field(default_factory=dict)
     party_location: Optional[str] = None
+    # Secret keys the DM has shown the players (see dungml.secrets).
+    revealed: frozenset[str] = frozenset()
 
     def state(self, key: str, authored: str) -> str:
         return self.door_states.get(key, authored)
@@ -87,29 +90,8 @@ def resolve_node(dmap: DungeonMap, graph: Graph, query: str) -> Optional[str]:
 
 # ----- geometry: which node a loose point belongs to -----
 
-def _area(poly: list) -> float:
-    return abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1]
-                   - poly[(i + 1) % len(poly)][0] * poly[i][1]
-                   for i in range(len(poly)))) / 2.0
-
-
-def _polys(nid: str, obj) -> list[list]:
-    if nid.startswith("room."):
-        return [room_polygon(obj)]
-    return corridor_polygons(obj)
-
-
 def _owner(dmap: DungeonMap, point) -> Optional[str]:
-    """The smallest node whose outline contains `point` — caves drawn inside
-    a canyon polygon own their own annotations."""
-    best: tuple[float, str] | None = None
-    for nid, obj in _nodes(dmap).items():
-        for poly in _polys(nid, obj):
-            if len(poly) >= 3 and _point_strictly_inside(point, poly):
-                a = _area(poly)
-                if best is None or a < best[0]:
-                    best = (a, nid)
-    return best[1] if best else None
+    return owner_node(dmap, point)
 
 
 # ----- exits -----
@@ -186,7 +168,13 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
     obj = _nodes(dmap)[node]
     labels = {nid: node_label(dmap, nid) for nid in graph.nodes}
     doors = _door_extras(dmap)
-    secret_refs = {n for n, fd in dmap.feature_defs.items() if getattr(fd, "secret", False)}
+    secrets = list_secrets(dmap)
+    key_of = {id(sc.item): sc.key for sc in secrets}
+
+    def hidden(item, kind: str) -> bool:
+        """GM-only right now: a secret the DM hasn't revealed. (One with no
+        key — inside a hidden layer — can't be revealed at all.)"""
+        return is_secret(dmap, kind, item) and key_of.get(id(item)) not in view.revealed
 
     exits, secret_exits = node_exits(graph, node, view, labels=labels)
     for e in exits:
@@ -217,20 +205,24 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
     counts: dict[str, int] = {}
     secret_features: list[dict] = []
     for f in obj.features:
-        if f.secret or f.ref in secret_refs:
-            item = {"name": f.ref}
+        if is_secret(dmap, "features", f):
+            item = {"name": f.ref, "revealed": not hidden(f, "features")}
+            if id(f) in key_of:
+                item["key"] = key_of[id(f)]
             if f.description:
                 item["description"] = f.description
             if f.dm_notes:
                 item["dm_notes"] = f.dm_notes
             secret_features.append(item)
-        elif f.description:
+        if hidden(f, "features"):
+            continue
+        if f.description:
             features.append({"name": f.ref, "description": f.description})
         else:
             counts[f.ref] = counts.get(f.ref, 0) + 1
     features.extend({"name": n, "count": c} for n, c in sorted(counts.items()))
     feature_notes = [{"name": f.ref, "dm_notes": f.dm_notes} for f in obj.features
-                     if f.dm_notes and not (f.secret or f.ref in secret_refs)]
+                     if f.dm_notes and not is_secret(dmap, "features", f)]
 
     # Annotations: the node's own texts plus map-level texts inside it. A
     # hidden layer is GM-only in its entirety — its texts never surface as
@@ -243,6 +235,8 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
     annotations = []
     annotation_notes = []
     for t in texts:
+        if hidden(t, "texts"):
+            continue
         a = {"text": t.text}
         if t.description:
             a["description"] = t.description
@@ -269,7 +263,13 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
 
     map_exits, secret_map_exits = [], []
     for x in xs:
-        (secret_map_exits if x.secret else map_exits).append(_exit_item(x))
+        if x.secret:
+            item = dict(_exit_item(x), revealed=not hidden(x, "exits"))
+            if id(x) in key_of:
+                item["key"] = key_of[id(x)]
+            secret_map_exits.append(item)
+        if not hidden(x, "exits"):
+            map_exits.append(_exit_item(x))
     for x in hidden_xs:
         secret_map_exits.append(_exit_item(x))
 
@@ -298,6 +298,12 @@ def room_context(dmap: DungeonMap, graph: Graph, node: str, view: SessionView) -
             "annotation_notes": annotation_notes,
             "hidden_annotations": hidden_annotations,
             "secret_map_exits": secret_map_exits,
+            # Everything in this node the DM can reveal, and whether it is.
+            "secrets": [
+                {"key": sc.key, "kind": sc.kind, "label": sc.label,
+                 "revealed": sc.key in view.revealed}
+                for sc in secrets if sc.node == node
+            ],
         },
     }
 

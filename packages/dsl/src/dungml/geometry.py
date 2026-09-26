@@ -532,3 +532,24 @@ def party_start_point(dmap: DungeonMap) -> Optional[Vec2]:
         return ps.at
     node = party_start_node(dmap)
     return node_centroid(dmap, node) if node else None
+
+
+def _polygon_area(poly: list[Vec2]) -> float:
+    return abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1]
+                   - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                   for i in range(len(poly)))) / 2.0
+
+
+def owner_node(dmap: DungeonMap, point: Vec2) -> Optional[str]:
+    """The node (`room.X` / `corridor.Y`) whose outline contains `point` —
+    the smallest one, so a cave drawn inside a canyon polygon owns what is
+    placed in the cave. None if the point is in no node."""
+    best: tuple[float, str] | None = None
+    for nid, obj in walk.nodes(dmap).items():
+        polys = [room_polygon(obj)] if nid.startswith("room.") else corridor_polygons(obj)
+        for poly in polys:
+            if len(poly) >= 3 and _point_strictly_inside(point, poly):
+                a = _polygon_area(poly)
+                if best is None or a < best[0]:
+                    best = (a, nid)
+    return best[1] if best else None

@@ -235,7 +235,7 @@ feature_inst: "feature" feature_ref "at" NUMBER "," NUMBER feature_modifier* fea
 
 feature_ref: STRING | CNAME
 
-?feature_modifier: feat_rotate | feat_scale
+?feature_modifier: feat_rotate | feat_scale | id_decl
 
 feat_rotate: "rotate" NUMBER
 // `scale 2` → uniform; `scale 2:1` → independent X:Y scaling.
@@ -243,7 +243,11 @@ feat_scale: "scale" NUMBER (":" NUMBER)?
 
 feature_block: "{" feature_block_property* "}"
 
-?feature_block_property: description_decl | dm_notes_decl | secret_decl
+?feature_block_property: description_decl | dm_notes_decl | secret_decl | id_decl
+
+// A stable handle for a feature / exit / text — the key a play session uses
+// to reveal it (see dungml.secrets). Without one, the key is its position.
+id_decl: "id" CNAME
 
 // ============ CORRIDOR ============
 // Second STRING is an optional human-readable display name. Used only as
@@ -350,6 +354,7 @@ marker: "marker" STRING "at" NUMBER "," NUMBER marker_modifier*
                 | marker_image
                 | description_decl
                 | dm_notes_decl
+                | secret_decl
 
 marker_tag:      "tag" (CNAME | STRING)
 marker_label:    "label" STRING
@@ -373,6 +378,8 @@ text_annotation.2: "text" STRING "at" NUMBER "," NUMBER text_modifier*
               | text_rotate
               | description_decl
               | dm_notes_decl
+              | secret_decl
+              | id_decl
 
 text_size:   "size" NUMBER
 text_rotate: "rotate" NUMBER
@@ -390,6 +397,7 @@ area: "area" STRING area_kind? "{" area_property* "}"
               | dm_notes_decl
               | background_prop
               | line_style_decl
+              | secret_decl
 
 area_kind: "kind" CNAME
 
@@ -406,7 +414,7 @@ hidden_flag: "hidden"
 // parallel lines). Not a connector — excluded from the graph.
 line_feature: "line_feature" STRING lf_kind? "{" line_feature_property* "}"
 
-?line_feature_property: lf_kind | lf_point | description_decl | dm_notes_decl
+?line_feature_property: lf_kind | lf_point | description_decl | dm_notes_decl | secret_decl
 
 lf_kind: "kind" CNAME
 lf_point: "point" NUMBER "," NUMBER
@@ -423,6 +431,7 @@ exit_decl: "exit" "at" NUMBER "," NUMBER "{" exit_property* "}"
               | description_decl
               | dm_notes_decl
               | secret_decl
+              | id_decl
 
 exit_target: "to" STRING "at" NUMBER "," NUMBER
 

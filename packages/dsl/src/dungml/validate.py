@@ -17,6 +17,7 @@ from .errors import Diagnostic
 from .geometry import Area, corridor_polygons, find_overlapping_areas, room_polygon
 from .graph import build_graph
 from .render.theme import list_themes
+from .secrets import list_secrets
 
 # Minimum interior-overlap area (square map units) before an overlap is
 # worth reporting. Below this, an overlap is a cosmetic sliver — typically
@@ -560,6 +561,21 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
             )
         else:
             seen_pairs[pair] = door.position
+
+    # ---- secret keys: two secrets sharing a key are revealed together ----
+    by_key: dict[str, list] = {}
+    for sc in list_secrets(dmap):
+        by_key.setdefault(sc.key, []).append(sc)
+    for key, same in by_key.items():
+        for sc in same[1:]:
+            diags.append(
+                _diag(
+                    "warning",
+                    f"secret key '{key}' is shared by {len(same)} secrets; revealing "
+                    f"one reveals them all — give each its own `id`",
+                    sc.item.span,
+                )
+            )
 
     # ---- duplicate names ----
     # Same-file redefinitions (recorded by the parser — the model keeps only

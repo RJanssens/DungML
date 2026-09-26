@@ -180,6 +180,7 @@ def render_fogged(
     party_location: Optional[str] = None,
     renderer: Optional[str] = None,
     full: bool = False,
+    revealed: Iterable[str] = (),
 ) -> str:
     """Render a play view.
 
@@ -187,12 +188,14 @@ def render_fogged(
     via `fog_of_war`, giving the players' view. With `full=True` the whole
     map is drawn (the GM's view) — handy for showing the party marker on the
     complete map. Either way, when `party_location` is a known node, a start
-    marker is drawn at its centroid to track where the party is.
+    marker is drawn at its centroid to track where the party is. `revealed`
+    is the DM's reveal list: secrets shown to the players (see
+    `dungml.secrets`).
     """
     if full:
         view = dmap.model_copy(deep=True)
     else:
-        view = fog_of_war(dmap, discovered_nodes, discovered_doors)
+        view = fog_of_war(dmap, discovered_nodes, discovered_doors, revealed)
     pos = node_centroid(view, party_location) if party_location else None
     if pos is not None:
         view.map.party_start = PartyStart(at=pos)

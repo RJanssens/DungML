@@ -573,6 +573,9 @@ class _Tx(Transformer):
     def secret_decl(self, items: list[Any]) -> tuple[str, Any]:
         return ("secret", True)
 
+    def id_decl(self, items: list[Any]) -> tuple[str, Any]:
+        return ("id", _ident(items[0]))
+
     def feature_def(self, items: list[Any]) -> FeatureDef:
         name = _strip_string(items[0])
         shape: Shape | None = None
@@ -690,6 +693,7 @@ class _Tx(Transformer):
         description = None
         dm_notes = None
         secret = False
+        ident = None
         for item in items:
             if not isinstance(item, tuple):
                 continue
@@ -699,9 +703,12 @@ class _Tx(Transformer):
                 dm_notes = item[1]
             elif item[0] == "secret":
                 secret = True
+            elif item[0] == "id":
+                ident = item[1]
         return (
             "inline_block",
-            {"description": description, "dm_notes": dm_notes, "secret": secret},
+            {"description": description, "dm_notes": dm_notes, "secret": secret,
+             "id": ident},
         )
 
     def feature_inst(self, items: list[Any]) -> FeatureInstance:
@@ -715,6 +722,7 @@ class _Tx(Transformer):
         description = None
         dm_notes = None
         secret = False
+        ident = None
         for item in items[3:]:
             if not isinstance(item, tuple):
                 continue
@@ -723,10 +731,13 @@ class _Tx(Transformer):
                 rotate = val
             elif key == "scale":
                 scale, scale_y = val
+            elif key == "id":
+                ident = val
             elif key == "inline_block":
                 description = val.get("description")
                 dm_notes = val.get("dm_notes")
                 secret = bool(val.get("secret"))
+                ident = val.get("id") or ident
         return FeatureInstance(
             ref=ref,
             position=(x, y),
@@ -736,6 +747,7 @@ class _Tx(Transformer):
             description=description,
             dm_notes=dm_notes,
             secret=secret,
+            id=ident,
         )
 
     # ----- room -----
@@ -1189,12 +1201,15 @@ class _Tx(Transformer):
         line_style_amount = None
         description = None
         dm_notes = None
+        secret = False
         for item in items[1:]:
             if isinstance(item, (RectRoom, PolygonRoom, BoundaryRoom, CircleRoom)):
                 shape = item
             elif isinstance(item, tuple):
                 key, val = item
-                if key == "kind":
+                if key == "secret":
+                    secret = True
+                elif key == "kind":
                     kind = val
                 elif key == "label":
                     label = val
@@ -1218,6 +1233,7 @@ class _Tx(Transformer):
             line_style_amount=line_style_amount,
             description=description,
             dm_notes=dm_notes,
+            secret=secret,
         )
 
     # ----- line feature -----
@@ -1234,11 +1250,14 @@ class _Tx(Transformer):
         points: list[tuple[float, float]] = []
         description = None
         dm_notes = None
+        secret = False
         for item in items[1:]:
             if not isinstance(item, tuple):
                 continue
             key, val = item
-            if key == "kind":
+            if key == "secret":
+                secret = True
+            elif key == "kind":
                 kind = val
             elif key == "point":
                 points.append(val)
@@ -1248,7 +1267,7 @@ class _Tx(Transformer):
                 dm_notes = val
         return LineFeature(
             name=name, kind=kind, points=points,
-            description=description, dm_notes=dm_notes,
+            description=description, dm_notes=dm_notes, secret=secret,
         )
 
     # ----- exit -----
@@ -1265,13 +1284,16 @@ class _Tx(Transformer):
         target_position: tuple[float, float] | None = None
         label = None
         secret = False
+        ident = None
         description = None
         dm_notes = None
         for item in items[2:]:
             if not isinstance(item, tuple):
                 continue
             key, val = item
-            if key == "target":
+            if key == "id":
+                ident = val
+            elif key == "target":
                 target_map, target_position = val
             elif key == "label":
                 label = val
@@ -1292,6 +1314,7 @@ class _Tx(Transformer):
             target_position=target_position,
             label=label,
             secret=secret,
+            id=ident,
             description=description,
             dm_notes=dm_notes,
         )

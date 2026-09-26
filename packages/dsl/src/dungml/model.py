@@ -166,6 +166,8 @@ class FeatureInstance(BaseModel):
     # Mark this single instance GM-only (hidden in the fogged players' view)
     # even if its feature type isn't secret by default.
     secret: bool = False
+    # Stable handle for revealing it in play (`id NAME`); see dungml.secrets.
+    id: Optional[str] = None
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -398,6 +400,7 @@ class Marker(BaseModel):
     image: Optional[str] = None  # path or URL to an image; replaces the initial glyph when set
     description: Optional[str] = None
     dm_notes: Optional[str] = None
+    secret: bool = False  # hidden from the players until the DM reveals it
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -414,6 +417,8 @@ class TextAnnotation(BaseModel):
     rotate: float = 0.0  # degrees, counter-clockwise
     description: Optional[str] = None
     dm_notes: Optional[str] = None
+    secret: bool = False  # hidden from the players until the DM reveals it
+    id: Optional[str] = None  # stable handle for revealing it; see dungml.secrets
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -435,6 +440,7 @@ class Area(BaseModel):
     line_style_amount: Optional[float] = None
     description: Optional[str] = None
     dm_notes: Optional[str] = None
+    secret: bool = False  # hidden from the players until the DM reveals it
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -451,6 +457,7 @@ class LineFeature(BaseModel):
     points: list[Vec2] = Field(default_factory=list)
     description: Optional[str] = None
     dm_notes: Optional[str] = None
+    secret: bool = False  # hidden from the players until the DM reveals it
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
@@ -472,6 +479,7 @@ class Exit(BaseModel):
     # GM-only: stripped from the fogged players' view until discovered, like a
     # secret door or a `secret` feature.
     secret: bool = False
+    id: Optional[str] = None  # stable handle for revealing it; see dungml.secrets
     description: Optional[str] = None
     dm_notes: Optional[str] = None
     span: SourceSpan = Field(default_factory=SourceSpan)
