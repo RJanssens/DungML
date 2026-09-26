@@ -49,14 +49,23 @@ def _fmt(n: float) -> str:
     return str(i) if n == i else str(n)
 
 
-def door_key(door: Door) -> str:
-    """Stable identity for a door, derived from its position.
+def is_concealed(door: Door) -> bool:
+    """A door the players can't see until it's found: the `secret` flag, or
+    a concealed type (`secret`, `hidden`, `concealed`)."""
+    return door.secret or door.type in HIDDEN_DOOR_TYPES
 
-    Doors have no authored id, so we key them by their ``x,y`` position
-    (e.g. ``"14,9"``). Two doors at the exact same point are extremely
-    unusual; `build_graph` disambiguates any genuine collision with a
-    ``#N`` suffix so keys stay unique within one map.
+
+def door_key(door: Door) -> str:
+    """Stable identity for a door: its name (`door "vault" …`), else its
+    position (e.g. ``"14,9"``).
+
+    A position key changes when the author moves the door, which makes play
+    sessions forget it was found; a name doesn't. Two doors at the exact
+    same point are extremely unusual; `build_graph` disambiguates any
+    genuine collision with a ``#N`` suffix so keys stay unique within a map.
     """
+    if door.id:
+        return door.id
     x, y = door.position
     return f"{_fmt(x)},{_fmt(y)}"
 
@@ -257,7 +266,7 @@ def build_graph(dmap: DungeonMap) -> Graph:
     for key, placed in keyed_doors(dmap):
         door = placed.item
         refs = [r for r in door.connects if r in g.nodes]
-        hidden = door.type in HIDDEN_DOOR_TYPES
+        hidden = is_concealed(door)
         one_way = door.type in ONE_WAY_DOOR_TYPES
         if len(refs) == 1:
             g.boundary.append(

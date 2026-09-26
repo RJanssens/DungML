@@ -356,7 +356,15 @@ class Slice(BaseModel):
 # ----- door, window -----
 
 class Door(BaseModel):
+    # Computed by the parser for `between` doors (see dungml.placement).
     position: Vec2
+    # Stable key (`door "name" …`); None = keyed by position (graph.door_key).
+    id: Optional[str] = None
+    # `between A and B`: the two refs the position was computed from.
+    between: Optional[list[str]] = None
+    # Concealed until found, whatever the door is made of. `type secret` /
+    # `concealed` / `hidden` mean the same (graph.is_concealed).
+    secret: bool = False
     connects: list[str] = Field(default_factory=list)
     type: str = "wooden"
     state: str = "closed"

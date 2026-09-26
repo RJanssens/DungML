@@ -562,6 +562,22 @@ def validate(dmap: DungeonMap) -> list[Diagnostic]:
         else:
             seen_pairs[pair] = door.position
 
+    # ---- door names: two doors with one name share one key ----
+    named: dict[str, list] = {}
+    for d in all_doors:
+        if d.id:
+            named.setdefault(d.id, []).append(d)
+    for name, same in named.items():
+        for d in same[1:]:
+            diags.append(
+                _diag(
+                    "warning",
+                    f"door '{name}' is named {len(same)} times; play sessions track "
+                    f"doors by name, so they would be found and opened together",
+                    d.span,
+                )
+            )
+
     # ---- secret keys: two secrets sharing a key are revealed together ----
     by_key: dict[str, list] = {}
     for sc in list_secrets(dmap):

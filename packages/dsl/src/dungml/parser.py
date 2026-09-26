@@ -1059,9 +1059,20 @@ class _Tx(Transformer):
     def door_trapped(self, items: list[Any]) -> tuple[str, Any]:
         return ("trapped", True)
 
+    def door_at(self, items: list[Any]) -> tuple[str, Any]:
+        return ("at", (_num(items[0]), _num(items[1])))
+
+    def door_between(self, items: list[Any]) -> tuple[str, Any]:
+        return ("between", [str(items[0]), str(items[1])])
+
     def door(self, items: list[Any]) -> Door:
-        x = _num(items[0])
-        y = _num(items[1])
+        ident: str | None = None
+        if items and isinstance(items[0], Token) and items[0].type == "STRING":
+            ident = _strip_string(items[0])
+            items = items[1:]
+        x, y = 0.0, 0.0
+        between: list[str] | None = None
+        secret = False
         connects: list[str] = []
         dtype = "wooden"
         state = "closed"
@@ -1070,11 +1081,17 @@ class _Tx(Transformer):
         trapped = False
         description = None
         dm_notes = None
-        for item in items[2:]:
+        for item in items:
             if not isinstance(item, tuple):
                 continue
             key, val = item
-            if key == "connects":
+            if key == "at":
+                x, y = val
+            elif key == "between":
+                between = val
+            elif key == "secret":
+                secret = True
+            elif key == "connects":
                 connects = val
             elif key == "type":
                 dtype = val
@@ -1092,7 +1109,10 @@ class _Tx(Transformer):
                 dm_notes = val
         return Door(
             position=(x, y),
-            connects=connects,
+            id=ident,
+            between=between,
+            secret=secret,
+            connects=connects or list(between or []),
             type=dtype,
             state=state,
             facing=facing,
@@ -1725,6 +1745,10 @@ def parse(
     model, includes = _parse_text(text, require_map=True)
     for inc_name in includes:
         _load_include_into(model, inc_name, base_dir, seen, include_sources)
+    # `door between A and B` positions need every room/corridor, includes too.
+    from .placement import resolve_door_placements
+
+    resolve_door_placements(model)
     return model
 
 

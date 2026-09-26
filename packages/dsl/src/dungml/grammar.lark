@@ -313,7 +313,13 @@ slice_width: "width" NUMBER
 SLICE_KIND: "river" | "ravine" | "split"
 
 // ============ DOOR ============
-door: "door" "at" NUMBER "," NUMBER "{" door_property* "}"
+// `door "name" …` gives the door a stable key (see graph.door_key). The
+// position is either given (`at X,Y`) or computed from the geometry
+// (`between room.a and corridor.b`, which also sets `connects`).
+door: "door" STRING? door_place "{" door_property* "}"
+?door_place: door_at | door_between
+door_at: "at" NUMBER "," NUMBER
+door_between: "between" ref "and" ref
 
 ?door_property: door_connects
               | door_type
@@ -321,6 +327,7 @@ door: "door" "at" NUMBER "," NUMBER "{" door_property* "}"
               | door_facing
               | door_width
               | door_trapped
+              | secret_decl
               | description_decl
               | dm_notes_decl
 

@@ -32,7 +32,7 @@ from shapely.ops import unary_union
 
 from . import walk
 from .geometry import LineWall, project_onto_wall, room_polygon
-from .graph import HIDDEN_DOOR_TYPES
+from .graph import is_concealed
 from .model import ArcSegment, Corridor, Door, DungeonMap, LineSegment, Vec2
 
 _EPS = 1e-6
@@ -323,7 +323,7 @@ def corridor_outlines(
             elif any(math.dist(ex.position, p) <= tol for ex in exits):
                 cuts.append((p, 2 * r * 1.01))  # the map continues past this end
         for d in doors:
-            if _touches(d, c) and d.type not in HIDDEN_DOOR_TYPES:
+            if _touches(d, c) and not is_concealed(d):
                 cuts.append((d.position, d.width or 1.0))
         rings = _rings(poly)
         segments_by_ring = [
