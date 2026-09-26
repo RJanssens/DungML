@@ -257,11 +257,9 @@ export function SvgPreview({
       if (ok === undefined) return;
       const color = ok ? GREEN : RED;
       const cls = e.getAttribute("class") ?? "";
-      if (cls === "floor") {
+      // Room and corridor floors are both filled shapes.
+      if (cls === "floor" || cls.includes("corridor-floor")) {
         e.style.fill = color;
-        e.setAttribute("data-pathtint", "1");
-      } else if (cls.includes("corridor-floor")) {
-        e.style.stroke = color;
         e.setAttribute("data-pathtint", "1");
       }
     });

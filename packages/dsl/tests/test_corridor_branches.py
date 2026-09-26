@@ -58,11 +58,11 @@ def test_run_to_unknown_node_is_an_error() -> None:
         )
 
 
-def test_crossing_renders_as_two_through_subpaths() -> None:
-    # Four runs sharing `hub` chain into two straight pass-throughs that
-    # cross at the hub, each drawn as its own M…-started sub-path.
+def test_crossing_is_one_merged_floor() -> None:
+    # Four runs sharing `hub` are one space: the floor is a single outline
+    # (one M…Z ring) with no walls across the junction.
     d = _floor_path(render(parse(CROSSROADS)))
-    assert d.count("M") == 2
+    assert d.count("M") == 1
 
 
 def test_branching_corridor_does_not_warn_against_itself() -> None:

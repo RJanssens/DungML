@@ -30,10 +30,11 @@ def test_width_zero_renders_single_line():
     assert 'class="corridor-floor"' not in svg
 
 
-def test_normal_width_keeps_wall_and_floor_layers():
+def test_normal_width_draws_a_floor_and_its_walls():
     svg = render(parse(_corridor_src(1)))
-    assert svg.count('class="corridor-wall"') == 1
     assert svg.count('class="corridor-floor"') == 1
+    assert svg.count('class="corridor-walls') == 1
+    assert 'class="corridor-wall"' not in svg  # no centreline stroke
 
 
 def test_width_zero_trail_draws_x_marks():

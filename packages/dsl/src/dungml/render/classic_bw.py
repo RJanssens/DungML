@@ -17,7 +17,6 @@ from ..geometry import (
     ArcWall,
     LineWall,
     Wall,
-    corridor_polygons,
     cut_wall,
     party_start_point,
     project_onto_wall,
@@ -54,6 +53,7 @@ from ..model import (
     Window,
 )
 from .. import walk
+from ..walls import corridor_outlines
 from . import Renderer, register
 from .theme import THEMES, Theme, get_theme
 
@@ -291,6 +291,7 @@ class _RenderContext:
         self.all_rooms: dict[str, Room] = walk.rooms(dmap, visible=True)
         self.corridors_by_name: dict[str, Corridor] = walk.corridors(dmap, visible=True)
         self.all_corridors: list[Corridor] = list(self.corridors_by_name.values())
+        self.corridor_outlines = corridor_outlines(dmap, wall_stroke=WALL_STROKE)
         # Sequential numbering in source order (dict preserves insertion),
         # unless a room carries an explicit number (fog_of_war sets these).
         self.room_numbers: dict[str, int] = {
@@ -432,13 +433,9 @@ class _RenderContext:
         # Corridors.
         all_corridors = self.all_corridors
         if all_corridors:
-            # Positions of every connector (door / cross-map exit). A corridor
-            # end with no connector here is a dead end and gets capped.
-            connectors = [d.position for d in doors]
-            connectors.extend(ex.position for ex in self._visible("exits"))
             parts.append('<g class="corridors">')
             for c in all_corridors:
-                parts.append(self._corridor(c, connectors))
+                parts.append(self._corridor(c))
             parts.append("</g>")
 
         if self.fade_stubs:
@@ -678,7 +675,6 @@ class _RenderContext:
             "stroke-linejoin:round}"
             f".floor{{fill:{self._floor_fill()};stroke:none}}"
             ".corridor-wall{fill:none}"
-            ".corridor-floor{fill:none}"
             f".door{{fill:none;stroke:{self.INK};stroke-width:{_n(DOOR_STROKE)};"
             "stroke-linecap:butt}"
             f".window{{fill:none;stroke:{self.INK};stroke-width:{_n(WINDOW_STROKE)}}}"
@@ -890,12 +886,12 @@ class _RenderContext:
         return self._cell_grid_lines(clip, self._id("cell-grid-rooms"))
 
     def _cell_grid_corridors(self, all_corridors: list[Corridor]) -> str:
-        """Cell grid clipped to corridor areas."""
-        clip: list[str] = []
-        for c in all_corridors:
-            for poly in corridor_polygons(c):
-                pts = " ".join(f"{_n(p[0])},{_n(self.y(p[1]))}" for p in poly)
-                clip.append(f'<polygon points="{pts}"/>')
+        """Cell grid clipped to corridor floors (their snapped outlines)."""
+        clip = [
+            f'<path d="{self._polygon_d(o.polygon)}" clip-rule="evenodd"/>'
+            for c in all_corridors
+            if (o := self.corridor_outlines.get(c.name)) is not None
+        ]
         return self._cell_grid_lines(clip, self._id("cell-grid-corr"))
 
     def _room_grid_overlay(self, r: Room) -> str:
@@ -1047,17 +1043,13 @@ class _RenderContext:
 
     # --- corridors ---
 
-    def _corridor(self, c: Corridor, connectors: list[Vec2] | None = None) -> str:
-        """Render a corridor as two stacked strokes of the centerline.
+    def _corridor(self, c: Corridor) -> str:
+        """Render a corridor: a filled floor plus its outline as walls.
 
-        Outer stroke (wide, dark) draws the walls; inner stroke (slightly
-        narrower, floor-coloured) carves the corridor band on top. L-junctions
-        and arc transitions sort themselves out naturally because both strokes
-        follow the same path — no parallel-wall stitching needed.
-
-        `connectors` is the list of door / exit positions on the map: a
-        terminal corridor end with no connector there is a dead end and gets
-        a flat wall cap drawn across its mouth.
+        The geometry comes from `dungml.walls`: ends that meet a door are
+        snapped onto the door's wall, doors and exits cut the openings, and
+        everything else — dead ends included — is wall. A zero-width
+        corridor is a bare centreline (a route marker) instead.
         """
         floor_d = self._corridor_path(c)
         if not floor_d:
@@ -1114,89 +1106,25 @@ class _RenderContext:
             )
             return line_layer + label_layer
 
-        outline_w = c.width + 2 * WALL_STROKE
-        # Wall outline (drawn first, wider, dark).
-        wall_layer = (
-            f'<path class="corridor-wall" {attrs} d="{floor_d}" '
-            f'stroke-width="{_n(outline_w)}" stroke="{self.INK}" '
-            f'stroke-linejoin="{join}" stroke-linecap="butt" fill="none"'
-            f"{filter_attr}/>"
-        )
-        # Floor layer (drawn second, narrower, floor colour or override).
-        floor_stroke = self._resolve_bg(c.background) or self._corridor_floor_fill()
+        outline = self.corridor_outlines.get(c.name)
+        if outline is None:
+            return label_layer
+        fill = self._resolve_bg(c.background) or self._corridor_floor_fill()
         floor_layer = (
-            f'<path class="corridor-floor" {attrs} d="{floor_d}" '
-            f'stroke-width="{_n(c.width)}" stroke="{floor_stroke}" '
-            f'stroke-linejoin="{join}" stroke-linecap="butt" fill="none"'
-            f"{filter_attr}/>"
+            f'<path class="corridor-floor" {attrs} d="{self._polygon_d(outline.polygon)}" '
+            f'fill="{fill}" fill-rule="evenodd" stroke="none"{filter_attr}/>'
         )
-        # On-map label only when the corridor declares an explicit `label`
-        # block. The display_name (second STRING after the slug) is for
-        # tooltips and the print legend only — it never renders on the map.
-        label_layer = self._corridor_label(c) if c.label is not None else ""
-        # Cap dead ends: degree-1 terminal endpoints with no connector. Drawn
-        # after the floor so the cap reads as a flat wall closing the mouth.
-        cap_layer = self._corridor_caps(c, connectors or [], filter_attr)
-        return wall_layer + floor_layer + cap_layer + label_layer
-
-    def _corridor_caps(
-        self,
-        c: Corridor,
-        connectors: list[Vec2],
-        filter_attr: str,
-    ) -> str:
-        """Flat wall caps across every dead-end mouth of a corridor.
-
-        A free end (a line-segment endpoint shared by no other segment) that
-        has no door / exit at it is a dead end. The two-stroke draw leaves
-        such an end open (floor flush to the edge, no dark line across it);
-        this paints a wall-coloured band across the mouth to close it.
-        Branches, bends and junctions (degree > 1) and ends with a connector
-        are left open."""
-        half = c.width / 2.0
-        if half <= 0:
-            return ""
-        # Every segment endpoint (line + arc) for degree counting.
-        all_ends: list[Vec2] = []
-        for s in c.segments:
-            if isinstance(s, LineSegment):
-                all_ends.append(s.start)
-                all_ends.append(s.end)
-            else:
-                all_ends.append(_arc_endpoint(s, s.from_angle))
-                all_ends.append(_arc_endpoint(s, s.to_angle))
-
-        def degree(pt: Vec2) -> int:
-            return sum(
-                1
-                for q in all_ends
-                if abs(q[0] - pt[0]) <= 1e-6 and abs(q[1] - pt[1]) <= 1e-6
-            )
-
-        tol = max(half, 0.5) + 0.25
-        out: list[str] = []
-        seen: set[tuple[float, float]] = set()
-        for s in c.segments:
-            if not isinstance(s, LineSegment):
-                continue
-            for pt, other in ((s.start, s.end), (s.end, s.start)):
-                key = (round(pt[0], 6), round(pt[1], 6))
-                if key in seen:
-                    continue
-                if degree(pt) != 1:
-                    continue  # bend / branch / junction, not a free end
-                if any(
-                    math.hypot(px - pt[0], py - pt[1]) <= tol
-                    for px, py in connectors
-                ):
-                    continue  # a door / exit opens here — leave it open
-                seen.add(key)
-                dx, dy = pt[0] - other[0], pt[1] - other[1]
-                L = math.hypot(dx, dy) or 1.0
-                out.append(
-                    self._corridor_cap(c, pt, (dx / L, dy / L), half, filter_attr)
-                )
-        return "".join(out)
+        # Dash-pattern line styles tag the group, as for room walls.
+        cls = "corridor-walls" + (
+            f" {c.line_style}" if c.line_style in ("ruined", "dotted", "dashed") else ""
+        )
+        walls = "".join(
+            f'<path class="wall" d="{self._polyline_d(p)}"/>' for p in outline.wall_paths
+        )
+        wall_layer = (
+            f'<g class="{cls}" data-corridor="{escape(c.name)}"{filter_attr}>{walls}</g>'
+        )
+        return floor_layer + wall_layer + label_layer
 
     def _fade_stubs_svg(self) -> str:
         """Fog-of-war fade stubs: each is a short corridor piece past an open
@@ -1245,33 +1173,24 @@ class _RenderContext:
             return ""
         return f'<defs>{"".join(defs)}</defs>' + "".join(groups)
 
-    def _corridor_cap(
-        self,
-        c: Corridor,
-        end: Vec2,
-        outward: Vec2,
-        half: float,
-        filter_attr: str,
-    ) -> str:
-        """A wall-coloured quad sealing one dead-end mouth, squared to the
-        corridor's own direction and matching the side-wall thickness."""
-        ex, ey = end
-        ux, uy = outward
-        nx, ny = -uy, ux
-        edge = half + WALL_STROKE  # outer half-width of the wall band
-        back = WALL_STROKE * 0.5  # overlap into the floor to hide the seam
-        fwd = WALL_STROKE  # cap thickness beyond the end
-        iL = (ex + nx * edge - ux * back, ey + ny * edge - uy * back)
-        iR = (ex - nx * edge - ux * back, ey - ny * edge - uy * back)
-        oL = (ex + nx * edge + ux * fwd, ey + ny * edge + uy * fwd)
-        oR = (ex - nx * edge + ux * fwd, ey - ny * edge + uy * fwd)
-        pts = " ".join(
-            f"{_n(x)},{_n(self.y(y))}" for x, y in (iL, oL, oR, iR)
-        )
-        return (
-            f'<polygon class="corridor-cap" data-corridor="{escape(c.name)}" '
-            f'points="{pts}" fill="{self.INK}" stroke="none"{filter_attr}/>'
-        )
+    def _polygon_d(self, poly) -> str:  # type: ignore[no-untyped-def]
+        """Path data for a (multi)polygon: one closed sub-path per ring."""
+        parts: list[str] = []
+        for g in getattr(poly, "geoms", [poly]):
+            for ring in (g.exterior, *g.interiors):
+                pts = list(ring.coords)[:-1]
+                if len(pts) >= 3:
+                    parts.append(
+                        "M " + " L ".join(f"{_n(x)},{_n(self.y(y))}" for x, y in pts) + " Z"
+                    )
+        return " ".join(parts)
+
+    def _polyline_d(self, pts: list[Vec2]) -> str:
+        """Path data through `pts`; closed (`Z`) when it ends where it began."""
+        closed = len(pts) > 2 and math.dist(pts[0], pts[-1]) < 1e-9
+        body = pts[:-1] if closed else pts
+        d = "M " + " L ".join(f"{_n(x)},{_n(self.y(y))}" for x, y in body)
+        return d + " Z" if closed else d
 
     def _corridor_label(self, c: Corridor) -> str:
         """Draw an explicit corridor label.
@@ -1536,33 +1455,6 @@ class _RenderContext:
             prev_dir = cur_dir
         return " ".join(parts)
 
-    def _corridor_walls(self, c: Corridor) -> list[LineWall]:
-        """Two parallel line walls bracketing each corridor segment."""
-        out: list[LineWall] = []
-        half = c.width / 2.0
-        for s in c.segments:
-            if isinstance(s, LineSegment):
-                ax, ay = s.start
-                bx, by = s.end
-                dx, dy = bx - ax, by - ay
-                L = (dx * dx + dy * dy) ** 0.5 or 1.0
-                nx, ny = -dy / L, dx / L
-                out.append(
-                    LineWall(
-                        (ax + nx * half, ay + ny * half),
-                        (bx + nx * half, by + ny * half),
-                    )
-                )
-                out.append(
-                    LineWall(
-                        (ax - nx * half, ay - ny * half),
-                        (bx - nx * half, by - ny * half),
-                    )
-                )
-            # Arc-segment walls left as a future enhancement; the
-            # corridor floor still renders along the centerline.
-        return out
-
     # --- slices (cross-slice terrain) ---
 
     # Per-kind palette: (bank_color, fill_color, accent_color).
@@ -1654,12 +1546,7 @@ class _RenderContext:
 
     def _door(self, d: Door) -> str:
         wall_info = self._find_door_wall(d)
-        # A door on a corridor's *side* wall needs the corridor's stroked wall
-        # opened too (rooms auto-cut, corridors don't) — paint a floor patch.
         marker = d.type in ("secret", "concealed")
-        patch = ""
-        if not marker:
-            patch = self._corridor_opening_patch(d) + self._corridor_end_mouth(d)
         if marker:
             letter = "S" if d.type == "secret" else "C"
             body = self._marker_door_symbol(d, wall_info, letter, d.type)
@@ -1671,165 +1558,7 @@ class _RenderContext:
             )
         else:
             body = self._door_leaf(d, wall_info)
-        return self._wrap_door(d, patch + body)
-
-    def _corridor_opening_patch(self, d: Door) -> str:
-        """Erase the corridor wall stroke at a door that sits on a corridor's
-        side edge, so the opening reads as a gap. Safe because both sides of
-        that edge are floor; returns "" for doors not on a corridor side."""
-        edge = self._door_corridor_edge(d)
-        if edge is None:
-            return ""
-        (ax, ay), (bx, by) = edge
-        dx, dy = bx - ax, by - ay
-        L = math.hypot(dx, dy) or 1.0
-        ux, uy = dx / L, dy / L
-        nx, ny = -uy, ux
-        cx, cy = d.position
-        half = (d.width or DOOR_WIDTH_DEFAULT) / 2.0
-        perp = WALL_STROKE + 0.06
-        corners = [
-            (cx - half * ux - perp * nx, cy - half * uy - perp * ny),
-            (cx + half * ux - perp * nx, cy + half * uy - perp * ny),
-            (cx + half * ux + perp * nx, cy + half * uy + perp * ny),
-            (cx - half * ux + perp * nx, cy - half * uy + perp * ny),
-        ]
-        pts = " ".join(f"{_n(x)},{_n(self.y(y))}" for x, y in corners)
-        return (
-            f'<polygon class="door-opening" points="{pts}" '
-            f'fill="{self._corridor_floor_fill()}" stroke="none"/>'
-        )
-
-    def _door_corridor_edge(self, d: Door) -> tuple[Vec2, Vec2] | None:
-        """If `d` sits on a connected corridor's side edge, return that
-        corridor segment's endpoints (to orient the opening patch)."""
-        corrs = self.corridors_by_name
-        for ref in d.connects:
-            if not ref.startswith("corridor."):
-                continue
-            c = corrs.get(ref.split(".", 1)[1])
-            if c is None:
-                continue
-            half = c.width / 2.0
-            for s in c.segments:
-                if not isinstance(s, LineSegment):
-                    continue
-                dist = _point_segment_dist(d.position, s.start, s.end)
-                # Near the long edge (≈ half-width away), not the centreline
-                # (an end-door) or far away.
-                if half - 0.3 <= dist <= half + WALL_STROKE + 0.15:
-                    return s.start, s.end
-        return None
-
-    def _corridor_end_at(
-        self, d: Door
-    ) -> tuple[Corridor, Vec2, Vec2, float, float] | None:
-        """If a corridor connected to `d` *terminates* near the door, return
-        (corridor, end_point, outward_unit_dir, half_width, terminal_seg_len).
-
-        Only degree-1 endpoints (true corridor ends, not bends or junctions)
-        qualify; a door on a corridor's side or partway along it is handled by
-        `_corridor_opening_patch`, not here."""
-        corrs = self.corridors_by_name
-        cx, cy = d.position
-        best: tuple[float, Corridor, Vec2, Vec2, float] | None = None
-        for ref in d.connects:
-            if not ref.startswith("corridor."):
-                continue
-            c = corrs.get(ref.split(".", 1)[1])
-            if c is None:
-                continue
-            half = c.width / 2.0
-            # (endpoint, other end) for every line-segment end.
-            ends: list[tuple[Vec2, Vec2]] = []
-            for s in c.segments:
-                if isinstance(s, LineSegment):
-                    ends.append((s.start, s.end))
-                    ends.append((s.end, s.start))
-            tol = max(half, 0.5) + 0.25
-            for pt, other in ends:
-                degree = sum(
-                    1
-                    for q, _ in ends
-                    if abs(q[0] - pt[0]) <= 1e-6 and abs(q[1] - pt[1]) <= 1e-6
-                )
-                if degree != 1:
-                    continue  # bend or junction, not a free end
-                dist = math.hypot(pt[0] - cx, pt[1] - cy)
-                if dist > tol:
-                    continue
-                dx, dy = pt[0] - other[0], pt[1] - other[1]
-                L = math.hypot(dx, dy) or 1.0
-                if best is None or dist < best[0]:
-                    best = (dist, c, pt, (dx / L, dy / L), half, L)
-        if best is None:
-            return None
-        _, c, pt, u, half, seg_len = best
-        return c, pt, u, half, seg_len
-
-    def _corridor_end_mouth(self, d: Door) -> str:
-        """Square a corridor's end to the wall it opens into.
-
-        A corridor is stroked along its centerline with a butt cap, so its
-        end is cut perpendicular to the corridor's *own* direction. Where a
-        (typically diagonal) corridor meets a wall at an oblique angle, that
-        cap diverges from the wall — leaving a skewed gap and a misangled dark
-        cap. This paints a floor quad that bridges the wall: squared to the
-        wall angle, pulled back into the corridor to cover the butt cap, and
-        pushed just past the wall to bury the door gap's jamb caps and meet
-        the room floor — so the join reads as one continuous opening.
-
-        Suppressed (returns "") when the corridor already ends on the wall
-        perpendicularly (the gap is zero-length), so axis-aligned maps render
-        unchanged."""
-        end = self._corridor_end_at(d)
-        if end is None:
-            return ""
-        c, (ex, ey), (ux, uy), half, seg_len = end
-        wall_info = self._find_door_wall(d)
-        if wall_info is None:
-            return ""
-        wall, _t = wall_info
-        nx, ny = -uy, ux
-        pL = (ex + nx * half, ey + ny * half)
-        pR = (ex - nx * half, ey - ny * half)
-        iL = _line_intersect(pL, (ux, uy), wall.a, wall.b)
-        iR = _line_intersect(pR, (ux, uy), wall.a, wall.b)
-        if iL is None or iR is None:
-            return ""
-        extL = math.hypot(iL[0] - pL[0], iL[1] - pL[1])
-        extR = math.hypot(iR[0] - pR[0], iR[1] - pR[1])
-        # Skip a degenerate mouth: a corridor already ending on the wall
-        # perpendicularly needs no patch (and clutters output for every
-        # axis-aligned end door otherwise).
-        if extL < 1e-6 and extR < 1e-6:
-            return ""
-        # Guard against a mismatched wall pulling the mouth far across the map.
-        max_ext = c.width * 2.0 + 1.0
-        if extL > max_ext or extR > max_ext:
-            return ""
-        # Bridge the wall so the join reads clean. `u` points out of the
-        # corridor and through the wall into the connected room, so:
-        #   - pull the near edge back into the corridor (-u) to overlap the
-        #     floor stroke's butt cap (else a hairline seam shows), and
-        #   - push the far edge just past the wall (+u) — far enough to bury
-        #     the wall's jamb caps (the dark nubs) and overlap the room floor,
-        #     but not so far it pokes a floor-coloured wedge deep into an
-        #     organic-filtered cave that renders darker than the corridor.
-        # The patch draws in the doors group, on top of walls and corridors.
-        back = min(WALL_STROKE, seg_len * 0.4)
-        fwd = WALL_STROKE
-        bL = (pL[0] - ux * back, pL[1] - uy * back)
-        bR = (pR[0] - ux * back, pR[1] - uy * back)
-        fL = (iL[0] + ux * fwd, iL[1] + uy * fwd)
-        fR = (iR[0] + ux * fwd, iR[1] + uy * fwd)
-        corners = [bL, fL, fR, bR]
-        pts = " ".join(f"{_n(x)},{_n(self.y(y))}" for x, y in corners)
-        fill = self._resolve_bg(c.background) or self._corridor_floor_fill()
-        return (
-            f'<polygon class="corridor-mouth" data-corridor="{escape(c.name)}" '
-            f'points="{pts}" fill="{fill}" stroke="none"/>'
-        )
+        return self._wrap_door(d, body)
 
     def _door_leaf(self, d: Door, wall_info: tuple[LineWall, float]) -> str:
         """Draw a door glyph in the gap cut from the wall.
@@ -2426,7 +2155,8 @@ class _RenderContext:
         )
 
     def _find_door_wall(self, d: Door) -> tuple[LineWall, float] | None:
-        """Locate the wall this door sits on. Searches across all rooms."""
+        """Locate the wall this door sits on: the nearest room wall, or —
+        for a door between corridors — the nearest corridor outline."""
         best: tuple[LineWall, float, float] | None = None
         for r in self.all_rooms.values():
             for w in room_walls(r):
@@ -2436,6 +2166,14 @@ class _RenderContext:
                 if best is None or dist < best[2]:
                     best = (w, t, dist)
         if best is None or best[2] > 1.0:
+            best = None
+            for name, outline in self.corridor_outlines.items():
+                if d.connects and f"corridor.{name}" not in d.connects:
+                    continue
+                hit = outline.nearest_wall(d.position)
+                if hit is not None and (best is None or hit[2] < best[2]):
+                    best = hit
+        if best is None:
             return None
         return best[0], best[1]
 

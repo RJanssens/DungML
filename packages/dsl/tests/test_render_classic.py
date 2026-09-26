@@ -110,16 +110,24 @@ def test_hidden_layer_features_are_skipped(crypt_source):
 
 
 def test_corridor_floor_uses_width(crypt_source):
-    svg = render(parse(crypt_source))
-    root = _parse_svg(svg)
+    root = _parse_svg(render(parse(crypt_source)))
     floors = [
         e for e in root.iter(f"{SVG_NS}path")
         if e.get("class") == "corridor-floor"
     ]
     assert len(floors) >= 1
-    # Widths in the sample are 2, 2, 1.5.
-    widths = {e.get("stroke-width") for e in floors}
-    assert "2" in widths
+    # A straight corridor's floor spans its width plus one wall stroke (half
+    # a stroke each side: the wall line sits on the floor's edge).
+    src = """
+    map "X" { grid { bounds 20 x 10 } }
+    corridor "c" { width 2 segment line from 2,5 to 18,5 }
+    """
+    floor = next(
+        e for e in _parse_svg(render(parse(src))).iter(f"{SVG_NS}path")
+        if e.get("class") == "corridor-floor"
+    )
+    ys = [float(v) for v in re.findall(r"[\d.]+,([\d.]+)", floor.get("d"))]
+    assert abs((max(ys) - min(ys)) - (2 + 0.18)) < 1e-6
 
 
 def test_y_axis_flips_for_bottom_left_origin():
@@ -589,42 +597,26 @@ def _poly_points(el: ET.Element) -> list[tuple[float, float]]:
 
 
 def test_diagonal_corridor_end_squares_to_angled_wall():
-    # A 45deg corridor meeting a wall that runs at a shallow angle. The
-    # corridor's butt cap diverges from the wall, so an end-mouth patch
-    # bridges the wall: its far edge is squared to the wall angle, and the
-    # quad straddles the wall (near edge inside the corridor, far edge inside
-    # the room) so it buries the gap's jamb caps and the floor-meets-floor
-    # seam.
+    # A 45deg corridor meeting a wall that runs at a shallow angle. Its end
+    # is snapped onto the wall: the floor reaches the wall across its whole
+    # width (the end edge lies along the wall, not at the corridor's own
+    # 45deg flat end) and nothing overhangs into the room.
+    from shapely.geometry import LineString, Polygon
+
+    from dungml.walls import corridor_outlines
+
     src = """
     map "M" { grid { cell 20 px bounds 30 x 30 } renderer "classic-bw" }
     room "cave" { polygon (22,6.9) (12.7,8.45) (12.7,20) (22,20) }
     corridor "c" { width 1 node n1 at 13.82,8.27 node n2 at 16,5 run n1 to n2 }
     door at 13.79,8.35 { connects corridor.c, room.cave type wooden }
     """
-    root = _parse_svg(render(parse(src)))
-    mouths = _findall_class(root, "corridor-mouth")
-    assert len(mouths) == 1
-    bL, fL, fR, bR = _poly_points(mouths[0])
-
-    ax, ay = 22.0, 6.9
-    bx, by = 12.7, 8.45
-    wx, wy = bx - ax, by - ay
-    wlen = (wx * wx + wy * wy) ** 0.5
-    ux, uy = wx / wlen, wy / wlen  # wall unit direction
-
-    # Core guarantee: the far edge is squared to the *wall* angle, not left at
-    # the corridor's own 45deg butt cap. (The corridor runs at 45deg; the wall
-    # at ~9.5deg — a butt-capped end would be ~80deg off.)
-    ex, ey = fR[0] - fL[0], fR[1] - fL[1]
-    elen = (ex * ex + ey * ey) ** 0.5
-    cross = abs((ex / elen) * uy - (ey / elen) * ux)  # |sin(angle to wall)|
-    assert cross < 1e-2, f"far edge not parallel to wall (sin={cross})"
-
-    # Non-degenerate quad.
-    area = abs(
-        (fL[0] - bL[0]) * (fR[1] - bL[1]) - (fL[1] - bL[1]) * (fR[0] - bL[0])
-    )
-    assert area > 1e-3
+    poly = corridor_outlines(parse(src), wall_stroke=0.18)["c"].polygon
+    wall = LineString([(22, 6.9), (12.7, 8.45)])
+    room = Polygon([(22, 6.9), (12.7, 8.45), (12.7, 20), (22, 20)])
+    assert poly.intersection(room).area < 1e-6
+    along = poly.boundary.intersection(wall.buffer(1e-6)).length
+    assert along > 1 + 0.18  # at least the corridor's width, laid on the wall
 
 
 def test_perpendicular_corridor_end_emits_no_mouth():
