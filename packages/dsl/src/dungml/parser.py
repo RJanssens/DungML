@@ -10,12 +10,13 @@ resolves these via parser-state-aware tokenization.
 """
 from __future__ import annotations
 
+import difflib
 import re
 from pathlib import Path
 from typing import Any, Mapping
 
 from lark import Lark, Token, Transformer
-from lark.exceptions import LarkError, UnexpectedInput, VisitError
+from lark.exceptions import LarkError, UnexpectedEOF, UnexpectedInput, VisitError
 
 from .errors import DmapParseError
 from .model import (
@@ -1477,6 +1478,70 @@ def _get_parser() -> Lark:
     return _parser
 
 
+# ----- parse-error wording -----
+
+_WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*|\S")
+_ALTERNATION_RE = re.compile(r"^\(\?:(.*)\)$")
+_TERMINAL_PHRASES = {
+    "NUMBER": "a number",
+    "STRING": "a string",
+    "TRIPLE_STRING": "a string",
+    "CNAME": "a name",
+}
+
+
+def _terminal_display(name: str) -> str:
+    """How a grammar terminal reads in an error: the keyword or punctuation
+    itself (`label`, `}`), a phrase (`a number`), or its alternatives."""
+    if name in _TERMINAL_PHRASES:
+        return _TERMINAL_PHRASES[name]
+    term = next((t for t in _get_parser().terminals if t.name == name), None)
+    if term is None:
+        return name.lower()
+    value = term.pattern.value
+    if term.pattern.type == "str":
+        return value
+    alt = _ALTERNATION_RE.match(value)
+    return alt.group(1).replace("\\", "").replace("|", " / ") if alt else name.lower()
+
+
+def _expected_list(names: Any, limit: int = 14) -> str:
+    # Punctuation first: "expected }" is usually the actionable part.
+    shown = sorted(
+        {_terminal_display(n) for n in names or ()},
+        key=lambda d: (d[:1].isalpha(), d),
+    )
+    quoted = [d if d in _TERMINAL_PHRASES.values() else f"`{d}`" for d in shown]
+    if len(quoted) == 1:
+        return quoted[0]
+    more = len(quoted) - limit
+    head = ", ".join(quoted[:limit])
+    return f"one of: {head}" + (f", … ({more} more)" if more > 0 else "")
+
+
+def _describe_unexpected(e: UnexpectedInput, text: str) -> str:
+    pos = getattr(e, "pos_in_stream", None)
+    token = getattr(e, "token", None)
+    if token is not None and str(token):
+        got = str(token)
+    elif pos is not None:
+        m = _WORD_RE.match(text, pos)
+        got = m.group(0) if m else text[pos : pos + 1]
+    else:
+        got = ""
+    expected = getattr(e, "allowed", None) or getattr(e, "expected", None) or ()
+    msg = f"unexpected '{got}'" if got else "unexpected input"
+    if expected:
+        msg += " — expected " + _expected_list(expected)
+        keywords = [
+            d for d in (_terminal_display(n) for n in expected) if d.isidentifier()
+        ]
+        close = difflib.get_close_matches(got, keywords, n=1, cutoff=0.6)
+        if close:
+            msg += f"; did you mean '{close[0]}'?"
+    return msg
+
+
 def list_libraries() -> list[str]:
     """Sorted names of the bundled include libraries (e.g. ``"core.dmap"``,
     ``"forest.dmap"``). These can be `include`d directly or copied into a
@@ -1557,9 +1622,18 @@ def _parse_text(
     """Parse one source string. Returns the model and any include paths."""
     try:
         tree = _get_parser().parse(text)
+    except UnexpectedEOF as e:
+        lines = text.split("\n")
+        raise DmapParseError(
+            "unexpected end of input — expected "
+            + _expected_list(e.expected)
+            + " (is a `{` block left unclosed?)",
+            line=len(lines),
+            column=len(lines[-1]) + 1,
+        ) from e
     except UnexpectedInput as e:
         raise DmapParseError(
-            f"unexpected input: {e.__class__.__name__}",
+            _describe_unexpected(e, text),
             line=getattr(e, "line", 0) or 0,
             column=getattr(e, "column", 0) or 0,
         ) from e
