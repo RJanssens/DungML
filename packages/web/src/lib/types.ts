@@ -24,6 +24,10 @@ export interface Project {
   shared: boolean;
   /** Display label for the project's owner. */
   owner: string;
+  /** Every signed-in user gets member rights on a public project. */
+  is_public: boolean;
+  /** How the caller reaches it. `shared` is `role !== "owner"`. */
+  role: "owner" | "member" | "public";
 }
 
 export interface ProjectMember {

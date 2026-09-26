@@ -129,3 +129,16 @@
   color: var(--fg-faint);
   font-style: italic;
 }
+
+.sectionHeading {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--text-muted, #555);
+}
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}

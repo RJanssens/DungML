@@ -7,11 +7,20 @@ import { Button, Card, EmptyState, Input } from "../components/Primitives";
 import { AppHeader, PageBody, PageShell } from "../components/Layout";
 import styles from "./Lists.module.css";
 
+// The projects list, split by how the caller reaches each one. Empty groups
+// are hidden.
+const GROUPS: { role: Project["role"]; title: string }[] = [
+  { role: "owner", title: "Mine" },
+  { role: "member", title: "Shared with me" },
+  { role: "public", title: "Public" },
+];
+
 export function ProjectsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
@@ -19,10 +28,12 @@ export function ProjectsPage() {
   });
 
   const create = useMutation({
-    mutationFn: (n: string) => api.projects.create(n),
+    mutationFn: ({ n, pub }: { n: string; pub: boolean }) =>
+      api.projects.create(n, pub),
     onSuccess: () => {
       setCreating(false);
       setName("");
+      setIsPublic(true);
       qc.invalidateQueries({ queryKey: ["projects"] });
     },
   });
@@ -52,7 +63,7 @@ export function ProjectsPage() {
 
   function onCreate(e: FormEvent) {
     e.preventDefault();
-    if (name.trim()) create.mutate(name.trim());
+    if (name.trim()) create.mutate({ n: name.trim(), pub: isPublic });
   }
 
   return (
@@ -109,6 +120,14 @@ export function ProjectsPage() {
                   required
                   maxLength={200}
                 />
+                <label className={styles.checkLabel}>
+                  <input
+                    type="checkbox"
+                    checked={isPublic}
+                    onChange={(e) => setIsPublic(e.target.checked)}
+                  />
+                  Public — everyone who signs in can see and edit
+                </label>
                 <Button type="submit" disabled={create.isPending}>
                   Create
                 </Button>
@@ -138,11 +157,23 @@ export function ProjectsPage() {
               }
             />
           ) : (
-            <ul className={styles.list}>
-              {projects.map((p) => (
-                <ProjectRow key={p.id} project={p} />
-              ))}
-            </ul>
+            <>
+              {GROUPS.map(({ role, title }) => {
+                const rows = projects.filter((p) => p.role === role);
+                if (rows.length === 0) return null;
+                const id = `projects-${role}`;
+                return (
+                  <section key={role} aria-labelledby={id}>
+                    <h2 id={id} className={styles.sectionHeading}>{title}</h2>
+                    <ul className={styles.list}>
+                      {rows.map((p) => (
+                        <ProjectRow key={p.id} project={p} />
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </>
           )}
         </div>
       </PageBody>
@@ -193,7 +224,8 @@ function ProjectRow({ project }: { project: Project }) {
         <Link to={`/projects/${project.id}`} className={styles.itemLink}>
           <span className={styles.itemName}>{project.name}</span>
           <span className={styles.itemMeta}>
-            {project.shared ? `Shared by ${project.owner} · ` : ""}
+            {project.is_public ? "Public" : "Private"} ·{" "}
+            {project.shared ? `${project.owner} · ` : ""}
             Updated {relativeTime(project.updated_at)}
           </span>
         </Link>

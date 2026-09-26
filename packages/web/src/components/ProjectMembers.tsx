@@ -14,10 +14,12 @@ export function ProjectMembers({
   projectId,
   isOwner,
   owner,
+  isPublic,
 }: {
   projectId: string;
   isOwner: boolean;
   owner: string;
+  isPublic: boolean;
 }) {
   const qc = useQueryClient();
   const [identifier, setIdentifier] = useState("");
@@ -48,6 +50,16 @@ export function ProjectMembers({
     onSuccess: invalidate,
   });
 
+  const visibility = useMutation({
+    mutationFn: (pub: boolean) => api.projects.setPublic(projectId, pub),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project", projectId] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (e: unknown) =>
+      setError(e instanceof Error ? e.message : "could not change visibility"),
+  });
+
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const who = identifier.trim();
@@ -58,6 +70,23 @@ export function ProjectMembers({
     <Card className={styles.panel}>
       <h3 className={styles.heading}>People</h3>
       <p className={styles.owner}>Owner: {owner || "unknown"}</p>
+      {isOwner ? (
+        <label className={styles.visibility}>
+          <input
+            type="checkbox"
+            checked={isPublic}
+            disabled={visibility.isPending}
+            onChange={(e) => visibility.mutate(e.target.checked)}
+          />
+          Public — everyone who signs in can see and edit, including deleting maps
+        </label>
+      ) : (
+        <p className={styles.visibility}>
+          {isPublic
+            ? "Public — everyone who signs in can see and edit"
+            : "Private — only the owner and the people it is shared with"}
+        </p>
+      )}
       {members.length === 0 ? (
         <p className={styles.empty}>Not shared with anyone yet.</p>
       ) : (

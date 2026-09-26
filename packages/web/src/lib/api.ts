@@ -101,8 +101,11 @@ export const auth = {
 
 export const projects = {
   list: () => request<Project[]>("GET", "/api/projects"),
-  create: (name: string) =>
-    request<Project>("POST", "/api/projects", { name }),
+  create: (name: string, isPublic = true) =>
+    request<Project>("POST", "/api/projects", { name, is_public: isPublic }),
+  // Owner-only; the backend 403s anyone else.
+  setPublic: (id: string, isPublic: boolean) =>
+    request<Project>("PATCH", `/api/projects/${id}`, { is_public: isPublic }),
   get: (id: string) => request<Project>("GET", `/api/projects/${id}`),
   rename: (id: string, name: string) =>
     request<Project>("PATCH", `/api/projects/${id}`, { name }),
