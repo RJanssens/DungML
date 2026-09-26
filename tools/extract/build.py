@@ -77,7 +77,9 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             t = np.clip(((xx - ax) * vx + (yy - ay) * vy) / max(vx * vx + vy * vy, 1e-9), 0, 1)
             band_px |= np.hypot(xx - ax - t * vx, yy - ay - t * vy) < b["width"] * P / 2 + 3
     circle_cell = -np.ones((N, N), int)
-    vec_cell = np.zeros((N, N), bool)
+    vec_cell = np.zeros((N, N), bool)   # floor that is not the grid pass's to spill into outlines
+    for i, j in corr.get("not_floor", []):
+        vec_cell[i, j] = True           # (white art the reader ruled out: 0C's outside strips, 2B's captions)
     for i in range(N):
         for j in range(N):
             s = (slice(int(round(i * P)), int(round((i + 1) * P))), slice(int(round(j * P)), int(round((j + 1) * P))))
@@ -661,6 +663,10 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             if r["kind"] == "cave":
                 out.append("  line_style organic")
             stats["poly_" + r["kind"]] += 1
+        # room_style: DSL lines the page implies for one room — a ruin's walls
+        # ("line_style ruined"), open ground the ruins stand on ("allow_overlap")
+        for line in corr.get("room_style", {}).get(r["name"], []):
+            out.append("  " + line)
         if r["name"] in label_box:   # where the page prints it
             x0, y0, x1, y1 = label_box[r["name"]]
             shown = label_room_of.get(r["name"], r["name"])

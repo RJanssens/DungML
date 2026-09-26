@@ -42,14 +42,15 @@ def render_png(src: str, path: Path, px: int) -> np.ndarray:
 
 
 def room_graph(path: Path) -> dict:
-    from dungml import build_graph, parse
-    src = path.read_text()
-    g = build_graph(parse(src, path=path))
+    from dungml import build_graph, parse, walk
+    dm = parse(path.read_text(), path=path)
+    g = build_graph(dm)
     lab = {}
-    for n, body in re.findall(r'(?ms)^room "([^"]+)"\s*\{(.*?)^\}', src):
-        m = re.search(r'(?m)^\s*label "([^"]+)"', body)
-        if m and f"room.{n}" in g.nodes:
-            lab[f"room.{n}"] = m.group(1).upper()   # "Ucpt" in one map is "UCpt" in another
+    # the room's own label, from the model: a label nested in one of its exits
+    # (`exit … { label "0B" }`) is not the room's name
+    for p in walk.members(dm, "rooms"):
+        if p.item.label and f"room.{p.item.name}" in g.nodes:
+            lab[f"room.{p.item.name}"] = p.item.label.text.upper()   # "Ucpt" in one map is "UCpt" in another
     for nid in g.nodes:
         if (m := re.fullmatch(r"room\.r(\d+)[a-z]", nid)) and nid not in lab:
             lab[nid] = m.group(1) + "*"
@@ -86,6 +87,9 @@ def main(job: Job) -> dict:
     h, w = min(rf.shape[0], rock.shape[0]), min(rf.shape[1], rock.shape[1])
     rf, rock = rf[:h, :w], rock[:h, :w]
     sf = ~rock
+    n, P = job.grid()
+    for i, j in job.corrections().get("not_floor", []):   # white art the reader ruled out isn't page floor
+        sf[int(round(i * P)):int(round((i + 1) * P)), int(round(j * P)):int(round((j + 1) * P))] = False
     iou = float((rf & sf).sum() / (rf | sf).sum())
     o = np.asarray(Image.open(job.image).convert("RGB"))[:h, :w].copy()
     o[sf & ~rf] = [230, 0, 0]
@@ -122,6 +126,10 @@ def main(job: Job) -> dict:
     for w in reviewed:
         tag = f"expected — {w['expected']}" if w.get("expected") else "UNEXPECTED — fix it, or add to job.json expected_warnings"
         print(f"  warning: {w['message']}" + (f" [at {w['at']}]" if w.get("at") else "") + f"  ({tag})")
+    used = {w["expected"] for w in reviewed if w.get("expected")}
+    for e in job.cfg.get("expected_warnings", []):
+        if e["why"] not in used:     # the map (or the validator) no longer produces it
+            print(f"  note: expected warning no longer raised, drop it from job.json: {e['why'][:90]}")
     out["rc"] = 1 if errors or unexpected else 0
     return out
 
@@ -141,9 +149,14 @@ def overlaps(dmap, min_area: float = 0.25) -> list[str]:
         return min(xs), min(ys), max(xs), max(ys)
 
     boxes = [box(p) if any(p) else None for _, p in shapes]
+    # a room marked allow_overlap (open ground that ruins stand on) is deliberate
+    # stacking, as for the validator
+    exempt = {f"room.{n}" for n, r in dmap.rooms.items() if r.allow_overlap}
     out = []
     for i in range(len(shapes)):
         for j in range(i + 1, len(shapes)):
+            if shapes[i][0] in exempt or shapes[j][0] in exempt:
+                continue
             a, b = boxes[i], boxes[j]
             if not a or not b or a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]:
                 continue

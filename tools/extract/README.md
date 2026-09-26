@@ -105,6 +105,7 @@ one — it's the record of what the DSL, libraries or templates couldn't do.
 | `not_walls` | `[[[i,j],[i,j]]]` | an edge the wall detector took for a wall (icon outlines touching rock) |
 | `not_cave` / `cave` | `["17"]` | a label the cave test got wrong (icon line-work looks organic; a cave label in a flat pocket) |
 | `dots` / `not_dots` | `false` / `[[x, y]]` | turn pillar-dot detection off, or drop one |
+| `room_style` | `{"canyon": ["allow_overlap"], "6": ["line_style ruined"]}` | DSL lines for one room (by label or `extra_rooms` name): ruined walls, open ground that ruins stand on |
 | `not_circles` / `not_bands` | `[[x, y]]` | drop a round room / slanted passage the vector pass found at (or through) a point |
 
 Coordinates: cells are `[row, col]`; door and feature positions are map
