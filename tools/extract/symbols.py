@@ -97,6 +97,91 @@ def main(job: Job) -> None:
                     hits.append(dict(o=orient, k=c + .5, p=best[2], s=round(best[0], 3), t=best[1], mid=True,
                                      cell=[r, c] if orient == "v" else [c, r]))
 
+    # filled (locked) doors on a grid line: a grey block 7-11 px across (fill ~135)
+    # and 12-23 px along the line, floor on both sides (measured on pages 82, 92,
+    # 99; a hollow door is white inside, a drawn wall or a ruin's dash is 5 px of a
+    # paler grey, 163-192, a grid line 1-3 px); a locked double door is two short
+    # blocks with a gap. No template: the grey fill correlates
+    # with every stretch of plain line. The line is scanned whole, since a door
+    # centred on a lattice point spans two cells.
+    fd = st.get("filled_door", {"width": [7, 11], "length": [12, 23], "leaf": [7, 13], "fill": [120, 200],
+                                "inner_max": 175, "white": 205})
+    for orient, img, fl in (("v", g, floor), ("h", g.T, floor.T)):
+        H = img.shape[0]
+        for k in range(1, n):
+            x = int(round(k * pitch))
+            strip = img[:, x - 9:x + 10]
+            dark = (strip < fd["fill"][1]).sum(1)                  # dark width per row
+            inner = strip[:, 7:12].mean(1)
+            side = np.minimum(strip[:, :2].min(1), strip[:, -2:].min(1))
+            cell = np.minimum((np.arange(H) / pitch).astype(int), n - 1)
+            between = fl[cell, k - 1] & fl[cell, k]
+            row_ok = between & (dark >= fd["width"][0]) & (dark <= fd["width"][1]) & (inner >= fd["fill"][0]) \
+                & (inner < fd["inner_max"]) & (side >= fd["white"])
+            runs, i = [], 0
+            while i < H:
+                if row_ok[i]:
+                    j = i
+                    while j + 1 < H and row_ok[j + 1]:
+                        j += 1
+                    runs.append((i, j + 1))
+                    i = j + 1
+                else:
+                    i += 1
+
+            def thin_past(a0, a1):
+                # a door is a block *in* a line: past both ends the line runs on thin.
+                # A stretch of thick grey wall between a door and a corner (1B's crypt
+                # walls) runs into rock at one end. (A crossing grid line is one dark row.)
+                before, after = dark[max(a0 - 6, 0):max(a0 - 2, 0)], dark[a1 + 2:a1 + 6]
+                return bool(len(before) and len(after) and np.median(before) <= 4 and np.median(after) <= 4)
+
+            def gap_kind(g0, g1):
+                # between two blocks: a white gap is a double door's two leaves (inner
+                # >200 on 3B, 3D); a full-width dark row is a crossing grid line, and
+                # the blocks are one door centred on a lattice point (2A's 15,13, 3C's
+                # 7,17); anything else is a rock edge crossing the line (0A's cave 15)
+                if g1 <= g0:
+                    return None
+                if dark[g0:g1].max() >= 15:
+                    return "crossing"
+                if inner[g0:g1].max() >= 190:
+                    return "leaves"
+                return None
+
+            def in_wall(a0, a1):
+                # a door stands in a wall or a passage's mouth: along the line, next to
+                # it, is rock on one side or a drawn wall (darker than a grid line). A
+                # grey block on open floor (2D 38's crusher icon) has grid line both ways
+                for yy in (a0 - int(pitch * 0.6), a1 + int(pitch * 0.6)):
+                    if not 0 <= yy < H:
+                        return True
+                    cc = min(int(yy / pitch), n - 1)
+                    if not (fl[cc, k - 1] and fl[cc, k]):
+                        return True
+                    seg = strip[max(yy - 4, 0):yy + 5, 6:13]
+                    if np.median(seg.min(1)) < 150:
+                        return True
+                return False
+
+            used = set()
+            for r, (a0, a1) in enumerate(runs):
+                if r in used:
+                    continue
+                L = a1 - a0
+                nxt = runs[r + 1] if r + 1 < len(runs) else None
+                if nxt and fd["leaf"][0] <= L <= fd["leaf"][1] and fd["leaf"][0] <= nxt[1] - nxt[0] <= fd["leaf"][1] \
+                        and nxt[0] - a1 <= 6 and in_wall(a0, nxt[1]) and gap_kind(a1, nxt[0]):
+                    # (two leaves fill the opening corner to corner: no thin line past them)
+                    used.add(r + 1)
+                    p = (a0 + nxt[1]) // 2
+                    single = gap_kind(a1, nxt[0]) == "crossing"
+                    if not any(h["t"] in ("filled", "filled2") and h["o"] == orient and h["k"] == k
+                               and abs(h["p"] - p) < pitch for h in hits):   # three leaf-like runs: one door
+                        hits.append(dict(o=orient, k=k, p=p, s=1.0, t="filled" if single else "filled2"))
+                elif fd["length"][0] <= L <= fd["length"][1] and thin_past(a0, a1) and in_wall(a0, a1):
+                    hits.append(dict(o=orient, k=k, p=(a0 + a1) // 2, s=1.0, t="filled"))
+
     def hollow(h) -> bool:
         if h.get("mid"):
             return True
@@ -111,6 +196,9 @@ def main(job: Job) -> None:
         if all(not (h["o"] == q["o"] and h["k"] == q["k"] and abs(h["p"] - q["p"]) < st["nms_px"]) for q in keep):
             keep.append(h)
     for h in keep:
+        if h["t"] in ("filled", "filled2"):
+            h["type"], h["state"] = ("wooden" if h["t"] == "filled" else "double"), "locked"
+            continue
         h["type"] = st["templates"][h["t"]]["type"]
         if w := st["templates"][h["t"]].get("width"):
             h["width"] = w

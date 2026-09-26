@@ -51,6 +51,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     F = frac > st["floor_min_frac"]
     for i, j in corr.get("not_floor", []):
         F[i, j] = False
+    for i, j in corr.get("floor", []):   # a cell under the floor threshold that is floor (a corner breach)
+        F[i, j] = True
 
     def nbrs(i, j):
         return _nbrs(i, j, N)
@@ -184,6 +186,9 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     for c in corr.get("extra_doors", []):
         d = dict(edges=[ekey(tuple(a), tuple(b)) for a, b in c["edges"]], pos=tuple(c["pos"]), type=c["type"],
                  width=c.get("width", 1))
+        # the reader's door replaces a detected one on the same edge (a filled door
+        # added by hand before the detector knew filled doors)
+        doors[:] = [o for o in doors if not set(o["edges"]) & set(d["edges"])]
         d.update({k: tuple(c[k]) if k == "from" else c[k] for k in ("from", "state") if k in c})
         doors.append(d)
     for c in corr.get("retype", []):
@@ -255,7 +260,11 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             x0, y0, x1, y1 = box
             label_box[t] = box
             labels[t] = (int(((y0 + y1) / 2) // P), int(((x0 + x1) / 2) // P))
+    extra_instances: dict[str, list] = {}
     for nm, cell in corr.get("label_cell", {}).items():   # a label detection missed, or printed outside its room
+        if nm in cfg.get("label_rooms", []):
+            extra_instances[nm] = [tuple(c) for c in cell]   # more rooms of a repeated label ("Dom")
+            continue
         labels[nm] = tuple(cell)
         if nm not in label_box:
             i, j = cell
@@ -271,6 +280,13 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             x0, y0, x1, y1 = box
             label_box[nm] = box
             labels[nm] = (int(((y0 + y1) / 2) // P), int(((x0 + x1) / 2) // P))
+            label_room_of[nm] = t
+    for t, cells in extra_instances.items():   # instances prep's label boxes missed
+        for i, j in cells:
+            counts[t] += 1
+            nm = f"{t}{counts[t]}"
+            labels[nm] = (i, j)
+            label_box[nm] = [j * P + P * .2, i * P + P * .2, (j + 1) * P - P * .2, (i + 1) * P - P * .2]
             label_room_of[nm] = t
 
     region = -np.ones((N, N), int)
@@ -383,6 +399,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             for j in range(j0, j1 + 1):
                 if region[i, j] < 0:
                     region[i, j] = rid
+        if nm in corr.get("room_rect", {}):
+            continue                        # the reader gave its cells: nothing hugs on (3A's Dom1)
         for i in range(i0 - 1, i1 + 2):
             for j in range(j0 - 1, j1 + 2):
                 # edge-adjacent to the rectangle only: a cell touching it corner-to-corner is
@@ -410,6 +428,10 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     def cells_of(rid):
         return [tuple(c) for c in zip(*np.nonzero(region == rid))]
 
+    # exits at the page's edge: the passage runs on off the map (2C's E, 3D's C). A
+    # stair niche or a chute landing inside a room stays part of the room
+    exit_cells = {(min(int(x["at"][1]), N - 1), min(int(x["at"][0]), N - 1)) for x in corr.get("exits", [])
+                  if min(x["at"][0], x["at"][1], N - x["at"][0], N - x["at"][1]) <= 1.0}
     changed = True
     while changed:                      # bumps: a corridor piece that only opens onto one room
         changed = False
@@ -429,6 +451,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             # which lets the pocket chain on into the room it hangs off (1B's 4)
             if regions[host].get("circle"):
                 continue                     # a circle's outline is fixed: what's outside it stays a corridor
+            if exit_cells & set(cells):
+                continue                     # a stub with an exit in it leads on: a corridor (2C's E, 3D's C)
             if regions[host]["kind"] in ("room", "cave") or (regions[host]["kind"] == "corridor" and len(cells) <= 2):
                 for c in cells:
                     region[c] = host
@@ -492,9 +516,28 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         rid = region[r["cells"][0]]
         return any(region[ii, jj] >= 0 and region[ii, jj] != rid for c in r["cells"] for _, ii, jj in nbrs(*c))
 
+    def pixel_open(a, b):
+        # adjacent cells connect only if floor actually crosses the shared edge
+        (i, j), (ii, jj) = a, b
+        if ii == i:
+            x = int(round(max(j, jj) * P))
+            s = rock[int(i * P) + 3:int((i + 1) * P) - 3, x - 4:x + 5]
+        else:
+            y = int(round(max(i, ii) * P))
+            s = rock[y - 4:y + 5, int(j * P) + 3:int((j + 1) * P) - 3].T
+        return (~s.any(1)).mean() > 0.25
+
+    def joins(r):
+        # a piece of partial cells that opens onto two spaces is a passage (a one-cell
+        # diagonal step between two rooms: 2B's 2/3, 2C's to 11), not page art
+        rid = region[r["cells"][0]]
+        return len({int(region[ii, jj]) for c in r["cells"] for _, ii, jj in nbrs(*c)
+                    if region[ii, jj] >= 0 and region[ii, jj] != rid and open_between(c, (ii, jj))
+                    and (ekey(c, (ii, jj)) in door_edge or pixel_open(c, (ii, jj)))}) >= 2
+
     keep = [r for r in regions if r["cells"] and not (r["kind"] == "corridor" and
-            ((all(frac[c] < FULL for c in r["cells"]) and not mid_cells & set(r["cells"]))   # arrows, compass, art
-             or not touches(r)))]                  # (a passage with a door drawn across it is real)
+            ((all(frac[c] < FULL for c in r["cells"]) and not mid_cells & set(r["cells"]) and not joins(r))
+             or not touches(r)))]                  # arrows, compass, art (a passage with a door drawn across it is real)
 
     # slanted passages: a corridor each, outside the cell grid
     for b in vec["bands"]:
@@ -648,7 +691,12 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         is_rect = len(cells) == (max(rows) - min(rows) + 1) * (max(cols) - min(cols) + 1) \
             and all(frac[c] >= FULL for c in cells)
         out.append(f'room "r{safe(r["name"])}" {{')
-        if c := r.get("circle"):
+        if poly := corr.get("room_poly", {}).get(r["name"]):
+            # the reader's outline, where the page's shape isn't a cell staircase (a
+            # triangle cut by a drawn diagonal wall: 2A's 12, 3D's 12 and 13)
+            out.append("  polygon " + " ".join(f"({fmt(x)},{fmt(y)})" for x, y in poly))
+            stats["poly_given"] += 1
+        elif c := r.get("circle"):
             out.append(f'  circle at {fmt(c["cx"])},{fmt(c["cy"])} radius {fmt(c["r"])}')
             stats["circle"] += 1
         elif r["kind"] == "room" and is_rect:
@@ -691,17 +739,6 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             out += exit_lines(x)
             stats["exit"] += 1
         out += ["}", ""]
-
-    def pixel_open(a, b):
-        # adjacent cells connect only if floor actually crosses the shared edge
-        (i, j), (ii, jj) = a, b
-        if ii == i:
-            x = int(round(max(j, jj) * P))
-            s = rock[int(i * P) + 3:int((i + 1) * P) - 3, x - 4:x + 5]
-        else:
-            y = int(round(max(i, ii) * P))
-            s = rock[y - 4:y + 5, int(j * P) + 3:int((j + 1) * P) - 3].T
-        return (~s.any(1)).mean() > 0.25
 
     openings = defaultdict(list)
     for i in range(N):
@@ -752,8 +789,15 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     slant_t = {nm: kit.template(nm) for nm in st.get("slant_templates", ["door", "arch"])}
 
     def slant_door(x, y, dx, dy, reach=(-0.7, 0.4)):
+        # (type, state): a door box filled grey is the page's locked door (3B/3D's
+        # chamber doors), as on the grid lines
         hit = vector.door_at(gt, slant_t, x * P, y * P, dx, dy, P, st, reach)
-        return st["templates"][hit[0]]["type"] if hit else "open"
+        if not hit:
+            return "open", None
+        hx, hy = hit[2]
+        core = gt[int(hy) - 2:int(hy) + 3, int(hx) - 2:int(hx) + 3]
+        filled = hit[0] == "door" and core.size and core.mean() < st.get("filled_door", {}).get("fill", [120, 200])[1]
+        return st["templates"][hit[0]]["type"], ("locked" if filled else None)
 
     def space_at(x, y, skip):
         k = band_at(x, y, 0.0)
@@ -779,7 +823,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             host = next((h for s in (0.35, 0.7, 1.0) if (h := space_at(ex + dx * s, ey + dy * s, bid)) is not None), None)
             if host is None:
                 continue
-            conns.append(dict(a=bid, b=host, pos=(round(ex, 2), round(ey, 2)), type=slant_door(ex, ey, dx, dy), width=1))
+            t, state = slant_door(ex, ey, dx, dy)
+            conns.append(dict(a=bid, b=host, pos=(round(ex, 2), round(ey, 2)), type=t, state=state, width=1))
 
     # a round room's doors sit on its rim: the lattice position of an opening is inside
     # the circle, and a door drawn on the rim is off the lattice
@@ -791,7 +836,21 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
                 ux, uy = (x - ci["cx"]) / d, (y - ci["cy"]) / d
                 c["pos"] = (round(ci["cx"] + ux * ci["r"], 2), round(ci["cy"] + uy * ci["r"], 2))
                 if c["type"] == "open":
-                    c["type"] = slant_door(*c["pos"], ux, uy, (-0.4, 0.7))
+                    t, state = slant_door(*c["pos"], ux, uy, (-0.4, 0.7))
+                    c["type"] = t
+                    if state:
+                        c["state"] = state
+    # retype also reaches doors the vector pass placed or moved (rim doors, spoke
+    # ends): matched at their final position
+    for rt in corr.get("retype", []):
+        for c in conns:
+            if abs(c["pos"][0] - rt["pos"][0]) + abs(c["pos"][1] - rt["pos"][1]) <= 0.3 and \
+                    (regions[c["a"]].get("band") or regions[c["b"]].get("band") or
+                     regions[c["a"]].get("circle") or regions[c["b"]].get("circle")):
+                c["type"] = rt["type"]
+                c.update({k: rt[k] for k in ("state",) if k in rt})
+                if "from" in rt:
+                    c["frm"] = tuple(rt["from"])
 
     for r in keep:
         if r["kind"] != "corridor":
