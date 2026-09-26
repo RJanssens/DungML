@@ -197,6 +197,11 @@ def find_bands(rock: np.ndarray, P: float, st: dict, circles: list[dict] = ()) -
             if in_circle(x, y):
                 return pts + [(x, y)], "circle"
             if rock[int(y), int(x)]:
+                if first is not None:
+                    # one flank opened and the centre line then met rock: a slanted
+                    # passage opening along a room's wall that runs straight on from
+                    # its own (5A's 8, 15, 7) — an opening, ending halfway
+                    return pts[:first + (len(pts) - first) // 2 + 1], "open"
                 return pts, "dead"
             nx, ny = -dy, dx
             a, b = floor_run(x, y, nx, ny, lim), floor_run(x, y, -nx, -ny, lim)
@@ -254,7 +259,7 @@ def find_bands(rock: np.ndarray, P: float, st: dict, circles: list[dict] = ()) -
         bands.append(dict(points=[[float(px / P), float(py / P)] for px, py in pl],
                           width=round(w / P, 2), ends=[why0, why1],
                           angle=round(math.degrees(th), 1)))
-    return _join_bends(bands)
+    return _join_bends(bands, rock=rock, P=P)
 
 
 def _straight_ends(pl: np.ndarray, short: float) -> np.ndarray:
@@ -274,10 +279,23 @@ def _straight_ends(pl: np.ndarray, short: float) -> np.ndarray:
     return pl
 
 
-def _join_bends(bands: list[dict], reach: float = 1.2) -> list[dict]:
+def _join_bends(bands: list[dict], reach: float = 1.6, rock=None, P: float = 30.0) -> list[dict]:
     """A passage that bends sharply is traced as two bands whose centre lines run
-    into the outer wall of the bend — two 'dead' ends facing each other (2A's
-    passage by 37 and 25 turns 45° at the "!"). Join them into one polyline."""
+    into the outer wall of the bend — two ends facing each other, 'dead', or
+    'open' where the bend's inner flank opened first (2A's passage by 37 and 25
+    turns 45° at the "!"). Join them into one polyline — unless the ends meet in
+    open floor: two passages opening into the same room are two passages."""
+
+    def narrow(x, y):
+        if rock is None:
+            return True
+        H, W = rock.shape
+        cx, cy, r = x * P, y * P, 1.2 * P
+        yy, xx = np.ogrid[max(int(cy - r), 0):min(int(cy + r), H), max(int(cx - r), 0):min(int(cx + r), W)]
+        disk = (xx - cx) ** 2 + (yy - cy) ** 2 < r * r
+        win = rock[max(int(cy - r), 0):min(int(cy + r), H), max(int(cx - r), 0):min(int(cx + r), W)]
+        return disk.any() and float((~win[disk]).mean()) < 0.6
+
     changed = True
     while changed:
         changed = False
@@ -286,10 +304,13 @@ def _join_bends(bands: list[dict], reach: float = 1.2) -> list[dict]:
                 A, B = bands[a], bands[b]
                 for ea in (0, 1):
                     for eb in (0, 1):
-                        if A["ends"][ea] != "dead" or B["ends"][eb] != "dead":
+                        if A["ends"][ea] not in ("dead", "open") or B["ends"][eb] not in ("dead", "open"):
                             continue
                         pa, pb = A["points"][-ea], B["points"][-eb]
                         if math.dist(pa, pb) > reach or abs(A["width"] - B["width"]) > 0.25:
+                            continue
+                        if "open" in (A["ends"][ea], B["ends"][eb]) and \
+                                not narrow((pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2):
                             continue
                         ap = A["points"] if ea == 1 else A["points"][::-1]    # ...→ bend
                         bp = B["points"] if eb == 0 else B["points"][::-1]    # bend → ...

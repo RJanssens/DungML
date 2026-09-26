@@ -152,8 +152,48 @@ def check_step(dmap, graph, step: Step, *, secret_refs: set[str], gm: list[tuple
                                  f"(undiscovered: {', '.join(hidden[:4])})")
 
 
-def explore(dmap, graph, start: str, reveal_secret: set[str], opened: set[str]):
-    """Breadth-first party walk. Yields a Step per node entered."""
+def self_links(dmap, graph, self_names: set[str]) -> list[tuple[str, str, bool, str]]:
+    """Exits that stay on this map — stairs between two floors printed side by side
+    (0C, 4C), a teleport pad, a tunnel under the floor: (from node, to node,
+    secret, key). The node an exit stands in is the one it's nested in, else the
+    space containing it; its landing is the space containing the target point."""
+    from shapely.geometry import Point, Polygon
+
+    from dungml import walk
+    from dungml.geometry import corridor_polygons, room_polygon
+    shapes = []
+    for kind in ("room", "corridor"):
+        for p in walk.members(dmap, f"{kind}s"):
+            nid = f"{kind}.{p.item.name}"
+            polys = [room_polygon(p.item)] if kind == "room" else corridor_polygons(p.item)
+            shapes += [(nid, Polygon(q).buffer(0)) for q in polys if len(q) >= 3]
+
+    def space_at(pt):
+        best = min(shapes, key=lambda s: s[1].distance(Point(pt)), default=None)
+        return best[0] if best is not None and best[1].distance(Point(pt)) <= 0.5 else None
+
+    found = []
+    for kind in ("room", "corridor"):
+        for p in walk.members(dmap, f"{kind}s"):
+            for ex in p.item.exits or []:
+                found.append((f"{kind}.{p.item.name}", ex))
+    found += [(space_at(ex.position), ex) for ex in list(dmap.exits) +
+              [x for layer in dmap.layers for x in layer.exits]]
+    out = []
+    for host, ex in found:
+        if ex.target_map not in self_names or host is None:
+            continue
+        to = space_at(ex.target_position)
+        if to and to != host:
+            out.append((host, to, bool(ex.secret), f"exit:{ex.position[0]:g},{ex.position[1]:g}"))
+    return out
+
+
+def explore(dmap, graph, start: str, reveal_secret: set[str], opened: set[str],
+            links: list = (), reveal_all: bool = False):
+    """Breadth-first party walk. Yields a Step per node entered. `links` are this
+    map's own exits (self_links): taken like a door — a secret one only when the
+    GM reveals secrets."""
     nodes: set[str] = set()
     doors: set[str] = set()
     q = deque([(start, None)])
@@ -178,6 +218,10 @@ def explore(dmap, graph, start: str, reveal_secret: set[str], opened: set[str]):
                 continue                      # locked / portcullis: seen, not passed
             seen.add(other)
             q.append((other, e.key))
+        for a, b, secret, key in links:
+            if a == node and b not in seen and (not secret or reveal_all or key in reveal_secret):
+                seen.add(b)
+                q.append((b, key))
 
 
 def filmstrip(svgs: list[tuple[str, str]], out: Path, per_row: int = 6, size: int = 300) -> None:
@@ -212,6 +256,8 @@ def main(argv=None) -> int:
     ap.add_argument("--reveal-all", action="store_true",
                     help="the GM reveals every secret/concealed door when the party reaches it")
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--self-name", nargs="*", default=[],
+                    help="this map's project name(s): exits to it are walked like doors")
     a = ap.parse_args(argv)
 
     dmap = parse(a.map.read_text(), path=a.map)
@@ -232,7 +278,8 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     steps, frames = [], []
-    for st in explore(dmap, graph, start, set(a.reveal_secret), set(a.open)):
+    links = self_links(dmap, graph, set(a.self_name) | {dmap.map.name})
+    for st in explore(dmap, graph, start, set(a.reveal_secret), set(a.open), links, a.reveal_all):
         svg = render_fogged(dmap, st.nodes, st.doors, party_location=st.entered)
         check_step(dmap, graph, st, secret_refs=secret_refs, gm=gm, public=public, labels=labels, svg=svg)
         steps.append(st)
@@ -244,7 +291,8 @@ def main(argv=None) -> int:
     for nid in unreached:
         edges = graph.incident_edges(nid)
         kinds = sorted({("secret" if e.hidden else e.state if is_blocked(e.state) else "via unreached")
-                        for e in edges}) or ["no doors (sealed)"]
+                        for e in edges} | {"secret exit" if s else "via unreached exit"
+                                           for _, b, s, _ in links if b == nid}) or ["no doors (sealed)"]
         why[nid] = kinds
 
     problems = [(s.n, s.entered, p) for s in steps for p in s.problems]

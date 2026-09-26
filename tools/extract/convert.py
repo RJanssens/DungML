@@ -104,6 +104,10 @@ def party(job: Job) -> int:
         args.append("--open-all")
     if cfg.get("reveal_all"):
         args.append("--reveal-all")
+    # exits to this same map (stairs between printed floors, teleports) are walked
+    reg_p = job.dir.parent / "maps.json"
+    lv = json.loads(reg_p.read_text())["levels"].get(job.cfg["name"], {}) if reg_p.exists() else {}
+    args += ["--self-name", *[n for n in (lv.get("name"), job.cfg["name"]) if n]]
     return p.main(args)
 
 
