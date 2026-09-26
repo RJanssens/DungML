@@ -1,0 +1,21 @@
+{
+ "_about": "Michael Curtis' one-page-dungeon style in Stonehell: white gridded floor, flat grey (~136) rock, black numerals, grey door symbols. Thresholds measured on page 73 (Level 1A).",
+ "rock_grey": [118, 150],
+ "gridline_grey": [140, 200],
+ "text_dark": 80,
+ "label_height": [14, 20],
+ "floor_min_frac": 0.3,
+ "full_frac": 0.95,
+ "gridline_max": 205,
+ "template_half": {"across": 12, "along": 13},
+ "template_margin": 0.38,
+ "nms_px": 25,
+ "door_hollow_min": 230,
+ "templates": {
+  "door": {"type": "wooden"},
+  "S": {"type": "secret"},
+  "arch": {"type": "arch"}
+ },
+ "room_label": "^[0-9]+[A-Za-z]?$",
+ "feature_label": "^[A-Z]$"
+}
