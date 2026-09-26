@@ -81,6 +81,9 @@ class Project(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(200))
+    # Public: every signed-in user gets member rights (see access.py). New
+    # projects default to it; the service and example projects opt out.
+    is_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), default=_now, onupdate=_now

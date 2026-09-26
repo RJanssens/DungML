@@ -65,7 +65,7 @@ def list_projects(user: CurrentUser, db: DbDep) -> list[schemas.ProjectOut]:
 def create_project(
     body: schemas.ProjectIn, user: CurrentUser, db: DbDep
 ) -> models.Project:
-    proj = models.Project(user_id=user.id, name=body.name)
+    proj = models.Project(user_id=user.id, name=body.name, is_public=body.is_public)
     db.add(proj)
     db.flush()
     seed_core_map(db, proj)
@@ -344,7 +344,8 @@ def import_samples(user: CurrentUser, db: DbDep) -> models.Project:
     still creates an empty project, so the client always gets something
     to navigate into.
     """
-    proj = models.Project(user_id=user.id, name=EXAMPLE_PROJECT_NAME)
+    # Private: every user gets their own copy, so public ones would pile up.
+    proj = models.Project(user_id=user.id, name=EXAMPLE_PROJECT_NAME, is_public=False)
     db.add(proj)
     db.flush()
     seed_core_map(db, proj)

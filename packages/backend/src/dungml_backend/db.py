@@ -129,3 +129,29 @@ def ensure_columns() -> None:
                         "ON maps (external_id)"
                     )
                 )
+
+    # Public projects. Adding the column makes every existing project public
+    # (the DEFAULT), then — in this branch only, so exactly once — the two
+    # kinds that should not be are set private: the ttrpg2 service project
+    # (ttrpg2 rewrites those maps on every token move) and each user's example
+    # project (one identical copy per user). Doing it on every boot would undo
+    # an owner who later made one of them public.
+    if "projects" in existing and "is_public" not in cols("projects"):
+        from .contract import _SERVICE_PROJECT, _SERVICE_SUBJECT
+        from .samples import EXAMPLE_PROJECT_NAME
+
+        sqlite = engine.dialect.name == "sqlite"
+        yes, no = ("1", "0") if sqlite else ("true", "false")
+        with engine.begin() as conn:
+            conn.execute(
+                text(f"ALTER TABLE projects ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT {yes}")
+            )
+            conn.execute(
+                text(
+                    f"UPDATE projects SET is_public = {no} WHERE name = :example "
+                    "OR (name = :service AND user_id IN "
+                    "(SELECT id FROM users WHERE subject = :subject))"
+                ),
+                {"example": EXAMPLE_PROJECT_NAME, "service": _SERVICE_PROJECT,
+                 "subject": _SERVICE_SUBJECT},
+            )

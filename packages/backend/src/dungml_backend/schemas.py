@@ -34,6 +34,8 @@ class TokenOut(BaseModel):
 
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    # New projects are public unless the creator says otherwise.
+    is_public: bool = True
 
 
 class ProjectOut(BaseModel):

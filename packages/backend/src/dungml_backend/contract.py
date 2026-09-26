@@ -34,7 +34,9 @@ def _service_project(db: DbSession) -> models.Project:
         )
     )
     if p is None:
-        p = models.Project(user_id=u.id, name=_SERVICE_PROJECT)
+        # Private: ttrpg2 owns these maps and re-pushes their DSL on every token
+        # move, so anyone else's edit would be silently overwritten.
+        p = models.Project(user_id=u.id, name=_SERVICE_PROJECT, is_public=False)
         db.add(p); db.commit(); db.refresh(p)
     return p
 
