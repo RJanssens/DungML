@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 # ----- auth -----
@@ -34,6 +34,20 @@ class TokenOut(BaseModel):
 
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    # New projects are public unless the creator says otherwise.
+    is_public: bool = True
+
+
+class ProjectPatchIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    # Owner-only; the route enforces it.
+    is_public: bool | None = None
+
+    @model_validator(mode="after")
+    def _something_to_change(self) -> "ProjectPatchIn":
+        if self.name is None and self.is_public is None:
+            raise ValueError("send name and/or is_public")
+        return self
 
 
 class ProjectOut(BaseModel):
@@ -46,6 +60,10 @@ class ProjectOut(BaseModel):
     shared: bool = False
     # Display label for the owner (name/email/subject), for the same badge.
     owner: str = ""
+    is_public: bool = True
+    # How the caller reaches the project: owning it, as a member, or only
+    # because it is public. `shared` is kept for older clients (role != owner).
+    role: Literal["owner", "member", "public"] = "owner"
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -5,7 +5,7 @@ import io
 import json
 import re
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
@@ -42,30 +42,38 @@ def _owner_label(proj: models.Project) -> str:
     return u.email or u.subject or ""
 
 
-def _project_out(
-    proj: models.Project, user: models.User
-) -> schemas.ProjectOut:
+def _role(db, proj: models.Project, user: models.User) -> str:
+    if proj.user_id == user.id:
+        return "owner"
+    return "member" if access.is_member(db, proj.id, user) else "public"
+
+
+def _project_out(db, proj: models.Project, user: models.User) -> schemas.ProjectOut:
+    role = _role(db, proj, user)
     return schemas.ProjectOut(
         id=proj.id,
         name=proj.name,
         created_at=proj.created_at,
         updated_at=proj.updated_at,
-        shared=proj.user_id != user.id,
+        shared=role != "owner",
         owner=_owner_label(proj),
+        is_public=proj.is_public,
+        role=role,
     )
 
 
 @router.get("", response_model=list[schemas.ProjectOut])
 def list_projects(user: CurrentUser, db: DbDep) -> list[schemas.ProjectOut]:
-    """Everything the caller owns or is a member of, most recent first."""
-    return [_project_out(p, user) for p in access.list_projects(db, user)]
+    """Everything the caller owns, is a member of, or that is public, most
+    recent first."""
+    return [_project_out(db, p, user) for p in access.list_projects(db, user)]
 
 
 @router.post("", response_model=schemas.ProjectOut, status_code=201)
 def create_project(
     body: schemas.ProjectIn, user: CurrentUser, db: DbDep
 ) -> models.Project:
-    proj = models.Project(user_id=user.id, name=body.name)
+    proj = models.Project(user_id=user.id, name=body.name, is_public=body.is_public)
     db.add(proj)
     db.flush()
     seed_core_map(db, proj)
@@ -78,21 +86,25 @@ def create_project(
 def get_project(
     project_id: str, user: CurrentUser, db: DbDep
 ) -> schemas.ProjectOut:
-    return _project_out(_get_owned(db, project_id, user), user)
+    return _project_out(db, _get_owned(db, project_id, user), user)
 
 
 @router.patch("/{project_id}", response_model=schemas.ProjectOut)
 def update_project(
     project_id: str,
-    body: schemas.ProjectIn,
+    body: schemas.ProjectPatchIn,
     user: CurrentUser,
     db: DbDep,
 ) -> schemas.ProjectOut:
     proj = _get_owned(db, project_id, user)
-    proj.name = body.name
+    if body.is_public is not None:
+        access.require_owner(proj, user)   # 403: visibility is the owner's call
+        proj.is_public = body.is_public
+    if body.name is not None:
+        proj.name = body.name
     db.commit()
     db.refresh(proj)
-    return _project_out(proj, user)
+    return _project_out(db, proj, user)
 
 
 @router.delete("/{project_id}", status_code=204)
@@ -170,7 +182,7 @@ def list_project_sessions(
                     updated_at=s.updated_at,
                 )
             )
-    out.sort(key=lambda r: r.updated_at or datetime.min, reverse=True)
+    out.sort(key=lambda r: r.updated_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     return out
 
 
@@ -344,7 +356,8 @@ def import_samples(user: CurrentUser, db: DbDep) -> models.Project:
     still creates an empty project, so the client always gets something
     to navigate into.
     """
-    proj = models.Project(user_id=user.id, name=EXAMPLE_PROJECT_NAME)
+    # Private: every user gets their own copy, so public ones would pile up.
+    proj = models.Project(user_id=user.id, name=EXAMPLE_PROJECT_NAME, is_public=False)
     db.add(proj)
     db.flush()
     seed_core_map(db, proj)

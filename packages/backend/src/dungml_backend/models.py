@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from .db import Base
 
@@ -14,11 +15,42 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class UTCDateTime(TypeDecorator):
+    """A timestamp that is UTC in Python and stored the way it always was.
+
+    SQLite keeps no timezone, so timestamps are stored as naive UTC by
+    convention — and used to come back naive, which reached clients as
+    `"…T12:43:41"` with no offset. ISO 8601 reads that as *local* time, so the
+    web app showed every change hours old. Values read back are marked UTC
+    here, once, instead of at every place a timestamp is serialised.
+
+    SQLite storage is unchanged (naive UTC), so rows written before and after
+    this type look the same. Backends that keep a timezone get an aware value.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)   # naive means UTC here
+        value = value.astimezone(timezone.utc)
+        return value.replace(tzinfo=None) if dialect.name == "sqlite" else value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+
 def _now() -> datetime:
-    # Naive UTC. SQLite (and many other backends) doesn't carry tz info
-    # across a round-trip, so we standardize the storage representation
-    # and treat all timestamps as UTC by convention.
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    # Aware UTC, so an object that hasn't been reloaded since its default
+    # fired says the same thing as one read back through UTCDateTime.
+    return datetime.now(timezone.utc)
 
 
 class User(Base):
@@ -34,7 +66,7 @@ class User(Base):
         String(255), unique=True, index=True, default=None
     )
     email: Mapped[str] = mapped_column(String(255), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
     projects: Mapped[list["Project"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -49,9 +81,12 @@ class Project(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(200))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # Public: every signed-in user gets member rights (see access.py). New
+    # projects default to it; the service and example projects opt out.
+    is_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_now, onupdate=_now
+        UTCDateTime(), default=_now, onupdate=_now
     )
 
     user: Mapped[User] = relationship(back_populates="projects")
@@ -80,7 +115,7 @@ class ProjectMember(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
     project: Mapped[Project] = relationship(back_populates="members")
     user: Mapped[User] = relationship()
@@ -101,9 +136,9 @@ class Map(Base):
     is_default: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_now, onupdate=_now
+        UTCDateTime(), default=_now, onupdate=_now
     )
 
     project: Mapped[Project] = relationship(back_populates="maps")
@@ -158,9 +193,9 @@ class PlaySession(Base):
     # Secret keys the DM has shown the players (dungml.secrets) — traps,
     # hidden inscriptions, … The fogged view hides every secret not listed.
     revealed_secrets: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_now, onupdate=_now
+        UTCDateTime(), default=_now, onupdate=_now
     )
 
     map: Mapped[Map] = relationship(back_populates="play_sessions")
@@ -188,4 +223,4 @@ class CampaignLink(Base):
     active_map_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("maps.id", ondelete="SET NULL"), default=None
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)

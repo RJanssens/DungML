@@ -315,6 +315,7 @@ export function ProjectPage() {
             projectId={projectId}
             isOwner={project ? !project.shared : false}
             owner={project?.owner ?? ""}
+            isPublic={project?.is_public ?? true}
           />
         </div>
       </PageBody>

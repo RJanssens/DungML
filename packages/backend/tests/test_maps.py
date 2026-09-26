@@ -84,7 +84,7 @@ def test_delete_map(auth_client, project_id):
 
 def test_cross_user_map_access_is_404(client, cottage_source):
     ha = {"Authorization": "Bearer dev-user"}
-    pid = client.post("/api/projects", json={"name": "P"}, headers=ha).json()["id"]
+    pid = client.post("/api/projects", json={"name": "P", "is_public": False}, headers=ha).json()["id"]
     mid = client.post(
         f"/api/projects/{pid}/maps",
         json={"name": "m", "source": cottage_source},

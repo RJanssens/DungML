@@ -48,7 +48,7 @@ def test_other_user_cannot_see_or_touch(client):
     """User A creates a project; user B sees 404, not 403, on all routes."""
     ha = {"Authorization": "Bearer dev-user"}
     pid = client.post(
-        "/api/projects", json={"name": "secret"}, headers=ha,
+        "/api/projects", json={"name": "secret", "is_public": False}, headers=ha,
     ).json()["id"]
 
     hb = {"Authorization": "Bearer dev-service"}
@@ -232,7 +232,7 @@ def test_import_library_conflict_409(auth_client):
 def test_library_catalog_requires_ownership(client):
     ha = {"Authorization": "Bearer dev-user"}
     pid = client.post(
-        "/api/projects", json={"name": "P"}, headers=ha,
+        "/api/projects", json={"name": "P", "is_public": False}, headers=ha,
     ).json()["id"]
     hb = {"Authorization": "Bearer dev-service"}
     assert client.get(

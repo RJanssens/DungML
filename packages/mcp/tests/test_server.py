@@ -466,3 +466,35 @@ def test_reveal_secret_shows_a_trap_in_the_players_view(fresh_db):
     assert out["revealed_secrets"] == []
     with pytest.raises(ValueError, match="unknown secret 'nope'.*pit_1"):
         s.reveal_secret(session_id=sid, key="nope")
+
+
+def _someone_elses_project(server, *, public: bool) -> str:
+    from dungml_backend import models
+    with server._session() as db:
+        other = models.User(subject="someone-else", email="else@test")
+        db.add(other); db.flush()
+        p = models.Project(user_id=other.id, name="theirs", is_public=public)
+        db.add(p); db.commit()
+        return p.id
+
+
+def test_public_projects_of_others_are_listed_and_usable(fresh_db):
+    s = fresh_db
+    pid = _someone_elses_project(s, public=True)
+    assert pid in [p["id"] for p in s.list_projects()]
+    assert s.list_maps(project_id=pid) == []   # reachable, and it has no maps yet
+
+
+def test_private_projects_of_others_stay_hidden(fresh_db):
+    s = fresh_db
+    pid = _someone_elses_project(s, public=False)
+    assert pid not in [p["id"] for p in s.list_projects()]
+    with pytest.raises(ValueError):
+        s.list_maps(project_id=pid)
+
+
+def test_only_the_owner_deletes_a_public_project(fresh_db):
+    s = fresh_db
+    pid = _someone_elses_project(s, public=True)
+    with pytest.raises(ValueError, match="owner"):
+        s.delete_project(project_id=pid)

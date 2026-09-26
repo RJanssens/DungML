@@ -84,7 +84,7 @@ from dungml import (
 )
 from dungml import walk
 from dungml.geometry import corridor_polygons, room_polygon
-from dungml_backend import models
+from dungml_backend import access, models
 from dungml_backend.db import get_sessionmaker, init_schema
 
 mcp = FastMCP("dungml")
@@ -124,20 +124,21 @@ def _session():
     return get_sessionmaker()()
 
 
+def _user(db: DbSession, user_id: str) -> models.User:
+    return db.get(models.User, user_id)
+
+
 def _owned_project(db: DbSession, project_id: str, user_id: str) -> models.Project:
-    p = db.get(models.Project, project_id)
-    if p is None or p.user_id != user_id:
+    """A project this user may work on — owner, member or public (access.py)."""
+    p = access.accessible_project(db, project_id, _user(db, user_id))
+    if p is None:
         raise ValueError(f"project {project_id!r} not found")
     return p
 
 
 def _owned_map(db: DbSession, map_id: str, user_id: str) -> models.Map:
     m = db.get(models.Map, map_id)
-    if m is None:
-        raise ValueError(f"map {map_id!r} not found")
-    # Walk up to the owning user to confirm.
-    project = db.get(models.Project, m.project_id)
-    if project is None or project.user_id != user_id:
+    if m is None or not access.can_access(db, m.project, _user(db, user_id)):
         raise ValueError(f"map {map_id!r} not found")
     return m
 
@@ -385,14 +386,10 @@ def _diag_to_dict(d: Diagnostic) -> dict:
 
 @mcp.tool()
 def list_projects() -> list[dict]:
-    """List all projects owned by the MCP user, newest first."""
+    """List the projects the MCP user can work on (own, member, public), newest first."""
     with _session() as db:
         user = _get_or_create_mcp_user(db)
-        rows = db.scalars(
-            select(models.Project)
-            .where(models.Project.user_id == user.id)
-            .order_by(models.Project.updated_at.desc())
-        ).all()
+        rows = access.list_projects(db, user)
         return [
             {
                 "id": p.id,
@@ -426,6 +423,8 @@ def delete_project(
     with _session() as db:
         user = _get_or_create_mcp_user(db)
         proj = _owned_project(db, project_id, user.id)
+        if proj.user_id != user.id:
+            raise ValueError("only the project owner can delete it")
         db.delete(proj)
         db.commit()
         return {"ok": True, "deleted": project_id}

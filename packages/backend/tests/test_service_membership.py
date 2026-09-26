@@ -13,7 +13,7 @@ SVC = {"Authorization": "Bearer dev-service"}
 
 
 def _project_with_map(client, cottage_source: str, name="Stonehell"):
-    pid = client.post("/api/projects", json={"name": name}, headers=OWNER).json()["id"]
+    pid = client.post("/api/projects", json={"name": name, "is_public": False}, headers=OWNER).json()["id"]
     mid = client.post(
         f"/api/projects/{pid}/maps",
         json={"name": "Gatehouse", "source": cottage_source},
