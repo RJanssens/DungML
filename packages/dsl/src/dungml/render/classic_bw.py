@@ -8,6 +8,7 @@ world coordinates throughout.
 from __future__ import annotations
 
 import math
+import re
 from html import escape
 from typing import Iterable
 
@@ -186,6 +187,30 @@ _TEXTURES: dict[str, str] = {
 }
 
 
+# ----- author-value sanitising -----
+#
+# Colours, classes and path data come straight from the .dmap source and land
+# inside SVG attributes / inline styles. The web editor inserts the SVG as raw
+# HTML, so anything that isn't recognisably a colour (etc.) is dropped rather
+# than escaped — escaping stops attribute breakout but not CSS injection
+# (`red;background:url(…)`).
+_CSS_COLOR_RE = re.compile(
+    r"#[0-9a-fA-F]{3,8}"
+    r"|[a-zA-Z]+"
+    r"|(?:rgb|rgba|hsl|hsla)\(\s*[0-9.,%\s/+-]*\)"
+)
+_CLASS_RE = re.compile(r"[A-Za-z0-9_\- ]+")
+_PATH_D_RE = re.compile(r"[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]*")
+
+
+def _css_color(value: str | None) -> str | None:
+    """`value` if it is a plain CSS colour (hex, name, rgb()/hsl()), else None."""
+    if value is None:
+        return None
+    v = value.strip()
+    return v if _CSS_COLOR_RE.fullmatch(v) else None
+
+
 def _resolve_fill(value: str | None) -> tuple[str | None, str | None]:
     """Resolve a `background` string to (svg_fill, texture_name_to_register).
 
@@ -198,7 +223,7 @@ def _resolve_fill(value: str | None) -> tuple[str | None, str | None]:
         return None, None
     if value in _TEXTURES:
         return f"url(#dungml-tx-{value})", value
-    return value, None
+    return _css_color(value), None
 
 
 @register("classic-bw")
@@ -2492,7 +2517,7 @@ class _RenderContext:
         radius = max(m.size, 0.18)
         # Resolve colour: palette key takes priority; otherwise pass-through.
         tag = m.tag or MARKER_DEFAULT_TAG
-        fill = MARKER_PALETTE.get(tag, tag)
+        fill = MARKER_PALETTE.get(tag) or _css_color(tag) or MARKER_PALETTE[MARKER_DEFAULT_TAG]
         initial = (m.initial or (m.name[:1] if m.name else "?")).upper()[:2]
         # Outer ring slightly darker than the fill so the token reads on
         # any background — same trick the legend uses for door leaves.
@@ -2619,13 +2644,15 @@ class _RenderContext:
 
     def _glyph_svg(self, g) -> str:  # type: ignore[no-untyped-def]
         cls = {"stroke": "feature", "fill": "feature-fill", "plain": None}[g.role]
-        classes = " ".join(c for c in (cls, g.extra_class) if c)
+        extra = g.extra_class if g.extra_class and _CLASS_RE.fullmatch(g.extra_class) else None
+        classes = " ".join(c for c in (cls, extra) if c)
         head = f' class="{classes}"' if classes else ""
         tail = ""
-        if g.fill is not None:
-            tail += f' fill="{g.fill}"'
-        if g.stroke is not None:
-            tail += f' stroke="{g.stroke}"'
+        fill, stroke = _css_color(g.fill), _css_color(g.stroke)
+        if fill is not None:
+            tail += f' fill="{fill}"'
+        if stroke is not None:
+            tail += f' stroke="{stroke}"'
         if g.stroke_width is not None:
             tail += f' stroke-width="{_n(g.stroke_width)}"'
         if isinstance(g, GlyphCircle):
@@ -2648,12 +2675,14 @@ class _RenderContext:
             pts = " ".join(f"{_n(x)},{_n(y)}" for x, y in g.points)
             return f'<polyline{head} points="{pts}"{tail}/>'
         if isinstance(g, GlyphPath):
+            if not _PATH_D_RE.fullmatch(g.d):
+                return ""
             return f'<path{head} d="{g.d}"{tail}/>'
         return ""
 
     def _shape_svg(self, shape, background, outline) -> str:  # type: ignore[no-untyped-def]
-        fill = background or "#ffffff"
-        stroke = (outline.color if outline else None) or "#111"
+        fill = _css_color(background) or "#ffffff"
+        stroke = _css_color(outline.color if outline else None) or "#111"
         sw = (outline.width if outline else None) or FEATURE_STROKE
         dash = ""
         if outline and outline.stroke == "dashed":
@@ -2680,7 +2709,7 @@ class _RenderContext:
 
     def _overlay_svg(self, ov: Overlay) -> str:
         ox, oy = ov.offset
-        fill = ov.fill or "#111"
+        fill = _css_color(ov.fill) or "#111"
         if isinstance(ov.shape, CircleShape):
             return (
                 f'<circle cx="{_n(ox)}" cy="{_n(oy)}" r="{_n(ov.shape.radius)}" '
