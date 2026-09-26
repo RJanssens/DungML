@@ -250,9 +250,11 @@ class _RenderContext:
                 continue
             for r in layer.rooms:
                 self.all_rooms.setdefault(r.name, r)
-        # Sequential numbering in source order (dict preserves insertion).
+        # Sequential numbering in source order (dict preserves insertion),
+        # unless a room carries an explicit number (fog_of_war sets these).
         self.room_numbers: dict[str, int] = {
-            name: i + 1 for i, name in enumerate(self.all_rooms)
+            name: r.number if r.number is not None else i + 1
+            for i, (name, r) in enumerate(self.all_rooms.items())
         }
         # Textures actually referenced from this map (one pattern def per
         # texture name). Built up by `_resolve_bg`; we pre-pass over

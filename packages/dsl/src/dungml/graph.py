@@ -22,6 +22,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Optional
 
+from pydantic import BaseModel
+
 from .model import Corridor, Door, DungeonMap, Room
 
 # A door state that physically blocks passage until something changes
@@ -302,6 +304,22 @@ def is_blocked(state: str) -> bool:
     return state.lower() in BLOCKING_STATES
 
 
+def _strip_dm_notes(obj: object) -> None:
+    """Clear every `dm_notes` in a model tree, in place. Walks all fields
+    rather than naming entity types, so a new entity kind can't leak."""
+    if isinstance(obj, BaseModel):
+        if getattr(obj, "dm_notes", None) is not None:
+            obj.dm_notes = None
+        for name in type(obj).model_fields:
+            _strip_dm_notes(getattr(obj, name))
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            _strip_dm_notes(item)
+    elif isinstance(obj, dict):
+        for item in obj.values():
+            _strip_dm_notes(item)
+
+
 def fog_of_war(
     dmap: DungeonMap,
     discovered_nodes: Iterable[str],
@@ -348,6 +366,18 @@ def fog_of_war(
             host.exits = [e for e in exits if not e.secret]
 
     out = dmap.model_copy(deep=True)
+    # Freeze label numbers from the full map before pruning, so the players'
+    # "3. Crypt" is the GM's "3. Crypt" rather than renumbered 1..n.
+    numbered: dict[str, Room] = dict(out.rooms)
+    for layer in out.layers:
+        if not layer.hidden:
+            for r in layer.rooms:
+                numbered.setdefault(r.name, r)
+    for i, r in enumerate(numbered.values()):
+        if r.number is None:
+            r.number = i + 1
+    _strip_dm_notes(out)
+    strip_secret(out)
     out.rooms = {n: r for n, r in out.rooms.items() if f"room.{n}" in nodes}
     out.corridors = {
         n: c for n, c in out.corridors.items() if f"corridor.{n}" in nodes
@@ -373,6 +403,7 @@ def fog_of_war(
     out.exits = [e for e in out.exits if not e.secret]
 
     for layer in out.layers:
+        strip_secret(layer)
         layer.rooms = [r for r in layer.rooms if f"room.{r.name}" in nodes]
         layer.corridors = [
             c for c in layer.corridors if f"corridor.{c.name}" in nodes

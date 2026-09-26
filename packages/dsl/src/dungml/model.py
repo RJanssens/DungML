@@ -261,6 +261,9 @@ class Room(BaseModel):
     # warning — for deliberate stacking (e.g. a ruined building drawn on top
     # of the canyon floor it sits in). Set with the `allow_overlap` keyword.
     allow_overlap: bool = False
+    # Label number ("3. Crypt"). None = sequential in source order. Set by
+    # `fog_of_war` so a pruned players' view keeps the GM view's numbers.
+    number: Optional[int] = None
     span: SourceSpan = Field(default_factory=SourceSpan)
 
 
