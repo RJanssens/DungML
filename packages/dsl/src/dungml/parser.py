@@ -205,6 +205,23 @@ class _Tx(Transformer):
         self.require_map = require_map
         self.includes: list[str] = []
 
+    def _call_userfunc(self, tree: Any, new_children: Any = None) -> Any:
+        # Stamp the source span onto every model object a rule produces, at
+        # any nesting depth. (Lark 1.x's per-node dispatch hook; the public
+        # alternative, `v_args(meta=True)`, would change every method's
+        # signature.) test_spans.py pins this.
+        result = super()._call_userfunc(tree, new_children)
+        meta = getattr(tree, "meta", None)
+        span = getattr(result, "span", None)
+        if (
+            isinstance(span, SourceSpan)
+            and span.line == 0
+            and meta is not None
+            and not getattr(meta, "empty", True)
+        ):
+            result.span = _span(tree)
+        return result
+
     def include_decl(self, items: list[Any]) -> None:
         self.includes.append(_strip_string(items[0]))
         return None  # filtered out by `start`
@@ -1432,101 +1449,6 @@ class _Tx(Transformer):
         )
 
 
-# ---------------------------------------------------------------------------
-# Span attachment
-#
-# Lark's tree-level meta (line/column) gives us spans for free, but the
-# Transformer above replaces each Tree node with its concrete model
-# object before we can read it. To recover spans we run a second pass:
-# parse → tree, then post-process per top-level node, attaching its
-# original meta onto the corresponding model instance.
-# ---------------------------------------------------------------------------
-
-
-def _attach_spans(tree: Any, model: DungeonMap) -> None:
-    """Best-effort: walk the parse tree and tag spans onto matching model
-    objects. We match top-level objects by their identifier (name or
-    position) since the source text is what we ultimately care about
-    for editor diagnostics.
-    """
-    from lark import Tree
-
-    def walk(node: Tree) -> None:
-        if not hasattr(node, "data"):
-            return
-
-        if node.data == "map_block" and getattr(node, "meta", None):
-            model.map.span = _span(node)
-
-        elif node.data == "feature_def":
-            name = _strip_string(node.children[0])
-            if name in model.feature_defs:
-                model.feature_defs[name].span = _span(node)
-
-        elif node.data == "room":
-            name = _strip_string(node.children[0])
-            if name in model.rooms:
-                model.rooms[name].span = _span(node)
-
-        elif node.data == "corridor":
-            name = _strip_string(node.children[0])
-            if name in model.corridors:
-                model.corridors[name].span = _span(node)
-
-        elif node.data == "door":
-            x, y = float(str(node.children[0])), float(str(node.children[1]))
-            for d in model.doors:
-                if d.position == (x, y) and d.span.line == 0:
-                    d.span = _span(node)
-                    break
-
-        elif node.data == "window":
-            x, y = float(str(node.children[0])), float(str(node.children[1]))
-            for w in model.windows:
-                if w.position == (x, y) and w.span.line == 0:
-                    w.span = _span(node)
-                    break
-
-        elif node.data == "text_annotation":
-            text = _strip_string(node.children[0])
-            x, y = float(str(node.children[1])), float(str(node.children[2]))
-            for t in model.texts:
-                if (
-                    t.text == text
-                    and t.position == (x, y)
-                    and t.span.line == 0
-                ):
-                    t.span = _span(node)
-                    break
-
-        elif node.data == "exit_decl":
-            x, y = float(str(node.children[0])), float(str(node.children[1]))
-            for ex in model.exits:
-                if ex.position == (x, y) and ex.span.line == 0:
-                    ex.span = _span(node)
-                    break
-
-        elif node.data == "area":
-            name = _strip_string(node.children[0])
-            for a in model.areas:
-                if a.name == name and a.span.line == 0:
-                    a.span = _span(node)
-                    break
-
-        elif node.data == "layer":
-            name = _strip_string(node.children[0])
-            for layer in model.layers:
-                if layer.name == name and layer.span.line == 0:
-                    layer.span = _span(node)
-                    break
-
-        for child in node.children:
-            if isinstance(child, Tree):
-                walk(child)
-
-    walk(tree)
-
-
 _parser: Lark | None = None
 
 _LIBRARY_DIR = Path(__file__).parent / "includes"
@@ -1640,7 +1562,6 @@ def _parse_text(
         if isinstance(e.orig_exc, DmapParseError):
             raise e.orig_exc from None
         raise DmapParseError(str(e.orig_exc)) from e
-    _attach_spans(tree, model)
     return model, tx.includes
 
 
