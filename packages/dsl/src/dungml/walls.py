@@ -250,8 +250,23 @@ def _apply_cuts(
         if best is None or best[0] > DOOR_TOLERANCE:
             continue
         _, ri, si, s, t = best
-        half = (width / 2) / (math.dist(s.a, s.b) or 1.0)
-        removed.setdefault((ri, si), []).append((t - half, t + half))
+        # The gap runs along the nearest segment's line and through every segment
+        # on that line it spans: one straight wall is often several outline
+        # segments (a corridor end snapped onto another picks up its vertices).
+        L = math.dist(s.a, s.b) or 1.0
+        u = ((s.b[0] - s.a[0]) / L, (s.b[1] - s.a[1]) / L)
+        c = _lerp(s, t)
+        g0 = (c[0] - u[0] * width / 2, c[1] - u[1] * width / 2)
+        g1 = (c[0] + u[0] * width / 2, c[1] + u[1] * width / 2)
+        for rj, sj, w in flat:
+            if not all(abs((q[0] - s.a[0]) * u[1] - (q[1] - s.a[1]) * u[0]) <= 1e-6 for q in (w.a, w.b)):
+                continue                        # not on the nearest segment's line
+            Lw = math.dist(w.a, w.b) or 1.0
+            ta = ((g0[0] - w.a[0]) * (w.b[0] - w.a[0]) + (g0[1] - w.a[1]) * (w.b[1] - w.a[1])) / (Lw * Lw)
+            tb = ((g1[0] - w.a[0]) * (w.b[0] - w.a[0]) + (g1[1] - w.a[1]) * (w.b[1] - w.a[1])) / (Lw * Lw)
+            lo, hi = min(ta, tb), max(ta, tb)
+            if hi > _EPS and lo < 1 - _EPS:
+                removed.setdefault((rj, sj), []).append((lo, hi))
 
     paths: list[list[Vec2]] = []
     for ri, ring in enumerate(segments_by_ring):

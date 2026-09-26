@@ -132,6 +132,29 @@ def test_t_junction_door_into_another_corridors_side() -> None:
     assert _wall_hits(a, (13, 10 - r))  # a's side wall elsewhere is intact
 
 
+def test_junction_arm_door_cuts_its_whole_end_wall() -> None:
+    # A junction folded into one branch: the hub's short arms end at open doors
+    # into the other branches. A branch's end, snapped onto the hub, picks up the
+    # hub's vertex on the centreline, so its end wall is two outline segments;
+    # the door's gap must run through both — not stop at the centreline, leaving
+    # a stub of wall across the passage (Stonehell 3D's hall crossings).
+    outs = _outlines(
+        'corridor "v" { width 1\n'
+        "  node n1 at 3.5,0 node hub at 3.5,2.5 node w at 3,2.5 node e at 4,2.5 node s at 3.5,3\n"
+        "  run n1 to hub run hub to w run hub to e run hub to s }\n"
+        'corridor "l" { width 1 segment line from 0,2.5 to 3,2.5 }\n'
+        'corridor "r" { width 1 segment line from 4,2.5 to 7,2.5 }\n'
+        'corridor "s" { width 1 segment line from 3.5,3 to 3.5,5 }\n'
+        "door at 3,2.5 { connects corridor.v, corridor.l type open }\n"
+        "door at 4,2.5 { connects corridor.v, corridor.r type open }\n"
+        "door at 3.5,3 { connects corridor.v, corridor.s type open }\n"
+    )
+    for pt in ((3, 2.1), (3, 2.9), (4, 2.1), (4, 2.9), (3.1, 3), (3.9, 3)):
+        for name, o in outs.items():
+            assert not _wall_hits(o, pt), (name, pt)
+    assert _wall_hits(outs["v"], (3, 1.5))  # the vertical run's side wall is intact
+
+
 def test_exit_at_a_corridor_end_leaves_it_open() -> None:
     o = _outlines(
         'corridor "k" { width 2 segment line from 5,5 to 15,5 }\n'
