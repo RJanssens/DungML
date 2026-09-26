@@ -69,3 +69,17 @@ door at 5,5 { connects corridor.a, corridor.b type wooden }
     kinds = {el.tag.removeprefix(SVG) + "." + (el.get("class") or "") for el in door.iter()}
     assert "polygon.door-leaf" in kinds  # a leaf across the opening, not a lone circle
     assert not any(k.startswith("circle.") for k in kinds)
+
+
+def test_open_door_between_corridors_draws_no_ring() -> None:
+    # An `open` door is a bare opening: nothing drawn. Between two corridors
+    # it used to find no *room* wall and fall back to a ring — a map that
+    # splits corridors at junctions (for finer fog) got one ring per join.
+    for width in (1, 0):
+        src = HEAD + f"""
+corridor "a" {{ width {width} segment line from 1,5 to 5,5 }}
+corridor "b" {{ width {width} segment line from 5,5 to 9,5 }}
+door at 5,5 {{ connects corridor.a, corridor.b type open }}
+"""
+        door = next(el for el in _root(src).iter(f"{SVG}g") if el.get("class") == "door-instance")
+        assert list(door) == [], (width, [c.tag for c in door])

@@ -1568,6 +1568,8 @@ class _RenderContext:
         if marker:
             letter = "S" if d.type == "secret" else "C"
             body = self._marker_door_symbol(d, wall_info, letter, d.type)
+        elif (d.type or "").lower() in ("open", "opening", "gap"):
+            body = ""  # a bare opening draws nothing, wall or no wall
         elif wall_info is None:
             cx, cy = d.position
             body = (
