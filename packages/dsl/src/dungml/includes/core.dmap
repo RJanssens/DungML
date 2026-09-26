@@ -127,6 +127,15 @@ feature_def "slime-trap" {
   }
 }
 
+# Electricity / shock trap — a lightning bolt in a circle.
+feature_def "shock-trap" {
+  secret
+  glyph {
+    circle stroke at 0,0 radius 0.35
+    polygon fill (0.05,-0.3) (-0.15,0.02) (0,0.02) (-0.05,0.3) (0.15,-0.04) (0,-0.04)
+  }
+}
+
 # ---- furniture & fittings ----
 
 feature_def "chest" {
@@ -175,6 +184,33 @@ feature_def "statue" {
 
 feature_def "marker" {
   glyph { circle fill at 0,0 radius 0.18 }
+}
+
+# Well — a stone ring around a dark shaft.
+feature_def "well" {
+  glyph {
+    circle stroke at 0,0 radius 0.38
+    circle fill at 0,0 radius 0.2
+  }
+}
+
+# Wall glyph — a carved sigil (a teleport rune, a warding mark).
+feature_def "wall-glyph" {
+  glyph {
+    circle stroke at 0,0 radius 0.32
+    line stroke from -0.2,0.2 to 0.2,-0.2
+    line stroke from -0.2,-0.2 to 0.2,0.2
+    line stroke from 0,-0.32 to 0,0.32
+  }
+}
+
+# Direction sign — a post with a pointing board. Not `signpost`: city.dmap
+# already has a coloured one, and the first include wins on a name clash.
+feature_def "direction-sign" {
+  glyph {
+    line stroke from 0,0.4 to 0,-0.3
+    polygon fill (-0.38,-0.22) (-0.2,-0.38) (0.3,-0.38) (0.3,-0.06) (-0.2,-0.06)
+  }
 }
 
 # ---- stairs ----
