@@ -170,7 +170,7 @@ See README for the full quickstart. In short:
 
 ```bash
 uv sync                                   # Python workspace (dsl + backend + mcp)
-uv run pytest packages/                   # 659 tests — run this before any commit
+uv run pytest packages/                   # 695 tests — run this before any commit
 uv run dmap-server                        # → http://127.0.0.1:8000
 uv run dmap --help                        # DSL CLI (render, validate, renderers)
 uv run dmap-mcp                           # stdio MCP server, shares the backend DB
@@ -239,6 +239,24 @@ everyday shapes. (ttrpg2 works around this by auto-prepending
 
 **Renderers:** `classic-bw` (default), `floorplan`, `hatched`,
 `oldschool-blue`. `GET /api/dsl/renderers` is authoritative.
+
+**Themes are separate from renderers.** A renderer is geometry plus a default
+theme (`render/theme.py`: `mono`, `paper`, `blue`); `theme NAME` in the map
+block swaps the palette. New colours belong in `Theme`, not as literals —
+and never recolour by rewriting the finished SVG (that once mangled author
+colours and prose).
+
+**"What is in this map" lives in `dungml.walk`.** Top level vs layers vs
+nested-in-a-room, hidden-layer filtering and name dedup are decided there;
+the renderer, graph, validator, fog stubs, `room_context` and the MCP server
+all call it. Door keys (with their `#N` collision suffix) come from
+`graph.keyed_doors`. Don't hand-roll a `for layer in dmap.layers` loop — the
+copies drifted before.
+
+**SVG ids and CSS are namespaced per drawing.** Several maps share one page
+(scenario, print, GM + fog), so every id goes through `ctx._id(...)` and the
+stylesheet is scoped to the root `<svg>`'s `dm-<hash>` class. Keep element
+classes as they are — the editor matches `class === "floor"` exactly.
 
 **Fog of war is a pure function.** `graph.fog_of_war` prunes a `DungeonMap` to
 the discovered subset and returns a fully valid map, so *any* renderer draws
