@@ -98,13 +98,14 @@ one — it's the record of what the DSL, libraries or templates couldn't do.
 | `extra_rooms` | `{"27a": [[i, j]]}` | an unlabelled space that is a room (crypt niches) |
 | `label_cell` | `{"12": [i, j]}` | a label printed outside its room |
 | `not_floor` | `[[i, j]]` | white art that isn't floor |
-| `features` | `[{type, at, scale?, description?, dm_notes?}]` | icons, at cell precision; `description`/`dm_notes` may be literal text or a reference `"features_key.C"` / `"traps.Pit"` / `"stalls.G"` into `descriptions.json` |
+| `features` | `[{type, at, scale?, rotate?, description?, dm_notes?}]` | icons, at cell precision; `description`/`dm_notes` may be literal text or a reference `"features_key.C"` / `"traps.Pit"` / `"stalls.G"` into `descriptions.json` |
 | `exits` | `[{at, to, land?, label?, secret?, description?, dm_notes?}]` | a way to another map: `to` is a level id from `maps.json`, `land` the point on that map (default its centre). Teleports are exits too, even to the same map |
 | `region_notes` | `[{cell, description?, dm_notes?}]` | text for the space holding a cell (a lettered feature with no icon, an exit stub) |
 | `not_doors` | `[{at, type?}]` | drop a symbol false positive near a point (only of `type`, if given) |
 | `not_walls` | `[[[i,j],[i,j]]]` | an edge the wall detector took for a wall (icon outlines touching rock) |
 | `not_cave` / `cave` | `["17"]` | a label the cave test got wrong (icon line-work looks organic; a cave label in a flat pocket) |
 | `dots` / `not_dots` | `false` / `[[x, y]]` | turn pillar-dot detection off, or drop one |
+| `not_circles` / `not_bands` | `[[x, y]]` | drop a round room / slanted passage the vector pass found at (or through) a point |
 
 Coordinates: cells are `[row, col]`; door and feature positions are map
 units `[x, y]` (a door on a cell edge is `x.5` or an integer on the line).
@@ -194,6 +195,33 @@ Detected: grid, floor, caves vs straight walls, labels (positions), doors /
 secret doors / archways on grid lines, doors / locked doors / portcullises
 drawn mid-cell in a one-cell passage, drawn walls between floor cells, pillar
 dots.
+
+**Off-grid shapes** (`vector.py`, before the grid pass; `"vector": false` in
+`job.json` turns it off). The grid pass reads floor cell by cell, which turns
+a round room into a staircase and a slanted passage into a zig-zag — and
+reads both as cave walls. So they're found first, from the rock boundary:
+
+- *Round rooms*: Hough circles kept only when the rim is wall (rock outside,
+  floor inside) and hugs the circle to a pixel — an octagon's sides, or a
+  square room's walls touched from inside, only graze it. Emitted as
+  `circle at … radius …`, named by the label inside; its doors sit on the rim,
+  and a door drawn there off the lattice is matched in the passage's frame.
+- *Slanted passages*: straight rock edges off 0°/90°, paired with a parallel
+  edge a passage-width away (floor between, rock outside), then traced both
+  ways, re-centring between the walls each step (printed bands wobble and
+  bend a few degrees). A trace stops at a round room's rim, at a dead end, off
+  the page, or where the passage opens into a space — and carries on past a
+  corridor it crosses as a second piece. Emitted as a one-segment corridor of
+  the measured width, joined to the space at each end by the door drawn
+  there (templates sampled across the passage, at its angle) or an opening.
+
+Their cells leave the grid pass, and pillar dots on their seams (the wedge
+of rock where a spoke meets a rim) are dropped. On Stonehell it finds
+nothing on Level 1 and the surface, and 3D's seven round rooms and twelve
+spokes, 3B's four, 3A's shaft room, and the 45° passages of 2A, 2C, 5A, 5D.
+
+Not detected: diagonal walls *drawn* across white cells (2A's 22/12/13 —
+lines, not rock edges), stippled or hatched floor.
 
 Not yet — corrections:
 

@@ -26,6 +26,7 @@ read-aloud description, since titles give things away ("Gas Fountain").
 """
 from __future__ import annotations
 
+import math
 import re
 from collections import defaultdict, deque
 
@@ -34,6 +35,7 @@ from PIL import Image
 from scipy import ndimage as nd
 from skimage import measure
 
+import vector
 from common import Job, ekey, fmt, load_json, nbrs as _nbrs, save_json
 
 
@@ -52,6 +54,40 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
 
     def nbrs(i, j):
         return _nbrs(i, j, N)
+
+    # ------------------------------------------------------------ off-grid shapes
+    # round rooms and slanted passages (vector.py) are drawn as what they are; their
+    # cells leave the grid pass, which would read them as staircases (and as caves)
+    vec = vector.detect(rock, P, st) if cfg.get("vector", True) else {"circles": [], "bands": []}
+    vec["circles"] = [c for c in vec["circles"] if not any(math.hypot(c["cx"] - x, c["cy"] - y) < c["r"]
+                                                           for x, y in corr.get("not_circles", []))]
+    vec["bands"] = [b for b in vec["bands"] if not any(vector._near_band(x, y, b, 1.0)
+                                                       for x, y in corr.get("not_bands", []))]
+    save_json(job.work / "vector.json", vec)
+    H, W = rock.shape
+    yy, xx = np.mgrid[:H, :W]
+    disk_px = np.zeros((H, W), int)                 # 1 + circle index
+    for k, c in enumerate(vec["circles"]):
+        disk_px[((xx - c["cx"] * P) ** 2 + (yy - c["cy"] * P) ** 2 < (c["r"] * P + 2) ** 2) & (disk_px == 0)] = k + 1
+    band_px = np.zeros((H, W), bool)
+    for b in vec["bands"]:
+        pts = np.array(b["points"]) * P
+        for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+            vx, vy = bx - ax, by - ay
+            t = np.clip(((xx - ax) * vx + (yy - ay) * vy) / max(vx * vx + vy * vy, 1e-9), 0, 1)
+            band_px |= np.hypot(xx - ax - t * vx, yy - ay - t * vy) < b["width"] * P / 2 + 3
+    circle_cell = -np.ones((N, N), int)
+    for i in range(N):
+        for j in range(N):
+            s = (slice(int(round(i * P)), int(round((i + 1) * P))), slice(int(round(j * P)), int(round((j + 1) * P))))
+            fl = ~rock[s]
+            nfl = max(int(fl.sum()), 1)
+            k = int(disk_px[int((i + .5) * P), int((j + .5) * P)])
+            if k:                                   # the cell's centre is inside a round room
+                circle_cell[i, j] = k - 1
+                F[i, j] = True
+            elif ((disk_px[s] > 0) | band_px[s])[fl].sum() / nfl >= 0.5 and frac[i, j] < FULL:
+                F[i, j] = False                     # a round room's rim or a slanted passage
 
     # ------------------------------------------------------------ grid lines
     def edge_strip(i, j, d, half=3):
@@ -85,7 +121,10 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     organic = np.zeros((N, N), bool)
     for i in range(N):
         for j in range(N):
-            if F[i, j] and frac[i, j] < FULL:
+            s = (slice(int(round(i * P)), int(round((i + 1) * P))), slice(int(round(j * P)), int(round((j + 1) * P))))
+            # an arc or a slanted wall is not a cave's
+            if F[i, j] and frac[i, j] < FULL and circle_cell[i, j] < 0 and not band_px[s].any() \
+                    and not (disk_px[s] > 0).any():
                 organic[i, j] = organic_cell(i, j)
     cave = F & nd.binary_dilation(organic, np.ones((3, 3)))
 
@@ -231,6 +270,15 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     region = -np.ones((N, N), int)
     regions: list[dict] = []
 
+    # round rooms first: every cell whose centre is inside the circle, named after the
+    # label printed in it
+    in_circle = set()
+    for k, c in enumerate(vec["circles"]):
+        names = sorted((nm for nm, cell in labels.items() if circle_cell[cell] == k), key=lambda n: (len(n), n))
+        regions.append(dict(kind="room", name=names[0] if names else f"round{k + 1}", cells=[], circle=c))
+        in_circle.update(names)
+        region[circle_cell == k] = len(regions) - 1
+
     # ------------------------------------------------------------ caves
     full = F & (frac >= FULL)
 
@@ -257,6 +305,9 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
 
     cave_label = {}
     for nm, (i, j) in labels.items():
+        if nm in in_circle:
+            cave_label[nm] = False
+            continue
         b = best_full_rect(i, j)
         org3 = organic[max(i - 1, 0):i + 2, max(j - 1, 0):j + 2].sum()
         cave_label[nm] = bool(cave[i, j]) and not (b and partial_share(b[1]) <= 0.15 and org3 < 3) \
@@ -265,7 +316,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             cave_label[nm] = True
             cave[i, j] = True
     for nm, (i, j) in labels.items():
-        b = best_full_rect(i, j)
+        b = best_full_rect(i, j) if nm not in in_circle else None
         if not cave_label[nm] and b and min(b[1][2] - b[1][0], b[1][3] - b[1][1]) >= 1:
             i0, j0, i1, j1 = b[1]
             cave[i0:i1 + 1, j0:j1 + 1] = False       # a walled room next to a cave isn't cave
@@ -301,7 +352,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         for i, j in cells:
             region[i, j] = len(regions) - 1
     rects = {}
-    for nm, (si, sj) in sorted(((nm, c) for nm, c in labels.items() if not cave[c]),
+    for nm, (si, sj) in sorted(((nm, c) for nm, c in labels.items() if not cave[c] and nm not in in_circle),
                                key=lambda t: (len(t[0]), t[0])):
         if nm in corr.get("room_rect", {}):
             rects[nm] = tuple(corr["room_rect"][nm])
@@ -370,6 +421,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             # rooms and caves take a bump of any size (the L of #3, a cave's stray
             # floor); a corridor takes a pocket of one or two cells (a statue alcove),
             # which lets the pocket chain on into the room it hangs off (1B's 4)
+            if regions[host].get("circle"):
+                continue                     # a circle's outline is fixed: what's outside it stays a corridor
             if regions[host]["kind"] in ("room", "cave") or (regions[host]["kind"] == "corridor" and len(cells) <= 2):
                 for c in cells:
                     region[c] = host
@@ -437,6 +490,19 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             ((all(frac[c] < FULL for c in r["cells"]) and not mid_cells & set(r["cells"]))   # arrows, compass, art
              or not touches(r)))]                  # (a passage with a door drawn across it is real)
 
+    # slanted passages: a corridor each, outside the cell grid
+    for b in vec["bands"]:
+        regions.append(dict(kind="corridor", name=f"c{len(regions)}", cells=[], band=b))
+        keep.append(regions[-1])
+    rid_of = {id(r): k for k, r in enumerate(regions)}
+
+    def band_at(x, y, tol=0.25):
+        for k, r in enumerate(regions):
+            if r.get("band") and vector._near_band(x, y, dict(r["band"], width=1),
+                                                    (r["band"]["width"] / 2 + tol)):
+                return k
+        return None
+
     def safe(name: str) -> str:
         # DSL names are identifiers: a correction's "21 secret" must not break the parse
         return re.sub(r"\W", "_", name)
@@ -496,7 +562,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
 
     def feature_lines(f, indent="  "):
         ref = f["type"] if "-" not in f["type"] else '"' + f["type"] + '"'
-        head = f'{indent}feature {ref} at {fmt(f["at"][0])},{fmt(f["at"][1])}' + (f' scale {f["scale"]}' if "scale" in f else "")
+        head = f'{indent}feature {ref} at {fmt(f["at"][0])},{fmt(f["at"][1])}' \
+            + (f' scale {f["scale"]}' if "scale" in f else "") + (f' rotate {fmt(f["rotate"])}' if f.get("rotate") else "")
         body = text_block("description", text_ref(f.get("description")), indent + "  ") \
             + text_block("dm_notes", text_ref(f.get("dm_notes")), indent + "  ")
         return [head + " {"] + body + [indent + "}"] if body else [head]
@@ -504,8 +571,14 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     features = list(corr.get("features", []))
     if corr.get("dots", True) and (job.work / "dots.json").exists():   # detected pillar dots
         drop = {tuple(p) for p in corr.get("not_dots", [])}
+
+        def seam(x, y):
+            # where a spoke meets a round room the page leaves a wedge of rock that
+            # reads as a dot: not a pillar
+            return any(abs(math.hypot(x - c["cx"], y - c["cy"]) - c["r"]) < 0.6 for c in vec["circles"]) or \
+                any(vector._near_band(x, y, dict(b, width=1), b["width"] / 2 + 0.6) for b in vec["bands"])
         features += [{"type": st.get("dot_feature", "pillar"), "at": p}
-                     for p in load_json(job.work / "dots.json") if tuple(p) not in drop]
+                     for p in load_json(job.work / "dots.json") if tuple(p) not in drop and not seam(*p)]
     # text for a space the key describes by feature letter (E's bricked-up alcoves) or an
     # exit stub: attached to whichever room/corridor holds the cell
     notes_in = defaultdict(lambda: {"description": [], "dm_notes": []})
@@ -534,6 +607,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         return lines + [indent + "}"]
 
     def host_of(x, y):
+        if (k := band_at(x, y)) is not None:
+            return k
         rid = region[min(int(y), N - 1), min(int(x), N - 1)]
         if rid < 0 or regions[rid] not in keep:   # on a wall: nearest space
             rid = min((abs(ii + .5 - y) + abs(jj + .5 - x), region[ii, jj]) for ii in range(N) for jj in range(N)
@@ -546,12 +621,7 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
 
     feats_in = defaultdict(list)
     for f in features:
-        x, y = f["at"]
-        rid = region[min(int(y), N - 1), min(int(x), N - 1)]
-        if rid < 0 or regions[rid] not in keep:   # on a wall: nearest space
-            rid = min((abs(ii + .5 - y) + abs(jj + .5 - x), region[ii, jj]) for ii in range(N) for jj in range(N)
-                      if region[ii, jj] >= 0 and regions[region[ii, jj]] in keep)[1]
-        feats_in[rid].append(f)
+        feats_in[host_of(*f["at"])].append(f)
 
     out = [f'include "{inc}"' for inc in cfg.get("includes", ["core.dmap"])] + [""]
     out += [f'map "{cfg["title"]}" {{',
@@ -572,7 +642,10 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         is_rect = len(cells) == (max(rows) - min(rows) + 1) * (max(cols) - min(cols) + 1) \
             and all(frac[c] >= FULL for c in cells)
         out.append(f'room "r{safe(r["name"])}" {{')
-        if r["kind"] == "room" and is_rect:
+        if c := r.get("circle"):
+            out.append(f'  circle at {fmt(c["cx"])},{fmt(c["cy"])} radius {fmt(c["r"])}')
+            stats["circle"] += 1
+        elif r["kind"] == "room" and is_rect:
             out.append(f"  rect {min(cols)},{min(rows)} {max(cols) - min(cols) + 1} x {max(rows) - min(rows) + 1}")
             stats["rect"] += 1
         else:
@@ -663,8 +736,70 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
                     if regions[region[cell]]["kind"] == "corridor":
                         stub[region[cell]].append((cell, edge_mid(e)))
 
+    # --- slanted passages: where each end meets a space, a door there or an opening
+    from common import Style
+    kit = Style(cfg.get("style", "stonehell"))
+    slant_t = {nm: kit.template(nm) for nm in st.get("slant_templates", ["door", "arch"])}
+
+    def slant_door(x, y, dx, dy, reach=(-0.7, 0.4)):
+        hit = vector.door_at(gt, slant_t, x * P, y * P, dx, dy, P, st, reach)
+        return st["templates"][hit[0]]["type"] if hit else "open"
+
+    def space_at(x, y, skip):
+        k = band_at(x, y, 0.0)
+        if k is not None and k != skip:
+            return k
+        for kk, r in enumerate(regions):
+            if (c := r.get("circle")) and math.hypot(x - c["cx"], y - c["cy"]) < c["r"] + 0.1:
+                return kk
+        i, j = min(max(int(y), 0), N - 1), min(max(int(x), 0), N - 1)
+        if region[i, j] >= 0 and regions[region[i, j]] in keep:
+            return int(region[i, j])
+        return None
+
+    for bid, r in enumerate(regions):
+        if not (b := r.get("band")):
+            continue
+        pts = b["points"]
+        for (ex, ey), (px, py), why in ((pts[0], pts[1], b["ends"][0]), (pts[-1], pts[-2], b["ends"][1])):
+            if why not in ("open", "circle"):
+                continue                               # a dead end, or off the page (an exit)
+            d = math.hypot(ex - px, ey - py) or 1
+            dx, dy = (ex - px) / d, (ey - py) / d      # outward
+            host = next((h for s in (0.35, 0.7, 1.0) if (h := space_at(ex + dx * s, ey + dy * s, bid)) is not None), None)
+            if host is None:
+                continue
+            conns.append(dict(a=bid, b=host, pos=(round(ex, 2), round(ey, 2)), type=slant_door(ex, ey, dx, dy), width=1))
+
+    # a round room's doors sit on its rim: the lattice position of an opening is inside
+    # the circle, and a door drawn on the rim is off the lattice
+    for c in conns:
+        for side in ("a", "b"):
+            if ci := regions[c[side]].get("circle"):
+                x, y = c["pos"]
+                d = math.hypot(x - ci["cx"], y - ci["cy"]) or 1
+                ux, uy = (x - ci["cx"]) / d, (y - ci["cy"]) / d
+                c["pos"] = (round(ci["cx"] + ux * ci["r"], 2), round(ci["cy"] + uy * ci["r"], 2))
+                if c["type"] == "open":
+                    c["type"] = slant_door(*c["pos"], ux, uy, (-0.4, 0.7))
+
     for r in keep:
         if r["kind"] != "corridor":
+            continue
+        if b := r.get("band"):
+            rid = rid_of[id(r)]
+            w = round(b["width"] * 20) / 20
+            out += [f'corridor "{r["name"]}" {{', f"  width {fmt(w)}"]
+            out += [f"  segment line from {fmt(ax)},{fmt(ay)} to {fmt(bx)},{fmt(by)}"
+                    for (ax, ay), (bx, by) in zip(b["points"], b["points"][1:])]
+            for f in feats_in.get(rid, []):
+                out += feature_lines(f)
+                stats["feature"] += 1
+            for x in exits_in.get(rid, []):
+                out += exit_lines(x)
+                stats["exit"] += 1
+            out += ["}", ""]
+            stats["band"] += 1
             continue
         rid = region[r["cells"][0]]
         cells = set(r["cells"])
