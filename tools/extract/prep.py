@@ -35,6 +35,12 @@ def detect_pitch(g: np.ndarray, style: dict) -> float:
         # FFT index = periods across the page = cells; plausible grids are 12..60
         k0, k1 = 12, 60
         k = k0 + int(np.argmax(spec[k0:k1 + 1]))
+        # a grid's lines are a comb: its harmonics at 2k, 3k… Speckle and texture
+        # (3C's stipple, 4A's cave floor, the surface's contour lines) can lift the
+        # second above the fundamental, reading 60 cells for 30. A strong peak at
+        # half the frequency is the grid
+        while k % 2 == 0 and k // 2 >= k0 and spec[k // 2] >= 0.3 * spec[k]:
+            k //= 2
         if best is None or spec[k] > best[1]:
             best = (k, spec[k])
     return w / best[0]
