@@ -1609,6 +1609,11 @@ def _merge(into: DungeonMap, other: DungeonMap) -> None:
     into.features.extend(other.features)
     into.doors.extend(other.doors)
     into.windows.extend(other.windows)
+    into.markers.extend(other.markers)
+    into.texts.extend(other.texts)
+    into.areas.extend(other.areas)
+    into.line_features.extend(other.line_features)
+    into.exits.extend(other.exits)
     into.layers.extend(other.layers)
 
 

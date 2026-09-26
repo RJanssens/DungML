@@ -233,3 +233,22 @@ def test_nested_includes(tmp_path):
     m = parse(main_src, path=str(main))
     assert "deep" in m.feature_defs
     assert "mid" in m.feature_defs
+
+
+def test_include_carries_every_top_level_entity_kind() -> None:
+    lib = """
+text "hello" at 3,3
+area "pool" kind water { rect 1,1 3 x 3 }
+marker "bob" at 2,2
+line_feature "rail" kind bars { point 1,1 point 4,1 }
+exit at 5,5 { to "cellar" at 1,1 }
+"""
+    m = parse(
+        'include "lib.dmap"\nmap "t" { grid { bounds 30 x 20 } }',
+        include_sources={"lib.dmap": lib},
+    )
+    assert [t.text for t in m.texts] == ["hello"]
+    assert [a.name for a in m.areas] == ["pool"]
+    assert [mk.name for mk in m.markers] == ["bob"]
+    assert [lf.name for lf in m.line_features] == ["rail"]
+    assert [ex.target_map for ex in m.exits] == ["cellar"]
