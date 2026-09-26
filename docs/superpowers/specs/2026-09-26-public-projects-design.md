@@ -1,8 +1,7 @@
 # Public projects
 
 **Date:** 2026-09-26
-**Status:** Draft — approach A and "full member rights" approved in chat; the
-two exceptions under *Decisions to confirm* still need a yes
+**Status:** Approved — approach A, full member rights, and both exceptions
 
 ## Problem
 
@@ -75,9 +74,9 @@ public.
 | `contract.py` service project (`_SERVICE_PROJECT`) | **`false`** — see below |
 | example samples project (`EXAMPLE_PROJECT_NAME`) | **`false`** — see below |
 
-### Decisions to confirm
+### Exceptions (approved)
 
-These two refine the approved "new and existing projects are public":
+These two refine "new and existing projects are public" (confirmed 2026-09-26):
 
 1. **The ttrpg2 service project stays private.** The legacy `/maps/{external_id}`
    contract provisions maps into the service principal's own project, and
