@@ -155,3 +155,65 @@ def test_campaign_routes_stay_bounded_to_the_linked_project(client, cottage_sour
     assert client.get(f"/api/maps/{other_map}", headers=OTHER).status_code == 200
     # … but the campaign-scoped routes only reach the linked project
     assert client.get(f"/campaigns/g1/maps/{other_map}/known", headers=OTHER).status_code == 404
+
+
+# ---- Task 3: API ----
+
+
+def _get(client, pid, h):
+    return client.get(f"/api/projects/{pid}", headers=h).json()
+
+
+def test_role_and_is_public_per_caller(client):
+    pid = _public(client)
+    mine = _get(client, pid, OWNER)
+    assert (mine["role"], mine["is_public"], mine["shared"]) == ("owner", True, False)
+    theirs = _get(client, pid, OTHER)
+    assert (theirs["role"], theirs["shared"]) == ("public", True)
+
+
+def test_member_role_on_a_public_project(client):
+    pid = _public(client)
+    client.get("/api/projects", headers=OTHER)   # provision the second user
+    assert client.post(f"/api/projects/{pid}/members",
+                       json={"identifier": "@dungeon-daemon-service"}, headers=OWNER).status_code == 201
+    assert _get(client, pid, OTHER)["role"] == "member"
+
+
+def test_list_has_no_duplicates_and_the_strongest_role(client):
+    pid = _public(client)
+    client.get("/api/projects", headers=OTHER)
+    client.post(f"/api/projects/{pid}/members",
+                json={"identifier": "@dungeon-daemon-service"}, headers=OWNER)
+    rows = [p for p in client.get("/api/projects", headers=OTHER).json() if p["id"] == pid]
+    assert len(rows) == 1 and rows[0]["role"] == "member"
+    rows = [p for p in client.get("/api/projects", headers=OWNER).json() if p["id"] == pid]
+    assert len(rows) == 1 and rows[0]["role"] == "owner"
+
+
+def test_owner_makes_private_member_keeps_stranger_loses(client):
+    pid = _public(client)
+    r = client.patch(f"/api/projects/{pid}", json={"is_public": False}, headers=OWNER)
+    assert r.status_code == 200 and r.json()["is_public"] is False
+    assert client.get(f"/api/projects/{pid}", headers=OTHER).status_code == 404
+    client.post(f"/api/projects/{pid}/members",
+                json={"identifier": "@dungeon-daemon-service"}, headers=OWNER)
+    assert _get(client, pid, OTHER)["role"] == "member"
+
+
+def test_only_the_owner_changes_visibility(client):
+    pid = _public(client)
+    r = client.patch(f"/api/projects/{pid}", json={"is_public": False}, headers=OTHER)
+    assert r.status_code == 403
+    assert _get(client, pid, OWNER)["is_public"] is True
+
+
+def test_anyone_with_access_can_still_rename(client):
+    pid = _public(client)
+    r = client.patch(f"/api/projects/{pid}", json={"name": "Renamed"}, headers=OTHER)
+    assert r.status_code == 200 and r.json()["name"] == "Renamed"
+
+
+def test_patch_needs_a_field(client):
+    pid = _public(client)
+    assert client.patch(f"/api/projects/{pid}", json={}, headers=OWNER).status_code == 422
