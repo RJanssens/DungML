@@ -26,6 +26,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import Job  # noqa: E402
 
 
+def placeholder(lid: str, lv: dict) -> str:
+    """A stand-in for a level that isn't converted yet: one open room over the
+    whole grid, so an exit's landing point is inside a space. Replace it by
+    converting the page under the same map name; exits into it keep working."""
+    return f'''include "core.dmap"
+
+map "{lv["name"]}" {{
+  grid {{ cell 32 px units feet 5 bounds 30 x 30 origin top-left }}
+  renderer "classic-bw"
+  dm_notes """
+    Placeholder for level {lid}: not converted yet. Exits from other levels land
+    here at the centre (15,15) until this page is converted; the landing areas
+    they name are in their dm_notes.
+  """
+}}
+
+room "unconverted" {{
+  rect 0,0 30 x 30
+  label "{lid} (not converted yet)"
+}}
+'''
+
+
 def upload(job: Job) -> None:
     """PUT the map's source onto the project map with the same name, or POST a
     new one. `job.json` → "upload": {"base": url, "project": id, "map": name}.
@@ -42,11 +65,27 @@ def upload(job: Job) -> None:
 
     src = job.dmap.read_text()
     maps = {m["name"]: m["id"] for m in call("GET", f"/api/projects/{u['project']}/maps")}
-    if u["map"] in maps:
-        call("PUT", f"/api/maps/{maps[u['map']]}", {"source": src})
-        mid, verb = maps[u["map"]], "updated"
+    # the map is named after its entry in the module's maps.json, which is what other
+    # maps' exits target; an earlier upload under job.json's old name is renamed
+    reg_p = job.dir.parent / "maps.json"
+    registry = json.loads(reg_p.read_text())["levels"] if reg_p.exists() else {}
+    name = registry.get(job.cfg["name"], {}).get("name", u["map"])
+    if name not in maps and u.get("map") in maps and u["map"] != name:
+        call("PUT", f"/api/maps/{maps[u['map']]}", {"name": name})
+        maps[name] = maps.pop(u["map"])
+        print(f"upload: renamed {u['map']!r} -> {name!r}")
+    if name in maps:
+        call("PUT", f"/api/maps/{maps[name]}", {"source": src})
+        mid, verb = maps[name], "updated"
     else:
-        mid, verb = call("POST", f"/api/projects/{u['project']}/maps", {"name": u["map"], "source": src})["id"], "created"
+        mid, verb = call("POST", f"/api/projects/{u['project']}/maps", {"name": name, "source": src})["id"], "created"
+    # placeholders: every level an exit can target exists, so exits resolve today
+    for lid, lv in registry.items():
+        if lv.get("placeholder") and lv["name"] not in maps:
+            call("POST", f"/api/projects/{u['project']}/maps", {"name": lv["name"], "source": placeholder(lid, lv)})
+            maps[lv["name"]] = True
+            print(f"upload: created placeholder {lv['name']!r}")
+    u = dict(u, map=name)
     v = call("GET", f"/api/maps/{mid}/validate")
     d = v.get("diagnostics", []) if isinstance(v, dict) else v
     print(f"upload: {verb} {u['map']!r} ({mid}); server says {sum(x.get('severity') == 'error' for x in d)} errors, "
@@ -61,6 +100,10 @@ def party(job: Job) -> int:
         args += ["--reveal-secret", *cfg["reveal_secret"]]
     if cfg.get("open"):
         args += ["--open", *cfg["open"]]
+    if cfg.get("open_all"):
+        args.append("--open-all")
+    if cfg.get("reveal_all"):
+        args.append("--reveal-all")
     return p.main(args)
 
 
@@ -90,13 +133,17 @@ def main(argv: list[str]) -> int:
         rc = 0
         for s in order:
             r = steps[s](job)
-            if s == "party":
-                rc = r            # party exits 1 when it finds a fog leak
+            if isinstance(r, dict):
+                r = r.get("rc", 0)   # score: validation errors or unexpected warnings
+            if isinstance(r, int):
+                rc = rc or r         # party: a fog leak
         return rc
     if step not in steps:
         print(__doc__)
         return 2
     rc = steps[step](job)
+    if isinstance(rc, dict):
+        rc = rc.get("rc", 0)
     return rc if isinstance(rc, int) else 0
 
 

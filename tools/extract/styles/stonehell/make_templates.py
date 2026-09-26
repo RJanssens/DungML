@@ -21,6 +21,9 @@ style.json.
     page 77 (Level 1B)
       S_h     the secret door on 5's north wall       y=150, x=495  horizontal
       arch2   15's north archway, two cells wide      y=541, x=751  horizontal
+    page 79 (Level 1C) — both drawn mid-cell, in the one-cell passage into a room
+      locked      17's west door, a filled box         x=45,  y=433  vertical
+      portcullis  15's west portcullis, three dots     x=225, y=374  vertical
 
 Add a symbol: pick a clean instance, add a line here, give it a door type (and
 `orient` if it's a letter) in style.json's "templates", re-run.
@@ -42,6 +45,8 @@ CUTS = {
     "plain_x": ("73", "v", 421, 421),
     "S_h": ("77", "h", 150, 495),
     "arch2": ("77", "h", 541, 751),
+    "locked": ("79", "v", 45, 433),
+    "portcullis": ("79", "v", 225, 374),
 }
 
 pages = dict(a.split("=", 1) for a in sys.argv[1:])

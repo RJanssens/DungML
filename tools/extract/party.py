@@ -112,6 +112,12 @@ def check_step(dmap, graph, step: Step, *, secret_refs: set[str], gm: list[tuple
 
     for f in view.features:
         step.problems.append(f"top-level feature {f.ref} at {f.position} ignores the fog")
+    for x in view.exits:
+        step.problems.append(f"top-level exit at {x.position} to {x.target_map!r} ignores the fog")
+    for nid, obj in _nodes_of(view).items():
+        for x in getattr(obj, "exits", []) or []:
+            if getattr(x, "secret", False):
+                step.problems.append(f"secret exit at {x.position} to {x.target_map!r} visible in {nid}")
     for nid, obj in _nodes_of(view).items():
         for f in getattr(obj, "features", []) or []:
             if f.ref in secret_refs or getattr(f, "secret", False):
@@ -201,11 +207,19 @@ def main(argv=None) -> int:
                     help="secret door keys the GM reveals (the party found them)")
     ap.add_argument("--open", nargs="*", default=[],
                     help="door keys the GM opens (locked doors, portcullises)")
+    ap.add_argument("--open-all", action="store_true",
+                    help="the GM opens every locked door and portcullis the party reaches")
+    ap.add_argument("--reveal-all", action="store_true",
+                    help="the GM reveals every secret/concealed door when the party reaches it")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
 
     dmap = parse(a.map.read_text(), path=a.map)
     graph = build_graph(dmap)
+    if a.open_all:
+        a.open = list(a.open) + [e.key for e in graph.edges if is_blocked(e.state)]
+    if a.reveal_all:
+        a.reveal_secret = list(a.reveal_secret) + [e.key for e in graph.edges if e.hidden]
     start = resolve_node(dmap, graph, a.start)
     if start is None:
         print(f"unknown start {a.start!r}", file=sys.stderr)

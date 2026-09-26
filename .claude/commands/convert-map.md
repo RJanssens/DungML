@@ -61,16 +61,29 @@ with a lookalike: note it in the module's `LIMITATIONS.md`** and either add a
 feature_def to the right library (monochrome glyph for core; say which) or
 leave the icon out.
 
-## 6. build → score → party
+## 6. Exits
+
+Every way off the page — a corridor running to the edge, stairs, a chute, a
+teleport — is an `exits` correction to a level id in the module's `maps.json`.
+Add a level that isn't there yet as a placeholder (`"placeholder": true`).
+Land on the matching stub of a converted map (and set that map's exit back to
+land here); on a placeholder omit `land` and name the keyed landing area in
+dm_notes. A trap's chute or a teleporter is `secret`.
+
+## 7. build → score → party
 
 Run `all` (or the steps singly). Then:
 
 - `build`: "labels without a room" must be empty.
-- `score`: IoU should be ≳ 0.9 and 0 errors. Look at `work/diff.png` — red is
-  page floor the map misses, blue is map floor over rock. Explain every
-  topology difference against the reference by looking at the page; the
-  reference may be the one that's wrong (a missing corridor link, a door
-  kept only as a feature) — record those.
+- `score`: IoU should be ≳ 0.9, 0 errors, and **no UNEXPECTED warning**. Look
+  at each warning on the page before explaining it: most first-time warnings
+  are defects (a stray piece of cave floor, a secret room left as a
+  dead-end corridor, an alcove cut off its room). Only then add it to
+  `expected_warnings` with the reason. Look at `work/diff.png` — red is page
+  floor the map misses, blue is map floor over rock. Explain every topology
+  difference against the reference by looking at the page; the reference may
+  be the one that's wrong (a missing corridor link, a door kept only as a
+  feature) — record those.
 - `party`: must report 0 problems. Look at `work/party/party_filmstrip.png`:
   the reveal should grow a corridor stretch or a room at a time. Every
   unreached node must be intended (secret, locked, sealed per the key); set
@@ -80,10 +93,12 @@ Run `all` (or the steps singly). Then:
 Iterate on corrections until all three hold. Never hand-edit the `.dmap`:
 everything goes through the job files so the map can be rebuilt.
 
-## 7. Upload and record
+## 8. Upload and record
 
-Run `upload` (needs `upload` in `job.json`; `DUNGML_TOKEN` defaults to the
-dev token). Then append this map's entry to the module's `LIMITATIONS.md`:
-counts (rooms, corridors, doors by type, features, corrections by kind),
-scores, what the DSL or libraries couldn't express, missing features, what
-the templates missed, and reference-map errors found.
+Run `upload` (needs `upload.project` in `job.json`; `DUNGML_TOKEN` defaults to
+the dev token). It names the map after its `maps.json` entry and creates any
+missing placeholders. Check every exit's `to` resolves to a project map. Then
+update the module's `LIMITATIONS.md`: counts (rooms, corridors, doors by
+type, features, exits, corrections by kind), scores, what the DSL or
+libraries couldn't express, missing features, what the templates missed,
+module-text gaps, and reference-map errors found.

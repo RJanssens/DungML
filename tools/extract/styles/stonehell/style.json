@@ -18,8 +18,12 @@
   "S": {"type": "secret", "orient": "v"},
   "S_h": {"type": "secret", "orient": "h"},
   "arch": {"type": "arch"},
-  "arch2": {"type": "arch", "width": 2}
+  "arch2": {"type": "arch", "width": 2},
+  "locked": {"type": "wooden", "state": "locked", "mid_only": true},
+  "portcullis": {"type": "portcullis", "mid_only": true}
  },
+ "_mid_cell": "1C draws doors and portcullises mid-cell, in the one-cell passage into a room; those cells are scanned along their middle line too",
+ "mid_cell_margin": 0.5,
  "room_label": "^[0-9]+[A-Za-z]?$",
  "feature_label": "^[A-Z]$"
 }

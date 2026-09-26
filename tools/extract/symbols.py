@@ -43,8 +43,10 @@ def main(job: Job) -> None:
 
     hits = []
     for orient, img, fl in (("v", g, floor), ("h", g.T, floor.T)):
-        # a letter (S) is printed upright on any line, so it has a template per orientation
-        here = {nm: tm for nm, tm in temps.items() if st["templates"][nm].get("orient", orient) == orient}
+        # a letter (S) is printed upright on any line, so it has a template per orientation;
+        # mid_only symbols (1C's filled locked door, the portcullis dots) never sit on a grid line
+        here = {nm: tm for nm, tm in temps.items() if st["templates"][nm].get("orient", orient) == orient
+                and not st["templates"][nm].get("mid_only")}
         for k in range(1, n):
             x = int(round(k * pitch))
             for yy in range(L, img.shape[0] - L):
@@ -67,7 +69,37 @@ def main(job: Job) -> None:
                 if best[0] > st["template_margin"]:
                     hits.append(dict(o=orient, k=k, p=yy, s=round(best[0], 3), t=best[1]))
 
+    # mid-cell symbols: a door or portcullis drawn across the middle of a one-cell
+    # passage (floor on both ends, rock on both sides). There is no grid line down
+    # the middle of a cell, so the template score stands on its own.
+    for orient, img, fl in (("v", g, floor), ("h", g.T, floor.T)):
+        here = {nm: tm for nm, tm in temps.items() if st["templates"][nm].get("orient", orient) == orient
+                and st["templates"][nm].get("width", 1) == 1}
+        for r in range(1, n - 1):
+            for c in range(1, n - 1):
+                if not (fl[r, c - 1] and fl[r, c] and fl[r, c + 1] and not fl[r - 1, c] and not fl[r + 1, c]):
+                    continue
+                x = int(round((c + .5) * pitch))
+                best = (0.0, None, 0)
+                for yy in range(int(r * pitch) + 4, int((r + 1) * pitch) - 4):
+                    for dx in (-2, -1, 0, 1, 2):
+                        w = img[yy - L:yy + L + 1, x + dx - A:x + dx + A + 1]
+                        # an empty passage cell is near-uniform white: its correlation with
+                        # anything is noise, so a mid-cell window must actually hold ink
+                        if w.shape != plain.shape or w.std() < st.get("mid_cell_min_std", 20):
+                            continue
+                        for name, tm in here.items():
+                            s = ncc(w, tm)
+                            if s > best[0]:
+                                best = (s, name, yy)
+                if best[0] > st.get("mid_cell_margin", 1):
+                    # (r, c) is in the scan image's frame; `cell` is stored in page (row, col)
+                    hits.append(dict(o=orient, k=c + .5, p=best[2], s=round(best[0], 3), t=best[1], mid=True,
+                                     cell=[r, c] if orient == "v" else [c, r]))
+
     def hollow(h) -> bool:
+        if h.get("mid"):
+            return True
         img = g if h["o"] == "v" else g.T
         x = int(round(h["k"] * pitch))
         return img[h["p"] - 3:h["p"] + 4, x - 1:x + 2].mean(1).min() > st["door_hollow_min"]
@@ -82,6 +114,9 @@ def main(job: Job) -> None:
         h["type"] = st["templates"][h["t"]]["type"]
         if w := st["templates"][h["t"]].get("width"):
             h["width"] = w
+        if s := st["templates"][h["t"]].get("state"):
+            h["state"] = s
+    keep.sort(key=lambda h: (h["o"], h["k"], h["p"]))   # by position, not by score, before persisting
     save_json(job.work / "symbols.json", keep)
 
     im = Image.open(job.image).convert("RGB")
@@ -92,6 +127,11 @@ def main(job: Job) -> None:
         d.ellipse([x - 7, y - 7, x + 7, y + 7], outline=col.get(h["type"], (255, 140, 0)), width=3)
     im.save(job.work / "symbols_dbg.png")
     dots = find_dots(job, pitch, n)
+    # a portcullis is three dots; its dots are not pillars
+    bars = [((h["k"], h["p"] / pitch) if h["o"] == "v" else (h["p"] / pitch, h["k"])) for h in keep
+            if h["type"] == "portcullis"]
+    dots = [p for p in dots if all(abs(p[0] - bx) + abs(p[1] - by) > 0.8 for bx, by in bars)]
+    dots.sort(key=lambda p: (p[1], p[0]))
     save_json(job.work / "dots.json", dots)
     for x, y in dots:
         d.ellipse([x * pitch - 5, y * pitch - 5, x * pitch + 5, y * pitch + 5], outline=(160, 0, 200), width=2)

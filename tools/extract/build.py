@@ -92,7 +92,28 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     # ------------------------------------------------------------ doors / walls
     hits = [h for h in load_json(job.work / "symbols.json") if h["s"] >= corr.get("door_threshold", 0)]
 
+    def roomlike(c):
+        # inside a 2x2 block of full floor: part of a room, not a 1-wide passage
+        i, j = c
+        return any(all(0 <= i + di + a < N and 0 <= j + dj + b < N and frac[i + di + a, j + dj + b] >= FULL
+                       for a in (0, 1) for b in (0, 1)) for di, dj in ((0, 0), (-1, 0), (0, -1), (-1, -1)))
+
     def hit_edges(h):
+        if h.get("mid"):
+            # drawn across the middle of a one-cell passage: put it on the wall where the
+            # passage meets the room, so it renders on a wall and blocks the same way
+            r, c = h["cell"]
+            if h["o"] == "v":
+                sides = [((r, c - 1), (r, c), (c, r + .5)), ((r, c), (r, c + 1), (c + 1, r + .5))]
+                outer = [(r, c - 1), (r, c + 1)]
+            else:
+                sides = [((r - 1, c), (r, c), (c + .5, r)), ((r, c), (r + 1, c), (c + .5, r + 1))]
+                outer = [(r - 1, c), (r + 1, c)]
+            k = 1 if roomlike(outer[1]) and not roomlike(outer[0]) else 0
+            if not roomlike(outer[0]) and not roomlike(outer[1]):
+                k = 1
+            a, b, pos = sides[k]
+            return [ekey(a, b)], pos
         k, p = h["k"], h["p"] / P
         m = round(p)
         rows = [m - 1, m] if abs(p - m) < 0.2 else [int(p)]   # a door centred on a lattice point spans two edges
@@ -105,9 +126,16 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         return es, pos
 
     doors = []
+    # a symbol false positive (1C's "!" spear trap): {"at": [x, y], "type": "wooden"}; the type
+    # matters when a real symbol lands on the same wall (30's secret door beside the "!")
+    drop = [(tuple(p["at"]), p.get("type")) if isinstance(p, dict) else (tuple(p), None)
+            for p in corr.get("not_doors", [])]
     for h in hits:
         es, pos = hit_edges(h)
-        doors.append(dict(edges=es, pos=pos, type=h["type"], width=h.get("width", 1)))
+        if any(abs(pos[0] - x) + abs(pos[1] - y) <= 0.8 and t in (None, h["type"]) for (x, y), t in drop):
+            continue
+        doors.append(dict(edges=es, pos=pos, type=h["type"], width=h.get("width", 1),
+                          **({"state": h["state"]} if h.get("state") else {})))
     for c in corr.get("extra_doors", []):
         d = dict(edges=[ekey(tuple(a), tuple(b)) for a, b in c["edges"]], pos=tuple(c["pos"]), type=c["type"],
                  width=c.get("width", 1))
@@ -119,6 +147,11 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
                 d["type"] = c["type"]
                 d.update({k: tuple(c[k]) if k == "from" else c[k] for k in ("from", "state") if k in c})
     door_edge = {e: n for n, d in enumerate(doors) for e in d["edges"]}
+    mid_cells = {tuple(h["cell"]) for h in hits if h.get("mid")}
+    for c in mid_cells:
+        # a filled locked door is rock-grey and can cover most of a narrow passage cell,
+        # but a cell with a door drawn across it is floor
+        F[c] = True
     walls = {ekey(tuple(a), tuple(b)) for a, b in corr.get("walls", [])}
     # drawn walls between two floor cells: a grid line is 0-1 px of mid grey
     # (min ~170); a wall is 2+ px darker than 170 with a minimum under 150,
@@ -228,6 +261,9 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         org3 = organic[max(i - 1, 0):i + 2, max(j - 1, 0):j + 2].sum()
         cave_label[nm] = bool(cave[i, j]) and not (b and partial_share(b[1]) <= 0.15 and org3 < 3) \
             and nm not in corr.get("not_cave", [])      # icon line-work (a spiral stair) can look organic
+        if nm in corr.get("cave", []):                  # a cave label in a flat, walled-looking pocket
+            cave_label[nm] = True
+            cave[i, j] = True
     for nm, (i, j) in labels.items():
         b = best_full_rect(i, j)
         if not cave_label[nm] and b and min(b[1][2] - b[1][0], b[1][3] - b[1][1]) >= 1:
@@ -292,7 +328,11 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
                     region[i, j] = rid
         for i in range(i0 - 1, i1 + 2):
             for j in range(j0 - 1, j1 + 2):
-                if 0 <= i < N and 0 <= j < N and F[i, j] and region[i, j] < 0 and frac[i, j] < FULL:
+                # edge-adjacent to the rectangle only: a cell touching it corner-to-corner is
+                # a neighbour's chamfer (1C: 5 took one of octagon 16's diagonal cells)
+                beside = (i0 <= i <= i1) != (j0 <= j <= j1)
+                if beside and 0 <= i < N and 0 <= j < N and F[i, j] and region[i, j] < 0 and frac[i, j] < FULL \
+                        and (i, j) not in mid_cells:   # a passage with a portcullis's dots isn't a chamfer
                     region[i, j] = rid
 
     # ------------------------------------------------------------ corridors
@@ -322,7 +362,15 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             touch = [{region[ii, jj] for _, ii, jj in nbrs(*c)
                       if region[ii, jj] >= 0 and region[ii, jj] != rid and open_between(c, (ii, jj))} for c in cells]
             outside = set().union(*touch)
-            if len(outside) == 1 and all(touch) and regions[(host := outside.pop())]["kind"] == "room":
+            # every cell flush against the host — or a small pocket (≤ 4 cells) whose
+            # far cell hangs off the flush ones (1B's octagon edge + statue alcove)
+            if len(outside) != 1 or not (all(touch) or len(cells) <= 4):
+                continue
+            host = outside.pop()
+            # rooms and caves take a bump of any size (the L of #3, a cave's stray
+            # floor); a corridor takes a pocket of one or two cells (a statue alcove),
+            # which lets the pocket chain on into the room it hangs off (1B's 4)
+            if regions[host]["kind"] in ("room", "cave") or (regions[host]["kind"] == "corridor" and len(cells) <= 2):
                 for c in cells:
                     region[c] = host
                 changed = True
@@ -369,7 +417,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         return any(region[ii, jj] >= 0 and region[ii, jj] != rid for c in r["cells"] for _, ii, jj in nbrs(*c))
 
     keep = [r for r in regions if r["cells"] and not (r["kind"] == "corridor" and
-            (all(frac[c] < FULL for c in r["cells"]) or not touches(r)))]   # arrows, compass, margin art
+            ((all(frac[c] < FULL for c in r["cells"]) and not mid_cells & set(r["cells"]))   # arrows, compass, art
+             or not touches(r)))]                  # (a passage with a door drawn across it is real)
 
     def safe(name: str) -> str:
         # DSL names are identifiers: a correction's "21 secret" must not break the parse
@@ -399,10 +448,12 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
     desc = load_json(job.dir / "descriptions.json", default={"rooms": {}, "features_key": {}, "traps": {}, "map": {}})
 
     def text_ref(ref):
-        # "features_key.C" / "traps.Pit" point into descriptions.json, so module text stays module text
-        if isinstance(ref, str) and ref.split(".", 1)[0] in ("features_key", "traps") and "." in ref:
+        # "features_key.C" / "traps.Pit" / "stalls.G" point into descriptions.json, so
+        # module text stays module text; anything else is literal
+        if isinstance(ref, str) and "." in ref:
             a, b = ref.split(".", 1)
-            return desc[a][b]
+            if isinstance(desc.get(a), dict) and b in desc[a] and a not in ("rooms", "map"):
+                return desc[a][b]
         return ref
 
     def text_block(key, text, indent="  "):
@@ -432,6 +483,35 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         for k in ("description", "dm_notes"):
             if rn.get(k):
                 notes_in[rid][k].append(text_ref(rn[k]))
+
+    # exits to other maps: `to` is a level id in the module's maps.json (the project map
+    # name is looked up there); nested in the space they stand in, like features, so fog
+    # hides an exit until its room or corridor is found
+    registry = load_json(job.dir.parent / "maps.json", default={"levels": {}})["levels"]
+
+    def exit_lines(x, indent="  "):
+        to = registry.get(x["to"], {}).get("name", x["to"])
+        land = x.get("land", [15, 15])
+        lines = [f'{indent}exit at {fmt(x["at"][0])},{fmt(x["at"][1])} {{',
+                 f'{indent}  to "{to}" at {fmt(land[0])},{fmt(land[1])}']
+        if x.get("label"):
+            lines.append(f'{indent}  label "{x["label"]}"')
+        if x.get("secret"):
+            lines.append(f"{indent}  secret")
+        lines += text_block("description", text_ref(x.get("description")), indent + "  ")
+        lines += text_block("dm_notes", text_ref(x.get("dm_notes")), indent + "  ")
+        return lines + [indent + "}"]
+
+    def host_of(x, y):
+        rid = region[min(int(y), N - 1), min(int(x), N - 1)]
+        if rid < 0 or regions[rid] not in keep:   # on a wall: nearest space
+            rid = min((abs(ii + .5 - y) + abs(jj + .5 - x), region[ii, jj]) for ii in range(N) for jj in range(N)
+                      if region[ii, jj] >= 0 and regions[region[ii, jj]] in keep)[1]
+        return rid
+
+    exits_in = defaultdict(list)
+    for x in corr.get("exits", []):
+        exits_in[host_of(*x["at"])].append(x)
 
     feats_in = defaultdict(list)
     for f in features:
@@ -488,6 +568,9 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         for f in feats_in.get(region[cells[0]], []):
             out += feature_lines(f)
             stats["feature"] += 1
+        for x in exits_in.get(region[cells[0]], []):
+            out += exit_lines(x)
+            stats["exit"] += 1
         out += ["}", ""]
 
     def pixel_open(a, b):
@@ -618,8 +701,22 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
         for f in feats_in.get(rid, []):
             out += feature_lines(f)
             stats["feature"] += 1
+        for x in exits_in.get(rid, []):
+            out += exit_lines(x)
+            stats["exit"] += 1
         out += ["}", ""]
         stats["corridor"] += 1
+
+    # two spaces joined by several bare gaps (two caves touching twice) are one
+    # connection in the graph; keep the widest gap, so the validator's duplicate
+    # warning is about real doubled doors only
+    widest: dict = {}
+    for c in conns:
+        if c["type"] == "open":
+            key = (min(c["a"], c["b"]), max(c["a"], c["b"]))
+            if key not in widest or c.get("width", 1) > widest[key].get("width", 1):
+                widest[key] = c
+    conns = [c for c in conns if c["type"] != "open" or widest[(min(c["a"], c["b"]), max(c["a"], c["b"]))] is c]
 
     door_text = cfg.get("door_text", {})     # e.g. {"arch": "A"}: a door type described by a features-key entry
     for c in conns:
@@ -636,6 +733,8 @@ def main(job: Job) -> None:  # noqa: C901 — one pass, read top to bottom
             first, _, rest = desc["features_key"][k].partition(". ")
             out += text_block("description", first.rstrip(".") + ".")
             out += text_block("dm_notes", f"Feature {k}. " + rest)
+        elif k and "." in k:                     # "traps.Portcullis": legend text, GM side
+            out += text_block("dm_notes", text_ref(k))
         out += ["}", ""]
         stats["door_" + c["type"]] += 1
 

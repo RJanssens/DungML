@@ -68,10 +68,21 @@ reproduces the map; `work/` is scratch and can be deleted.
 
 Paths are relative to the job folder. `grid` (`{"cells": 30}` or
 `{"pitch": 30.07}`) overrides grid detection. `includes` defaults to
-`["core.dmap"]`. `door_text` names features-key entries that describe a door
-type (Stonehell's "A: Archways…", "B: Lowered portcullis…"). `reference` is an
-existing hand-made map to compare topology with. `party` configures the walk
-(see *Party-view check*).
+`["core.dmap"]`. `door_text` gives a door type the text of a features-key
+entry (`"arch": "A"`) or a legend entry (`"portcullis": "traps.Portcullis"`).
+`label_rooms` lists label texts that mark many rooms sharing one key entry
+(`["Cpt", "UCpt"]`: each instance becomes a room, `Cpt1`, `Cpt2`…).
+`reference` is an existing hand-made map to compare with. `party` configures
+the walk (see *Party-view check*). `expected_warnings` is where each
+validation warning that isn't a defect is explained (see *Warnings*).
+
+### `maps.json` (one per module, next to the job folders)
+
+Every level an exit can target: its id (`1A`, `2B`…), its **project map
+name** — which is what DungML `exit … to "NAME"` resolves — and whether it's a
+placeholder. `upload` names each converted map after its entry and creates any
+missing placeholder, so every exit resolves today and keeps resolving when the
+placeholder is replaced by the real conversion (same name).
 
 ### `corrections.json`
 
@@ -87,7 +98,13 @@ one — it's the record of what the DSL, libraries or templates couldn't do.
 | `extra_rooms` | `{"27a": [[i, j]]}` | an unlabelled space that is a room (crypt niches) |
 | `label_cell` | `{"12": [i, j]}` | a label printed outside its room |
 | `not_floor` | `[[i, j]]` | white art that isn't floor |
-| `features` | `[{type, at, scale?, description?, dm_notes?}]` | icons, at cell precision; `description`/`dm_notes` may be literal text or a reference `"features_key.C"` / `"traps.Pit"` into `descriptions.json` |
+| `features` | `[{type, at, scale?, description?, dm_notes?}]` | icons, at cell precision; `description`/`dm_notes` may be literal text or a reference `"features_key.C"` / `"traps.Pit"` / `"stalls.G"` into `descriptions.json` |
+| `exits` | `[{at, to, land?, label?, secret?, description?, dm_notes?}]` | a way to another map: `to` is a level id from `maps.json`, `land` the point on that map (default its centre). Teleports are exits too, even to the same map |
+| `region_notes` | `[{cell, description?, dm_notes?}]` | text for the space holding a cell (a lettered feature with no icon, an exit stub) |
+| `not_doors` | `[{at, type?}]` | drop a symbol false positive near a point (only of `type`, if given) |
+| `not_walls` | `[[[i,j],[i,j]]]` | an edge the wall detector took for a wall (icon outlines touching rock) |
+| `not_cave` / `cave` | `["17"]` | a label the cave test got wrong (icon line-work looks organic; a cave label in a flat pocket) |
+| `dots` / `not_dots` | `false` / `[[x, y]]` | turn pillar-dot detection off, or drop one |
 
 Coordinates: cells are `[row, col]`; door and feature positions are map
 units `[x, y]` (a door on a cell edge is `x.5` or an integer on the line).
@@ -116,6 +133,25 @@ table, the overview paragraphs that become the map description, and:
 | `party` | map | `party/party_report.json`, `party/party_filmstrip.png` | 0 problems; every unreached node intended |
 | `upload` | map | server | server validates with 0 errors |
 
+## Warnings
+
+`score` fails (exit 1) on a validation error **or on any warning that isn't
+explained**. A warning is a decision: fix the map, or list it in `job.json`:
+
+```json
+"expected_warnings": [
+ {"dead_end_at": [5.5, 27.5], "why": "the stairs down: its way on is the exit to 2A"},
+ {"disconnected": "room.r24", "why": "24 is sealed; only D's teleport reaches it"},
+ {"match": "some warning text", "why": "…"}
+]
+```
+
+Generated corridor names change between builds, so dead ends are matched by
+place (within 1.5 cells), not by name. Most warnings on these maps turned out
+to be real defects when first looked at (a cave's stray floor as a corridor, a
+secret room that was a dead-end corridor, a statue alcove cut off its room);
+the ones that remain are exits, which the validator doesn't count.
+
 ## Party-view check
 
 `party.py` walks the map as a party: enter a space, see its non-secret doors
@@ -126,8 +162,11 @@ secret doors drawn, secret features (traps) visible, top-level features
 (which ignore fog), GM text or unexplored room names in the room text or the
 SVG. It also lists what can't be reached — expected for secret doors, locked
 doors and sealed rooms, but each should be intended. `open` and
-`reveal_secret` in `job.json` simulate the GM unlocking doors and revealing
-found secret doors, so a second walk proves those areas open up properly.
+`reveal_secret` in `job.json` (door keys), or `open_all` / `reveal_all`,
+simulate the GM unlocking doors and revealing found secret doors as the party
+reaches them, so a second walk proves those areas open up properly. Exits are
+checked too: a top-level exit ignores the fog, and a secret exit must stay
+hidden.
 
 Run it on any map, converted or hand-made:
 
@@ -144,14 +183,26 @@ symbol templates (`door.png`, `S.png`, `arch.png`, `plain.png`), cut by
 A new symbol: cut a clean instance, add it to `make_templates.py`, map it to
 a door type in `style.json`'s `templates`.
 
-## What it doesn't do (yet)
+## What it detects, and what it doesn't (yet)
 
-- Symbols off the grid lines (a portcullis drawn mid-cell), filled/double
-  doors, one-way arrows, drawn walls between floor cells — corrections.
-- Icons (statues, stairs, traps, pools) — placed by the reader at cell
-  precision, as `features` corrections.
-- Exits to other maps (`exit … to "map" at x,y`) — need the target map.
+Detected: grid, floor, caves vs straight walls, labels (positions), doors /
+secret doors / archways on grid lines, doors / locked doors / portcullises
+drawn mid-cell in a one-cell passage, drawn walls between floor cells, pillar
+dots.
+
+Not yet — corrections:
+
+- Icons (statues, stairs, traps, pools, stalls) — placed by the reader at
+  cell precision, as `features` corrections.
+- Door symbols outside the kit (double doors, gates, one-way arrows, bashed-in
+  doors, concealed "C").
+- `line_feature`s (bars, fences) — not emitted.
 - Non-grid maps, hex maps, hand-drawn maps without a grid.
+
+`boxes.json`, `symbols.json` and `dots.json` are written sorted by position;
+`labels.json` follows `boxes.json` by position — re-running `prep` after a
+threshold change remaps it and marks new boxes `"?"`, so nothing shifts
+silently.
 
 Per-module records of what each map needed live next to the job folders —
 for Stonehell, `modules/stonehell/conversion/LIMITATIONS.md`.

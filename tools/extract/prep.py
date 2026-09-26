@@ -20,7 +20,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage as nd
 
-from common import Job, save_json
+from common import Job, load_json, save_json
 
 
 def detect_pitch(g: np.ndarray, style: dict) -> float:
@@ -38,6 +38,41 @@ def detect_pitch(g: np.ndarray, style: dict) -> float:
         if best is None or spec[k] > best[1]:
             best = (k, spec[k])
     return w / best[0]
+
+
+def remap_labels(job: Job, boxes: list[list[int]]) -> None:
+    """Keep labels.json attached to its boxes when prep is re-run and the box
+    list changes (a threshold tuned, a merge rule fixed): each old box's text
+    moves to the new box whose centre is nearest (within 8 px). A new box gets
+    "?" and an old one that vanished is reported — nothing shifts silently."""
+    old_p, lab_p = job.work / "boxes.json", job.dir / "labels.json"
+    if not (old_p.exists() and lab_p.exists()):
+        return
+    old, texts = load_json(old_p), load_json(lab_p)
+    if len(old) != len(texts):
+        print(f"prep: labels.json ({len(texts)}) doesn't match the previous boxes ({len(old)}); not remapping")
+        return
+    if old == boxes:
+        return
+
+    def centre(b):
+        return ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+
+    new_texts, used = [], set()
+    for nb in boxes:
+        cx, cy = centre(nb)
+        best = min(range(len(old)), key=lambda k: abs(centre(old[k])[0] - cx) + abs(centre(old[k])[1] - cy))
+        ox, oy = centre(old[best])
+        if abs(ox - cx) + abs(oy - cy) <= 8 and best not in used:
+            new_texts.append(texts[best])
+            used.add(best)
+        else:
+            new_texts.append("?")
+    lost = [texts[k] for k in range(len(old)) if k not in used and texts[k] not in ("-", "")]
+    save_json(lab_p, new_texts)
+    print(f"prep: labels.json remapped to the new box order"
+          + (f"; {new_texts.count('?')} new box(es) to read ('?')" if "?" in new_texts else "")
+          + (f"; labels no longer boxed: {lost}" if lost else ""))
 
 
 def main(job: Job) -> None:
@@ -81,6 +116,10 @@ def main(job: Job) -> None:
             words.append([x0, y0, x1, y1])
     hmin, hmax = st["label_height"]
     boxes = [w for w in words if hmin <= w[3] - w[1] <= hmax]
+    # merging grows words after `comps.sort()`, so sort the result itself before it
+    # is persisted: labels.json is read against this order
+    boxes.sort(key=lambda b: (b[0], b[1]))
+    remap_labels(job, boxes)
     save_json(job.work / "boxes.json", boxes)
 
     im = Image.open(job.image).convert("L")

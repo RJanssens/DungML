@@ -34,15 +34,21 @@ from pathlib import Path
 from common import Job, load_json, save_json
 
 GM = re.compile(r"""\(\d|\d+d\d|\bsave vs|\btrap|\bchance\b|\b\d[\d,]*\s*(gp|sp|cp)\b|\bgp\b|\bsp\b|\bcp\b|
-                    \bsee\b|\bIf\b|\bif\b|\blives here|\battack|\balert|\bsummon|\bunaware|\bstash|\bRoll\b|
+                    \bsee\b|\bSee\b|\bIf\b|\bif\b|\blives here|\battack|\balert|\bsummon|\bunaware|\bstash|\bRoll\b|
                     \banswers\b|\bUnder a\b|\bstore\b|\bSecret\b|\bpotion|\bteleport|\bactivates|\breturn after|
                     \bEmpty\.|\bHD\b|\bspell|\bwill\b|\bterrified|\ben route|\bon watch|\blive in|\bDwarves \(|
                     \btaking notes|\bSounds of work from|\bEmpty\b""", re.X)
 
 
+ABBREV = re.compile(r"\b(p|pp|vs|v|dia|no)\.\s", re.I)     # "p. 36", "save vs. poison" don't end a sentence
+
+
 def sentences(t: str) -> list[str]:
-    t = t.replace("&", "and")
-    return [p.strip() for p in re.split(r'(?<=[.!?"])\s+(?=[A-Z0-9"])', t) if p.strip()]
+    t = ABBREV.sub(lambda m: m.group(1) + ".\x00", t.replace("&", "and"))
+    # a quotation is part of its sentence: 'writing on the walls: "Bad Juju! Keep out!" Empty.'
+    t = re.sub(r'"[^"]*"', lambda m: m.group(0).replace(" ", "\x00"), t)
+    parts = re.split(r'(?<=[.!?"])\s+(?=[A-Z0-9"])', t)
+    return [p.replace("\x00", " ").strip() for p in parts if p.strip()]
 
 
 def main(job: Job) -> None:
@@ -51,6 +57,8 @@ def main(job: Job) -> None:
     start = next(n for n, l in enumerate(lines) if l.strip() == cfg["sheet"])
 
     def at(marker: str, frm: int) -> int:
+        if marker == "<EOF>":                  # a key that runs to the end of the file (1D)
+            return len(lines)
         return next(n for n in range(frm, len(lines)) if lines[n].strip().startswith(marker))
 
     def section(bounds, frm=start, with_marker=False) -> list[str]:
@@ -82,9 +90,12 @@ def main(job: Job) -> None:
         if n in cfg.get("desc_text", {}):
             # a secret inside a perceivable sentence ("…; secret door behind pivoting wall"):
             # the reader gives both halves explicitly, from the key's own words
+            # `replaces`: the key's sentences the override rewrites (default the first);
+            # the rest of the entry stays GM text after the override's own GM half
             o = cfg["desc_text"][n]
             rooms[n]["description"] = o["description"]
-            rooms[n]["dm_notes"] = (o.get("dm_notes", "") + " " + rooms[n]["dm_notes"]).strip() \
+            rest = [s for k, s in enumerate(ss) if k not in o.get("replaces", [0])]
+            rooms[n]["dm_notes"] = " ".join([o.get("dm_notes", "")] + rest).strip() \
                 if o.get("keep_dm", True) else o.get("dm_notes", "")
 
     ov = cfg.get("overview", {})
@@ -98,10 +109,25 @@ def main(job: Job) -> None:
     def numbered(ls):
         return [l.strip() for l in ls if re.match(r"^\d+\.", l.strip())]
 
+    feats = {}                        # before the extras: a label room can take a feature's text
+    if "features_key" in cfg:
+        last = None
+        for l in section(cfg["features_key"]):
+            m = re.match(r"^([A-Z](?: & [A-Z])*): (.*)$", l.strip())    # "B & F: Stone doors…" keys both
+            if m:
+                last = m.group(1).split(" & ")
+                for k in last:
+                    feats[k] = m.group(2)
+            elif last:
+                for k in last:
+                    feats[k] += " " + l.strip()
+
     for x in cfg.get("extras", []):
         # a room the numbered key doesn't have — a label room like Cpt, keyed by the legend
         r = rooms.setdefault(x["room"], {"title": x.get("new_title", x["room"]),
                                          "description": x.get("description", ""), "dm_notes": ""})
+        if "from_feature" in x:                          # 1C's E rooms are keyed as feature E
+            r["dm_notes"] = (feats[x["from_feature"]] + " " + r["dm_notes"]).strip()
         if "text" in x:                                  # a section verbatim (tables with 1-2. ranges)
             body = " ".join(l.strip() for l in section(x["text"]))
             r["dm_notes"] = (r["dm_notes"] + f"\n\n{x['title']}: " + body).strip()
@@ -118,19 +144,6 @@ def main(job: Job) -> None:
             if x.get("first_sentence"):
                 p = p.split(". ")[0] + "."
             r["dm_notes"] = (r["dm_notes"] + " " + x.get("prefix", "") + p + x.get("suffix", "")).strip()
-
-    feats = {}
-    if "features_key" in cfg:
-        last = None
-        for l in section(cfg["features_key"]):
-            m = re.match(r"^([A-Z](?: & [A-Z])*): (.*)$", l.strip())    # "B & F: Stone doors…" keys both
-            if m:
-                last = m.group(1).split(" & ")
-                for k in last:
-                    feats[k] = m.group(2)
-            elif last:
-                for k in last:
-                    feats[k] += " " + l.strip()
 
     traps, legend_keys = {}, {}
     if "legend" in cfg:
@@ -177,9 +190,32 @@ def main(job: Job) -> None:
         check = re.sub(r"\*\*|Wandering Monsters", "", head).strip(" ()")
         map_notes = (f"Wandering monsters ({check}). Roll d{len(rolls)}: "
                      + "; ".join((f"{a}" if a == b else f"{a}-{b}") + f" {m}" for a, b, m in ranges) + ".")
+    if "wandering_raw" in cfg:
+        # several tables in one (1D: Kobold Korners 1-10, Forgotten Chambers 1-10): verbatim
+        map_notes = "Wandering monsters.\n" + "\n".join(
+            l.strip() for l in section(cfg["wandering_raw"], with_marker=True)).replace("**", "")
     map_desc = " ".join(p for p in (para(x) for x in ov.get("map_description", [])) if p)
 
+    # lettered lists kept outside the key, possibly in another file (1D's market stalls
+    # A–P: the markdown conversion cut the list off mid-entry, the raw PDF text has it all)
+    lettered: dict[str, dict[str, str]] = {}
+    for name, spec in cfg.get("lettered", {}).items():
+        src = Path(spec.get("source", cfg["text"])).expanduser().read_text().split("\n")
+        a = next(n for n, l in enumerate(src) if l.strip().startswith(spec["start"]))
+        b = next(n for n in range(a + 1, len(src)) if src[n].strip().startswith(spec["end"]))
+        cur, out_l = None, {}
+        for l in src[a:b]:
+            m = re.match(r"^([A-Z])\. (.*)$", l.strip())
+            if m:
+                cur = m.group(1)
+                out_l[cur] = m.group(2)
+            elif cur and l.strip():
+                out_l[cur] += " " + l.strip()
+        lettered[name] = {k: re.sub(r"\s+", " ", v.replace("‘", "'").replace("―", '"').replace("‖", '"')).strip()
+                          for k, v in out_l.items()}
+
     save_json(job.dir / "descriptions.json", {
+        **lettered,
         "rooms": rooms, "features_key": feats, "traps": traps, "legend": legend_keys,
         "map": {"description": map_desc, "dm_notes": map_notes},
         "split_overrides": {k: v[1] for k, v in over.items()},
